@@ -5,10 +5,10 @@ import './style.css';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('App element missing');
 app.innerHTML = `
-  <header><div><h1>FOOTBALL / Autonomous Match 002</h1><p>3 gegen 3 · Live-Spiel · echte Ballphysik</p></div>
-  <div class="actions"><button id="pause">Pause</button><button id="reset">Neustart</button></div></header>
+  <header><div><h1>FOOTBALL / MATCHDAY 003</h1><p>3v3 · Trainersteuerung · Spielereignisse · Kamera</p></div>
+  <div class="actions"><button id="attack">Angriff</button><button id="defend">Defensiv</button><button id="camera">Kamera</button><button id="pause">Pause</button><button id="reset">Neustart</button></div></header>
   <main id="viewport"><div class="hud"><strong>LIVE SIMULATION</strong><div id="clock">Zeit: 0.0 s</div><div id="speed">Ball: 0.0 m/s</div><div id="score">ORANGE 0 : 0 BLAU</div><div id="contacts">Schüsse: 0</div><div id="frames">Physik: 60 Hz (Soll)</div></div>
-  <div class="status" id="status">Initialisiere Rapier WebAssembly …</div></main>`;
+  <div class="events" id="events"><b>SPIELEREIGNISSE</b><div id="feed">Anpfiff folgt …</div></div><div class="status" id="status">Initialisiere Rapier WebAssembly …</div></main>`;
 
 const status = document.querySelector<HTMLElement>('#status')!;
 const viewport = document.querySelector<HTMLElement>('#viewport')!;
@@ -17,13 +17,17 @@ const speedLabel = document.querySelector<HTMLElement>('#speed')!;
 const contactLabel = document.querySelector<HTMLElement>('#contacts')!;
 const pauseButton = document.querySelector<HTMLButtonElement>('#pause')!;
 const resetButton = document.querySelector<HTMLButtonElement>('#reset')!;
+const attackButton = document.querySelector<HTMLButtonElement>('#attack')!;
+const defendButton = document.querySelector<HTMLButtonElement>('#defend')!;
+const cameraButton = document.querySelector<HTMLButtonElement>('#camera')!;
+const feed = document.querySelector<HTMLElement>('#feed')!;
 
 async function start(): Promise<void> {
   await RAPIER.init();
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#101a32');
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 400);
-  camera.position.set(0, 42, 49);
+  camera.position.set(0, 32, 37);
   camera.lookAt(0, 0, 0);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -91,7 +95,16 @@ async function start(): Promise<void> {
   }
 
   let paused=false, time=0, contacts=0, accumulator=0, previous=performance.now();
-  let orange=0, blue=0;
+  let orange=0, blue=0, tacticalMode:'attack'|'defend'='attack', cameraMode=0, lastFeedTime=-10;
+  const events:string[]=[];
+  function logEvent(message:string):void {
+    events.unshift(`${'${'}time.toFixed(1)}s · ${'${'}message}`);
+    if(events.length>7)events.length=7;
+    feed.innerHTML=events.map(e=>`<div>${'${'}e}</div>`).join('');
+  }
+  attackButton.addEventListener('click',()=>{tacticalMode='attack';logEvent('Trainer: offensives Pressing');});
+  defendButton.addEventListener('click',()=>{tacticalMode='defend';logEvent('Trainer: kompakte Defensive');});
+  cameraButton.addEventListener('click',()=>{cameraMode=(cameraMode+1)%3;});
   const scoreLabel=document.querySelector<HTMLElement>('#score')!;
   let kickoffDelay=0;
   let lastContactText='Agenten suchen den Ball. Physik bestimmt das Ergebnis.';
@@ -104,7 +117,7 @@ async function start(): Promise<void> {
       p.body.setLinvel({x:0,y:0,z:0},true);
       p.cooldown=0;p.kicks=0;
     });
-    time=0;contacts=0;accumulator=0;orange=0;blue=0;kickoffDelay=0;
+    time=0;contacts=0;accumulator=0;orange=0;blue=0;kickoffDelay=0;events.length=0;logEvent('Anpfiff: 3 gegen 3');
     lastContactText='Neustart: sechs Agenten reagieren auf den Ball.';
   }
   pauseButton.addEventListener('click',()=>{paused=!paused;pauseButton.textContent=paused?'Fortsetzen':'Pause';});
@@ -135,10 +148,11 @@ async function start(): Promise<void> {
       }).length;
       // Closest agent presses; supporting players hold passing lanes.
       const attack=p.team===0?1:-1;
-      const targetX=rank===0?b.x:Math.max(-19,Math.min(19,b.x-attack*(3+rank*2)));
+      const anchor=tacticalMode==='defend' ? (p.team===0?-10:10) : b.x-attack*(3+rank*2);
+      const targetX=rank===0?b.x:Math.max(-19,Math.min(19,anchor));
       const targetZ=rank===0?b.z:Math.max(-12,Math.min(12,b.z+(p.initial[1]<0?-1:1)*(3+rank)));
       const tx=targetX-pos.x,tz=targetZ-pos.z, d=Math.hypot(tx,tz);
-      const maxSpeed=6.2, maxAcceleration=8.5;
+      const maxSpeed=tacticalMode==='attack'?7.5:5.5, maxAcceleration=10;
       const desiredSpeed=Math.min(maxSpeed,Math.max(0,d-.45)*2.4);
       const vx=d>.001?tx/d*desiredSpeed:0, vz=d>.001?tz/d*desiredSpeed:0;
       const ax=(vx-vel.x)/dt, az=(vz-vel.z)/dt;
@@ -158,6 +172,7 @@ async function start(): Promise<void> {
         ball.applyTorqueImpulse({x:0,y:(p.team===0?-.06:.06),z:0},true);
         p.cooldown=.85;contacts++;
         lastContactText=`#${p.number} (${p.team===0?'Orange':'Blau'}) schießt! t=${time.toFixed(1)} s`;
+        logEvent(`${p.team===0?'ORANGE':'BLAU'} #${p.number}: Schussversuch`);
       }
     }
     const v=ball.linvel(),speed=Math.hypot(v.x,v.y,v.z);
@@ -171,9 +186,11 @@ async function start(): Promise<void> {
     if(Math.abs(ballNow.x)>=21 && Math.abs(ballNow.z)<2.5 && ballNow.y<2) {
       if(ballNow.x>0)orange++;else blue++;
       lastContactText=`TOR! Orange ${orange} : ${blue} Blau — Anstoß folgt.`;
+      logEvent(`TOR! ${ballNow.x>0?'ORANGE':'BLAU'} · ${orange}:${blue}`);
       kickoff();
     } else if(Math.abs(ballNow.x)>23.5 || Math.abs(ballNow.z)>16.5) {
       lastContactText='Ausball: neuer Anstoß (Einwurf-Regeln folgen).';
+      if(time-lastFeedTime>1){logEvent('Ball im Aus · neuer Anstoß');lastFeedTime=time;}
       kickoff();
     }
   }
@@ -206,6 +223,9 @@ async function start(): Promise<void> {
     contactLabel.textContent=`Schüsse: ${contacts}`;
     scoreLabel.textContent=`ORANGE ${orange} : ${blue} BLAU`;
     status.textContent=lastContactText+' | 3v3-Test: keine trainierte KI, keine vollständigen Fußballregeln.';
+    if(cameraMode===0){camera.position.lerp(new THREE.Vector3(bp.x*.3,32,37),.025);camera.lookAt(bp.x*.3,0,0);}
+    else if(cameraMode===1){camera.position.lerp(new THREE.Vector3(bp.x-12,12,bp.z+17),.04);camera.lookAt(bp.x,0,bp.z);}
+    else{camera.position.lerp(new THREE.Vector3(0,58,.1),.035);camera.lookAt(0,0,0);}
     renderer.render(scene,camera);
     requestAnimationFrame(frame);
   }
