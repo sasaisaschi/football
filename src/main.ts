@@ -7,7 +7,7 @@ import { loadFootballer, updateFootballer } from './player-visuals';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('App element missing');
 app.innerHTML = `
-  <header><div><h1>INSIDE THE GAME / CHARACTER PIPELINE 005</h1><p>LIVE FROM THE ARENA · AUTONOMOUS FOOTBALL</p></div>
+  <header><div><h1>THE 12TH MAN / MATCHDAY</h1><p>LIVE FROM THE ARENA · AUTONOMOUS FOOTBALL</p></div>
   <div class="actions"><button id="attack">HOHES PRESSING</button><button id="defend">TIEF STEHEN</button><button id="camera">TV-KAMERA</button><button id="sound">STADIONTON AN</button><button id="pause">PAUSE</button><button id="reset">NEUSTART</button></div></header>
   <main id="viewport"><div class="broadcast"><span class="live-pill">● LIVE</span><span class="team-name home">ORANGE CITY</span><span id="score" class="broadcast-score">0 : 0</span><span class="team-name away">BLUE UNITED</span><span id="clock" class="match-clock">00:00</span></div><div class="match-info"><span>EXHIBITION · 3 VS 3</span><span id="speed">BALL 0.0 M/S</span><span id="contacts">SHOTS 0</span></div><div class="goal-flash" id="goal-flash">GOOOAL!</div>
   <div class="events" id="events"><b>MATCH INTELLIGENCE · LIVE</b><div id="feed">Anpfiff folgt …</div></div><div class="status" id="status">Initialisiere Stadion …</div></main>`;
@@ -47,6 +47,17 @@ async function start(): Promise<void> {
   scene.add(sunlight);
 
   const stadium=createStadium(scene);
+  // A continuous opening sequence: stadium establishing shot, teams, pitch, kickoff.
+  const intro=document.createElement('div');intro.className='match-intro';intro.innerHTML='<div class="intro-eyebrow">THE 12TH MAN · MATCHDAY</div><div class="intro-title">THIS IS OUR HOME.</div><div class="intro-subtitle">THE STADIUM IS ALIVE · KICKOFF APPROACHING</div><div class="intro-progress"><span></span></div>';
+  viewport.append(intro);
+  const introDuration=16;
+  let introTime=0;
+  let introFinished=false;
+  const startCamera=new THREE.Vector3(-67,29,76);
+  const endCamera=new THREE.Vector3(0,32,37);
+  camera.position.copy(startCamera);camera.lookAt(0,5,0);
+  const introSkip=document.createElement('button');introSkip.className='intro-skip';introSkip.textContent='ZUM ANPFIFF →';intro.append(introSkip);
+  introSkip.addEventListener('click',()=>{introTime=introDuration;});
   const stripes=[0x1e7b46,0x23864c];
   for(let i=0;i<8;i++){
     const strip=new THREE.Mesh(new THREE.PlaneGeometry(5.25,28),new THREE.MeshStandardMaterial({color:stripes[i%2],roughness:1}));
@@ -137,7 +148,7 @@ async function start(): Promise<void> {
   function logEvent(message:string):void {
     events.unshift(`${time.toFixed(1)}s · ${message}`);
     if(events.length>7)events.length=7;
-    feed.innerHTML=events.map(e=>`<div>${'${'}e}</div>`).join('');
+    feed.innerHTML=events.map(e=>`<div>${e}</div>`).join('');
   }
   attackButton.addEventListener('click',()=>{tacticalMode='attack';logEvent('Trainer: offensives Pressing');});
   defendButton.addEventListener('click',()=>{tacticalMode='defend';logEvent('Trainer: kompakte Defensive');});
@@ -241,7 +252,14 @@ async function start(): Promise<void> {
   new ResizeObserver(resize).observe(viewport);resize();
   function frame(now:number):void {
     const elapsed=Math.min((now-previous)/1000,.1);previous=now;
-    if(!paused) {
+    if(!paused && !introFinished){
+      introTime=Math.min(introDuration,introTime+elapsed);
+      const t=introTime/introDuration;
+      intro.style.opacity=String(Math.min(1,Math.max(0,(1-t)*5)));
+      const progress=intro.querySelector<HTMLElement>('.intro-progress span');if(progress)progress.style.width=`${t*100}%`;
+      if(t>=1){introFinished=true;intro.remove();logEvent('Anpfiff – das Spiel beginnt!');}
+    }
+    if(!paused && introFinished) {
       accumulator+=elapsed;
       let steps=0;
       while(accumulator>=1/60&&steps<6){step(1/60);accumulator-=1/60;steps++;}
@@ -264,7 +282,12 @@ async function start(): Promise<void> {
     contactLabel.textContent=`SHOTS ${contacts}`;
     scoreLabel.textContent=`${orange} : ${blue}`;
     status.textContent=lastContactText;
-    if(cameraMode===0){camera.position.lerp(new THREE.Vector3(bp.x*.3,32,37),.025);camera.lookAt(bp.x*.3,0,0);}
+    if(!introFinished){
+      const t=Math.min(1,introTime/introDuration),smooth=t*t*(3-2*t);
+      camera.position.copy(startCamera).lerp(endCamera,smooth);
+      camera.lookAt(0,5*(1-smooth),0);
+    }
+    else if(cameraMode===0){camera.position.lerp(new THREE.Vector3(bp.x*.3,32,37),.025);camera.lookAt(bp.x*.3,0,0);}
     else if(cameraMode===1){camera.position.lerp(new THREE.Vector3(bp.x-12,12,bp.z+17),.04);camera.lookAt(bp.x,0,bp.z);}
     else{camera.position.lerp(new THREE.Vector3(0,58,.1),.035);camera.lookAt(0,0,0);}
     stadium.update(time,Math.min(1,Math.abs(bp.x)/21));
