@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import './style.css';
 import { createStadium } from './stadium';
+import { loadFootballer, updateFootballer } from './player-visuals';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('App element missing');
 app.innerHTML = `
-  <header><div><h1>INSIDE THE GAME / MATCHDAY 004</h1><p>LIVE FROM THE ARENA · AUTONOMOUS FOOTBALL</p></div>
+  <header><div><h1>INSIDE THE GAME / CHARACTER PIPELINE 005</h1><p>LIVE FROM THE ARENA · AUTONOMOUS FOOTBALL</p></div>
   <div class="actions"><button id="attack">HOHES PRESSING</button><button id="defend">TIEF STEHEN</button><button id="camera">TV-KAMERA</button><button id="sound">STADIONTON AN</button><button id="pause">PAUSE</button><button id="reset">NEUSTART</button></div></header>
   <main id="viewport"><div class="broadcast"><span class="live-pill">● LIVE</span><span class="team-name home">ORANGE CITY</span><span id="score" class="broadcast-score">0 : 0</span><span class="team-name away">BLUE UNITED</span><span id="clock" class="match-clock">00:00</span></div><div class="match-info"><span>EXHIBITION · 3 VS 3</span><span id="speed">BALL 0.0 M/S</span><span id="contacts">SHOTS 0</span></div><div class="goal-flash" id="goal-flash">GOOOAL!</div>
   <div class="events" id="events"><b>MATCH INTELLIGENCE · LIVE</b><div id="feed">Anpfiff folgt …</div></div><div class="status" id="status">Initialisiere Stadion …</div></main>`;
@@ -88,7 +89,7 @@ async function start(): Promise<void> {
   world.createCollider(RAPIER.ColliderDesc.ball(ballRadius).setMass(.43).setRestitution(.58).setFriction(.6),ball);
   const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(ballRadius,24,16),new THREE.MeshStandardMaterial({color:'#f5f5ee',roughness:.5}));
   ballMesh.castShadow=true;scene.add(ballMesh);
-  type Player = { body:RAPIER.RigidBody; mesh:THREE.Group; color:string; kicks:number; cooldown:number; initial:[number,number]; team:number; number:number };
+  type Player = { body:RAPIER.RigidBody; mesh:THREE.Group; color:string; kicks:number; cooldown:number; initial:[number,number]; team:number; number:number; visual?:Awaited<ReturnType<typeof loadFootballer>> };
   const players: Player[] = [];
   for(const [i,x,z,color] of [[0,-13,-7,'#ff913d'],[1,-10,0,'#ff913d'],[2,-13,7,'#ff913d'],[3,13,-7,'#52caff'],[4,10,0,'#52caff'],[5,13,7,'#52caff']] as const) {
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x,.9,z).lockRotations().setLinearDamping(2));
@@ -119,6 +120,14 @@ async function start(): Promise<void> {
     players.push({body,mesh:group,color,kicks:0,cooldown:0,initial:[x,z],team:i<3?0:1,number:i+1});
   }
 
+  // Replace placeholder geometry only after a complete rigged GLB has loaded successfully.
+  void Promise.all(players.map(async p=>{
+    const visual=await loadFootballer(p.team,p.number);
+    if(!visual)return;
+    p.visual=visual;
+    p.mesh.clear();
+    p.mesh.add(visual.root);
+  }));
   let paused=false, time=0, contacts=0, accumulator=0, previous=performance.now();
   let soundEnabled=false, audio:AudioContext|null=null, noise:AudioBufferSourceNode|null=null, crowdGain:GainNode|null=null;
   function playGoalHorn(){if(!audio||!soundEnabled)return;for(const hz of [330,440,550]){const osc=audio.createOscillator(),g=audio.createGain();osc.type='sawtooth';osc.frequency.value=hz;g.gain.setValueAtTime(.0001,audio.currentTime);g.gain.exponentialRampToValueAtTime(.045,audio.currentTime+.1);g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+1.6);osc.connect(g).connect(audio.destination);osc.start();osc.stop(audio.currentTime+1.7);}}
@@ -245,6 +254,7 @@ async function start(): Promise<void> {
       const v=p.body.translation(), lv=p.body.linvel();
       p.mesh.position.set(v.x,v.y-.9,v.z);
       if(Math.hypot(lv.x,lv.z)>.1)p.mesh.rotation.y=Math.atan2(lv.x,lv.z);
+      if(p.visual)updateFootballer(p.visual,elapsed,Math.hypot(lv.x,lv.z),p.cooldown);
     });
     const v=ball.linvel();velocity.set(v.x,v.y,v.z);
     clockLabel.textContent=`${String(Math.floor(time/60)).padStart(2,'0')}:${String(Math.floor(time%60)).padStart(2,'0')}`;
