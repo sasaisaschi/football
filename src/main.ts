@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import './style.css';
+import { createStadium } from './stadium';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('App element missing');
@@ -42,6 +43,7 @@ async function start(): Promise<void> {
   sunlight.shadow.camera.top = 90; sunlight.shadow.camera.bottom = -90;
   scene.add(sunlight);
 
+  const stadium=createStadium(scene);
   const grass = new THREE.Mesh(new THREE.PlaneGeometry(48, 34), new THREE.MeshStandardMaterial({ color: '#18673e', roughness: 1 }));
   grass.rotation.x = -Math.PI / 2;
   grass.receiveShadow = true;
@@ -226,6 +228,7 @@ async function start(): Promise<void> {
     if(cameraMode===0){camera.position.lerp(new THREE.Vector3(bp.x*.3,32,37),.025);camera.lookAt(bp.x*.3,0,0);}
     else if(cameraMode===1){camera.position.lerp(new THREE.Vector3(bp.x-12,12,bp.z+17),.04);camera.lookAt(bp.x,0,bp.z);}
     else{camera.position.lerp(new THREE.Vector3(0,58,.1),.035);camera.lookAt(0,0,0);}
+    stadium.update(time,Math.min(1,Math.abs(bp.x)/21));
     renderer.render(scene,camera);
     requestAnimationFrame(frame);
   }
