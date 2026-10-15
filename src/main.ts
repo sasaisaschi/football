@@ -6,10 +6,10 @@ import { createStadium } from './stadium';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('App element missing');
 app.innerHTML = `
-  <header><div><h1>FOOTBALL / MATCHDAY 003</h1><p>3v3 · Trainersteuerung · Spielereignisse · Kamera</p></div>
-  <div class="actions"><button id="attack">Angriff</button><button id="defend">Defensiv</button><button id="camera">Kamera</button><button id="pause">Pause</button><button id="reset">Neustart</button></div></header>
-  <main id="viewport"><div class="hud"><strong>LIVE SIMULATION</strong><div id="clock">Zeit: 0.0 s</div><div id="speed">Ball: 0.0 m/s</div><div id="score">ORANGE 0 : 0 BLAU</div><div id="contacts">Schüsse: 0</div><div id="frames">Physik: 60 Hz (Soll)</div></div>
-  <div class="events" id="events"><b>SPIELEREIGNISSE</b><div id="feed">Anpfiff folgt …</div></div><div class="status" id="status">Initialisiere Rapier WebAssembly …</div></main>`;
+  <header><div><h1>INSIDE THE GAME / MATCHDAY 004</h1><p>LIVE FROM THE ARENA · AUTONOMOUS FOOTBALL</p></div>
+  <div class="actions"><button id="attack">HOHES PRESSING</button><button id="defend">TIEF STEHEN</button><button id="camera">TV-KAMERA</button><button id="sound">STADIONTON AN</button><button id="pause">PAUSE</button><button id="reset">NEUSTART</button></div></header>
+  <main id="viewport"><div class="broadcast"><span class="live-pill">● LIVE</span><span class="team-name home">ORANGE CITY</span><span id="score" class="broadcast-score">0 : 0</span><span class="team-name away">BLUE UNITED</span><span id="clock" class="match-clock">00:00</span></div><div class="match-info"><span>EXHIBITION · 3 VS 3</span><span id="speed">BALL 0.0 M/S</span><span id="contacts">SHOTS 0</span></div><div class="goal-flash" id="goal-flash">GOOOAL!</div>
+  <div class="events" id="events"><b>MATCH INTELLIGENCE · LIVE</b><div id="feed">Anpfiff folgt …</div></div><div class="status" id="status">Initialisiere Stadion …</div></main>`;
 
 const status = document.querySelector<HTMLElement>('#status')!;
 const viewport = document.querySelector<HTMLElement>('#viewport')!;
@@ -22,6 +22,8 @@ const attackButton = document.querySelector<HTMLButtonElement>('#attack')!;
 const defendButton = document.querySelector<HTMLButtonElement>('#defend')!;
 const cameraButton = document.querySelector<HTMLButtonElement>('#camera')!;
 const feed = document.querySelector<HTMLElement>('#feed')!;
+const soundButton=document.querySelector<HTMLButtonElement>('#sound')!;
+const goalFlash=document.querySelector<HTMLElement>('#goal-flash')!;
 
 async function start(): Promise<void> {
   await RAPIER.init();
@@ -44,6 +46,11 @@ async function start(): Promise<void> {
   scene.add(sunlight);
 
   const stadium=createStadium(scene);
+  const stripes=[0x1e7b46,0x23864c];
+  for(let i=0;i<8;i++){
+    const strip=new THREE.Mesh(new THREE.PlaneGeometry(5.25,28),new THREE.MeshStandardMaterial({color:stripes[i%2],roughness:1}));
+    strip.rotation.x=-Math.PI/2;strip.position.set(-18.375+i*5.25,.014,0);strip.receiveShadow=true;scene.add(strip);
+  }
   const grass = new THREE.Mesh(new THREE.PlaneGeometry(48, 34), new THREE.MeshStandardMaterial({ color: '#18673e', roughness: 1 }));
   grass.rotation.x = -Math.PI / 2;
   grass.receiveShadow = true;
@@ -88,19 +95,38 @@ async function start(): Promise<void> {
     world.createCollider(RAPIER.ColliderDesc.capsule(.52,.32).setMass(75).setFriction(.9).setRestitution(0),body);
     const group = new THREE.Group();
     const material = new THREE.MeshStandardMaterial({color,roughness:.75});
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(.32,.28,1.05,12),material);
-    torso.position.y=1.05; torso.castShadow=true; group.add(torso);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(.22,12,12),new THREE.MeshStandardMaterial({color:'#e7b88d'}));
-    head.position.y=1.83;head.castShadow=true;group.add(head);
+    const skin=new THREE.MeshStandardMaterial({color:i%2?'#9b6546':'#d7a47b',roughness:.85});
+    const shorts=new THREE.MeshStandardMaterial({color:i<3?'#171e35':'#e6e9f2',roughness:.8});
+    const boots=new THREE.MeshStandardMaterial({color:'#0c1220',roughness:.55});
+    function limb(w:number,h:number,d:number,xp:number,yp:number,zp:number,mat:THREE.Material){
+      const part=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);part.position.set(xp,yp,zp);part.castShadow=true;group.add(part);return part;
+    }
+    const torso=new THREE.Mesh(new THREE.BoxGeometry(.64,.72,.34),material);
+    torso.position.y=1.36;torso.castShadow=true;group.add(torso);
+    limb(.65,.26,.36,0,.9,0,shorts);
+    limb(.17,.55,.18,-.2,.48,0,skin);limb(.17,.55,.18,.2,.48,0,skin);
+    limb(.22,.16,.35,-.2,.13,.09,boots);limb(.22,.16,.35,.2,.13,.09,boots);
+    limb(.16,.62,.18,-.43,1.31,0,skin);limb(.16,.62,.18,.43,1.31,0,skin);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.19,12,10),skin);
+    head.position.y=1.89;head.castShadow=true;group.add(head);
+    const hair=new THREE.Mesh(new THREE.SphereGeometry(.195,12,8,0,Math.PI*2,0,Math.PI*.4),new THREE.MeshStandardMaterial({color:i%3===0?'#21130c':'#2c2522'}));
+    hair.position.y=1.93;group.add(hair);
+    const number=document.createElement('canvas');number.width=64;number.height=64;
+    const ctx=number.getContext('2d')!;ctx.fillStyle='white';ctx.font='bold 42px Arial';ctx.textAlign='center';ctx.fillText(String(i+1),32,47);
+    const decal=new THREE.Mesh(new THREE.PlaneGeometry(.3,.3),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(number),transparent:true,depthWrite:false,side:THREE.DoubleSide}));
+    decal.position.set(0,1.4,-.18);group.add(decal);
     scene.add(group);
     players.push({body,mesh:group,color,kicks:0,cooldown:0,initial:[x,z],team:i<3?0:1,number:i+1});
   }
 
   let paused=false, time=0, contacts=0, accumulator=0, previous=performance.now();
+  let soundEnabled=false, audio:AudioContext|null=null, noise:AudioBufferSourceNode|null=null, crowdGain:GainNode|null=null;
+  function playGoalHorn(){if(!audio||!soundEnabled)return;for(const hz of [330,440,550]){const osc=audio.createOscillator(),g=audio.createGain();osc.type='sawtooth';osc.frequency.value=hz;g.gain.setValueAtTime(.0001,audio.currentTime);g.gain.exponentialRampToValueAtTime(.045,audio.currentTime+.1);g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+1.6);osc.connect(g).connect(audio.destination);osc.start();osc.stop(audio.currentTime+1.7);}}
+  soundButton.addEventListener('click',()=>{if(!audio){audio=new AudioContext();const buffer=audio.createBuffer(1,audio.sampleRate*3,audio.sampleRate);const data=buffer.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*.2;noise=audio.createBufferSource();noise.buffer=buffer;noise.loop=true;const low=audio.createBiquadFilter();low.type='lowpass';low.frequency.value=420;crowdGain=audio.createGain();crowdGain.gain.value=.06;noise.connect(low).connect(crowdGain).connect(audio.destination);noise.start();}soundEnabled=!soundEnabled;void audio.resume();if(crowdGain)crowdGain.gain.value=soundEnabled?.11:0;soundButton.textContent=soundEnabled?'STADIONTON AUS':'STADIONTON AN';});
   let orange=0, blue=0, tacticalMode:'attack'|'defend'='attack', cameraMode=0, lastFeedTime=-10;
   const events:string[]=[];
   function logEvent(message:string):void {
-    events.unshift(`${'${'}time.toFixed(1)}s · ${'${'}message}`);
+    events.unshift(`${time.toFixed(1)}s · ${message}`);
     if(events.length>7)events.length=7;
     feed.innerHTML=events.map(e=>`<div>${'${'}e}</div>`).join('');
   }
@@ -189,6 +215,7 @@ async function start(): Promise<void> {
       if(ballNow.x>0)orange++;else blue++;
       lastContactText=`TOR! Orange ${orange} : ${blue} Blau — Anstoß folgt.`;
       logEvent(`TOR! ${ballNow.x>0?'ORANGE':'BLAU'} · ${orange}:${blue}`);
+      goalFlash.classList.add('active');goalFlash.textContent=ballNow.x>0?'ORANGE CITY SCORES!':'BLUE UNITED SCORES!';playGoalHorn();
       kickoff();
     } else if(Math.abs(ballNow.x)>23.5 || Math.abs(ballNow.z)>16.5) {
       lastContactText='Ausball: neuer Anstoß (Einwurf-Regeln folgen).';
@@ -220,11 +247,13 @@ async function start(): Promise<void> {
       if(Math.hypot(lv.x,lv.z)>.1)p.mesh.rotation.y=Math.atan2(lv.x,lv.z);
     });
     const v=ball.linvel();velocity.set(v.x,v.y,v.z);
-    clockLabel.textContent=`Zeit: ${time.toFixed(1)} s`;
-    speedLabel.textContent=`Ball: ${velocity.length().toFixed(1)} m/s`;
-    contactLabel.textContent=`Schüsse: ${contacts}`;
-    scoreLabel.textContent=`ORANGE ${orange} : ${blue} BLAU`;
-    status.textContent=lastContactText+' | 3v3-Test: keine trainierte KI, keine vollständigen Fußballregeln.';
+    clockLabel.textContent=`${String(Math.floor(time/60)).padStart(2,'0')}:${String(Math.floor(time%60)).padStart(2,'0')}`;
+    if(goalFlash.classList.contains('active')&&kickoffDelay===0)goalFlash.classList.remove('active');
+    if(crowdGain&&soundEnabled)crowdGain.gain.value=.08+Math.min(.16,Math.abs(bp.x)/21*.16);
+    speedLabel.textContent=`BALL ${velocity.length().toFixed(1)} M/S`;
+    contactLabel.textContent=`SHOTS ${contacts}`;
+    scoreLabel.textContent=`${orange} : ${blue}`;
+    status.textContent=lastContactText;
     if(cameraMode===0){camera.position.lerp(new THREE.Vector3(bp.x*.3,32,37),.025);camera.lookAt(bp.x*.3,0,0);}
     else if(cameraMode===1){camera.position.lerp(new THREE.Vector3(bp.x-12,12,bp.z+17),.04);camera.lookAt(bp.x,0,bp.z);}
     else{camera.position.lerp(new THREE.Vector3(0,58,.1),.035);camera.lookAt(0,0,0);}
