@@ -356,3 +356,51 @@ Avoid creating empty directories until there is actual code. Do not add Supabase
 ---
 
 **Architectural north star:** *We do not simulate the outcome of a football match. We simulate the world in which autonomous agents play football.*
+
+
+## 17. Product vision recovered — THE 12TH MAN / MATCHDAY (2026-10-15)
+
+**Origin:** Earlier concept conversation of 2026-10-14. This section restores previously omitted product intent; it does not claim that the features are implemented.
+
+### 17.1 What we are building
+THE 12TH MAN is an interactive, cross-generational **football matchday experience**, not a FIFA clone or a laboratory for polygon-based player models. The core emotional reference is English football culture: the pub before kickoff, the walk to the ground, chants, club identity, family/community, the tension of a chance and the collective explosion of a goal. Football is an entire shared day, not merely a ninety-minute animation. Manager-like tactical agency and the desire to participate personally belong together.
+
+The opening experience must communicate the vision instantly through **sound, storytelling, crowd behavior, perspective and human participation**, not through developer counters, placeholder cylinders or technical controls. The stadium should feel alive before any simulation details are exposed.
+
+### 17.2 Five originally conceived roles
+- **Match Director:** orchestrates matchday story and audiovisual presentation based on real events.
+- **Football Manager:** supports tactics, club decisions and coach interaction; cannot script outcomes.
+- **Pub Host:** creates pre-match community and football culture; conversational/spoken experience.
+- **Crowd Director:** dynamic chants, crowd reactions, tension and celebrations.
+- **Match Analyst:** explains events and tactical causes from real simulation data, without inventing evidence.
+
+These are **product/agent responsibilities**, not necessarily five separate expensive cloud models or continuously running LLM instances. Prefer event-driven, shared model access and deterministic local systems for immediate reactions.
+
+### 17.3 Low-resource creative direction
+The project has **finite compute, time and money**. Avoid a commitment to twenty-two photorealistic skinned 3D humans or a high-poly stadium. Evaluate composited stadium photography, image layers with parallax, 2.5D sprites / multi-angle player frames, camera direction, recorded or procedurally mixed stadium audio, event-driven short clips and adaptive soundscapes. No claim that single images provide arbitrary 3D rotations or physically correct foot contacts. Visual layers follow authoritative physics, never override it.
+
+**Mobile phone as a possible participation and production surface:** explore phone-based capture of crowd/chant/ambient sound, simple audio sampling, voice contribution, companion experience, shared cheering and inexpensive authentic matchday media. The exact mobile use case is not yet a settled implementation decision; check consent, recording rights and latency before implementation. Phones are not assumed to provide unlimited compute or energy.
+
+### 17.4 Experience sequence to prototype before additional physics cosmetics
+1. **Arrival / anticipation:** club identity, soundscape, approaching the ground, social atmosphere.
+2. **Stadium reveal:** immediate compelling establishing shot, chanting crowd, floodlights and pre-kickoff energy.
+3. **Live unscripted match:** independent player agents and single authoritative physical state; accessible broadcast rendering.
+4. **Emotional match direction:** crowd and commentary react to real chances, tackles, corners and goals; never fabricate them.
+5. **Participation:** coach/manager voice or natural-language tactical choices, optional audience interaction.
+6. **After the whistle:** analyst, narrative, memories, highlights tied to actual recorded match events.
+
+### 17.5 Non-negotiable creative checks
+- First thirty seconds must evoke a matchday, not a physics debugger.
+- Visual approach must be chosen against available hardware and production resources, not industry convention.
+- Authentic sound and timing may contribute more immersion per unit of compute than geometric complexity.
+- Never present technical prototypes as finished football characters or broadcast quality.
+- Preserve physical truth and event provenance even when presentation is cinematic.
+- Separate **agreed original vision**, **candidate implementation**, and **implemented/tested reality**.
+
+### 17.6 Current gap
+As of 2026-10-15, the repository contains an early 3v3 Rapier/Three.js prototype, a geometric stadium, broadcast overlay and an optional GLB loading pipeline. **It does not implement the matchday journey, Pub Host, Crowd Director, authentic audio library, cinematic image compositor or credible player animation assets.** Do not keep polishing the geometric prototype as a substitute for this vision.
+
+### 17.7 Working agreements
+- Local `npm run check` is the verification workflow; **do not add GitHub Actions/workflows without explicit user approval**.
+- Re-read this vision before major implementation. Prioritize decisive experiential improvements over superficial iteration.
+- Treat architecture candidates in earlier sections (including GitHub Actions) as **not approved** when they conflict with these explicit agreements.
