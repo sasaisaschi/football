@@ -254,6 +254,8 @@ async function start(): Promise<void> {
       }
     }
     const v=ball.linvel(),speed=Math.hypot(v.x,v.y,v.z);
+    // Rapier user forces persist across steps; drag must be recomputed fresh every tick.
+    ball.resetForces(true);
     if(speed>.05) {
       const drag=.5*1.225*.25*Math.PI*ballRadius*ballRadius*speed;
       ball.addForce({x:-drag*v.x,y:-drag*v.y,z:-drag*v.z},true);
