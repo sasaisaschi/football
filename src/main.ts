@@ -8,6 +8,7 @@ import { createPitchVisuals } from './pitch-visuals';
 import { PITCH } from './pitch';
 import { BALL } from './ball';
 import { Match, MatchEvent } from './match';
+import { MomentDirector } from './moment-director';
 import { createContactDiagnostics } from './diagnostics';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -15,7 +16,7 @@ if (!app) throw new Error('App element missing');
 app.innerHTML = `
   <header><div><h1>THE 12TH MAN / MATCHDAY</h1><p>LIVE FROM THE ARENA · AUTONOMOUS FOOTBALL</p></div>
   <div class="actions"><button id="attack">HOHES PRESSING</button><button id="defend">TIEF STEHEN</button><button id="camera">TV-KAMERA</button><button id="diagnostics">KONTAKTE</button><button id="sound">STADIONTON AN</button><button id="pause">PAUSE</button><button id="reset">NEUSTART</button></div></header>
-  <main id="viewport"><div class="broadcast"><span class="live-pill">● LIVE</span><span class="team-name home">ORANGE CITY</span><span id="score" class="broadcast-score">0 : 0</span><span class="team-name away">BLUE UNITED</span><span id="clock" class="match-clock">00:00</span></div><div class="match-info"><span>EXHIBITION · 11 VS 11</span><span id="speed">BALL 0.0 M/S</span><span id="contacts">TORSCHÜSSE 0 : 0</span></div><div class="goal-flash" id="goal-flash">GOOOAL!</div>
+  <main id="viewport"><div class="broadcast"><span class="live-pill">● LIVE</span><span class="team-name home">ORANGE CITY</span><span id="score" class="broadcast-score">0 : 0</span><span class="team-name away">BLUE UNITED</span><span id="clock" class="match-clock">00:00</span></div><div class="match-info"><span>EXHIBITION · 11 VS 11</span><span id="speed">BALL 0.0 M/S</span><span id="contacts">TORSCHÜSSE 0 : 0</span></div><div class="goal-flash" id="goal-flash">GOOOAL!</div><section class="moment-panel" id="moment-panel" hidden aria-live="polite"><div class="moment-eyebrow">DEIN MOMENT · TRAINERENTSCHEIDUNG</div><h2 id="moment-title"></h2><p id="moment-context"></p><div id="moment-options" class="moment-options"></div><button id="moment-skip" type="button">KI ENTSCHEIDEN LASSEN</button></section>
   <div class="events" id="events"><b>MATCH INTELLIGENCE · LIVE</b><div id="feed">Anpfiff folgt …</div></div><div class="status" id="status">Initialisiere Stadion …</div></main>`;
 
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
@@ -41,6 +42,30 @@ async function start(): Promise<void> {
   await RAPIER.init();
   const seed = Math.floor(Math.random() * 1e9);
   const match = new Match(seed);
+  const momentDirector = new MomentDirector(match);
+  const momentPanel = $<HTMLElement>('#moment-panel');
+  const momentOptions = $<HTMLElement>('#moment-options');
+  const showMoment = () => {
+    const moment = momentDirector.active;
+    if (!moment) return;
+    momentPanel.hidden = false;
+    $<HTMLElement>('#moment-title').textContent = moment.heading;
+    $<HTMLElement>('#moment-context').textContent = moment.context;
+    momentOptions.replaceChildren();
+    moment.options.forEach((option, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = option.label;
+      button.title = option.description;
+      button.addEventListener('click', () => {
+        if (!momentDirector.choose(index)) return;
+        momentPanel.hidden = true;
+        statusText = 'Trainerentscheidung übernommen – die Physik entscheidet.';
+      });
+      momentOptions.append(button);
+    });
+  };
+  $<HTMLButtonElement>('#moment-skip').addEventListener('click', () => { momentDirector.dismiss(); momentPanel.hidden = true; });
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#081322');
@@ -174,6 +199,7 @@ async function start(): Promise<void> {
   pauseButton.addEventListener('click', () => { paused = !paused; pauseButton.textContent = paused ? 'FORTSETZEN' : 'PAUSE'; });
   $<HTMLButtonElement>('#reset').addEventListener('click', () => {
     match.reset();
+    momentDirector.reset(); momentPanel.hidden = true;
     shots[0] = 0; shots[1] = 0; feedLines.length = 0;
     logLine('Neustart: Anstoß ORANGE');
   });
@@ -204,7 +230,11 @@ async function start(): Promise<void> {
     if (!paused && introFinished) {
       accumulator += elapsed;
       let steps = 0;
-      while (accumulator >= 1 / 60 && steps < 6) { match.step(); accumulator -= 1 / 60; steps++; }
+      while (accumulator >= 1 / 60 && steps < 6) {
+        if (momentDirector.active) { accumulator = 0; break; }
+        match.step(); accumulator -= 1 / 60; steps++;
+        if (momentDirector.update()) { showMoment(); accumulator = 0; break; }
+      }
       if (steps === 6) accumulator = 0;
     }
     const bp = match.ball.translation(), br = match.ball.rotation(), bv = match.ball.linvel();
