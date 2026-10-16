@@ -716,3 +716,12 @@ Der Matchday kann logisch fünf Rollen haben: Pub Host, Football Manager, Match 
 - Bundlegröße 5,3 MB (Rapier-WASM inline).
 
 **Nächste sinnvolle Schritte:** (a) Wahrnehmung und Passauswahl verbessern, Passquote messbar steigern; (b) Torwarttechnik mit eigenem Hand-Kollider; (c) Erkennung entscheidender Momente auf Basis des Ereignisprotokolls plus erste Entscheidungs-UI über `setUserIntent`; (d) Magnus-Effekt und Rollwiderstand kalibrieren; (e) Fouls im Schiedsrichter.
+
+
+## 23. Entscheidende Momente – erste Integration (16.10.2026)
+
+**Code auf `feature/decisive-moments-v1`, noch nicht laufzeitverifiziert:** `src/moment-director.ts` prüft den autoritativen Matchzustand auf offensive Chancen, Ballbesitz unter Druck und unmittelbare defensive Bedrohungen. Ein Cooldown begrenzt die Zahl der angebotenen Eingriffe. `src/main.ts` zeigt bei einer erkannten Situation eine Trainerauswahl, pausiert während der Wahl und übergibt eine ausgewählte Absicht über die vorhandene `Match.setUserIntent`-Schnittstelle. Das physikalische Ergebnis bleibt im Simulationskern; keine Ballmanipulation und keine geskripteten Tore.
+
+**Abgrenzung:** Dies ist ausdrücklich eine regelbasierte erste Auswahlheuristik, keine trainierte KI, keine umfassende Bewertung des erwarteten Einflusses auf den Spielausgang. Die Abwehrentscheidung »Zustellen« ist derzeit eine bestehende `control`-Absicht und **kein** echter Laufweg-/Tackle-Befehl; Fouls und rote Karten bleiben unimplementiert. Die derzeitige Auswahl des nächstgelegenen Spielers ist eine Näherung und garantiert nicht, dass eine gewünschte Aktion physikalisch ausführbar ist. Eine ausbleibende Fußberührung oder misslungene Aktion ist möglich.
+
+**Prüfstatus:** Drei Vitest-Fälle in `src/moment-director.test.ts` erstellt (Anstoß ohne Moment, Moment/Trainerauswahl, Cooldown). Tests und Browserprüfung wurden in dieser Sitzung **nicht ausgeführt**; ein grüner Build wird nicht behauptet. Vor dem Merge `npm run check` und eine interaktive Browserprüfung durchführen. Folgearbeit: Gegenangriffe/spielrelevante Zustandswechsel robust bewerten, menschliche Optionsauswahl an Realisierbarkeit koppeln, defensive `ActionIntent`-Arten, Kollisionen/Fouls/Schiedsrichteragent, situationsgerechte Kamera und Inszenierung.
