@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "sources": [
+    "src/player-visuals.ts",
+    "src/main.ts",
+    "src/stadium.ts"
+  ],
+  "implemented": {
+    "modelPaths": [
+      "/models/orange-footballer.glb",
+      "/models/blue-footballer.glb"
+    ],
+    "supportedClipLabels": [
+      "idle",
+      "run",
+      "walk",
+      "kick",
+      "celebrate"
+    ],
+    "clipDetection": "name-based matching against glTF animations",
+    "visualFallback": "procedural box-bodied footballer",
+    "blendSeconds": 0.22,
+    "runSpeedThreshold": 3.2,
+    "walkSpeedThreshold": 0.5,
+    "crowd": "subtle global sine-wave vertical displacement"
+  },
+  "limitations": [
+    "GLB files not confirmed in GitHub",
+    "kick clip recognition does not implement foot collision",
+    "individual crowd animations not implemented",
+    "no full skeletal movement in procedural fallback"
+  ],
+  "planned": [
+    "animated fan sprite atlases",
+    "foot-to-ball action timing",
+    "turning and braking",
+    "goal celebrations",
+    "keeper saves",
+    "motion matching where affordable"
+  ]
+}
