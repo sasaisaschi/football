@@ -10,7 +10,10 @@ export type FootballerVisual={
 const loader=new GLTFLoader();
 const modelCache=new Map<string,Promise<Awaited<ReturnType<typeof loader.loadAsync>>|null>>();
 function fetchModel(url:string){
-  if(!modelCache.has(url))modelCache.set(url,loader.loadAsync(url).catch(()=>null));
+  if(!modelCache.has(url))modelCache.set(url,loader.loadAsync(url).catch((error:unknown)=>{
+    console.warn(`Footballer model ${url} not available, placeholder figure stays in use:`,error);
+    return null;
+  }));
   return modelCache.get(url)!;
 }
 const animations=['idle','run','walk','kick','celebrate'] as const;
@@ -46,7 +49,7 @@ export async function loadFootballer(team:number,number:number):Promise<Football
   root.userData.playerNumber=number;
   return {root,mixer,actions,current:first};
 }
-export function updateFootballer(visual:FootballerVisual,dt:number,speed:number,cooldown:number):void{
+export function updateFootballer(visual:FootballerVisual,dt:number,speed:number,swinging:boolean):void{
   const target=speed>3.2?'run':speed>.5?'walk':'idle';
   const name=visual.actions.has(target)?target:visual.actions.has('run')?'run':'idle';
   if(name!==visual.current&&visual.actions.has(name)){
@@ -58,7 +61,11 @@ export function updateFootballer(visual:FootballerVisual,dt:number,speed:number,
   }
   const action=visual.actions.get(name);
   if(action)action.timeScale=Math.max(.65,Math.min(1.6,speed/4.5));
-  // Kicking is intentionally not faked as a ball contact: motor/foot physics is separate work.
-  void cooldown;
+  // The clip only accompanies a swing that the physics foot is really performing; it never causes contact.
+  if(swinging&&visual.actions.has('kick')&&visual.current!=='kick'){
+    visual.actions.get(visual.current)?.fadeOut(.08);
+    visual.actions.get('kick')!.reset().fadeIn(.08).play();
+    visual.current='kick';
+  }
   visual.mixer.update(dt);
 }

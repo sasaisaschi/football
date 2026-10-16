@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PITCH } from './pitch';
 
 /** Grass, IFAB markings, goal frames and nets. Pure presentation; collision lives in pitch.ts. */
@@ -26,15 +27,17 @@ export function createPitchVisuals(scene: THREE.Scene): void {
   }
 
   // Markings as flat quads so they keep their true 12 cm width at any camera distance.
+  // All markings are merged into one geometry: one draw call instead of several hundred.
   const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xeef8f0 });
   const w = PITCH.lineWidth;
+  const pieces: THREE.BufferGeometry[] = [];
+  const place = new THREE.Object3D();
   const segment = (x1: number, z1: number, x2: number, z2: number) => {
     const length = Math.hypot(x2 - x1, z2 - z1);
-    const quad = new THREE.Mesh(new THREE.PlaneGeometry(length + w, w), lineMaterial);
-    quad.rotation.x = -Math.PI / 2;
-    quad.rotation.z = -Math.atan2(z2 - z1, x2 - x1);
-    quad.position.set((x1 + x2) / 2, 0.008, (z1 + z2) / 2);
-    scene.add(quad);
+    place.rotation.set(-Math.PI / 2, 0, -Math.atan2(z2 - z1, x2 - x1));
+    place.position.set((x1 + x2) / 2, 0.008, (z1 + z2) / 2);
+    place.updateMatrix();
+    pieces.push(new THREE.PlaneGeometry(length + w, w).applyMatrix4(place.matrix));
   };
   const polyline = (points: [number, number][]) => {
     for (let i = 1; i < points.length; i++) segment(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);
@@ -49,10 +52,10 @@ export function createPitchVisuals(scene: THREE.Scene): void {
   segment(0, -hw + inset, 0, hw - inset);
   arc(0, 0, PITCH.centerCircleRadius, 0, Math.PI * 2, 96);
   const spot = (x: number, z: number) => {
-    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.11, 16), lineMaterial);
-    dot.rotation.x = -Math.PI / 2;
-    dot.position.set(x, 0.009, z);
-    scene.add(dot);
+    place.rotation.set(-Math.PI / 2, 0, 0);
+    place.position.set(x, 0.009, z);
+    place.updateMatrix();
+    pieces.push(new THREE.CircleGeometry(0.11, 16).applyMatrix4(place.matrix));
   };
   spot(0, 0);
   for (const s of [-1, 1]) {
@@ -77,6 +80,8 @@ export function createPitchVisuals(scene: THREE.Scene): void {
     }
     createGoalVisual(scene, s);
   }
+  // Plane and circle geometries share position/normal/uv attributes, so they merge directly.
+  scene.add(new THREE.Mesh(mergeGeometries(pieces), lineMaterial));
 }
 
 function createGoalVisual(scene: THREE.Scene, side: number): void {
