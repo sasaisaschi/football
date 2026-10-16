@@ -224,6 +224,7 @@ export class MatchEngine {
         ready: r.placed && restartReady(r, this.profiles, this.positions(), t => this.sign(t), this.time, this.referee.sentOff),
       } : null,
       handsAllowed: this.phase === 'in-play' && this.referee.keeperReleased !== p.id && !this.isBackPass(p.team),
+      ballHeldBy: this.heldBy,
     };
     const keeper = this.keepers.get(p.id);
     if (keeper) return keeper.think(ctx, () => brain.think(ctx));

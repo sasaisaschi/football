@@ -22,6 +22,8 @@ export type BrainContext = {
   restart: { kind: RestartKind; team: 0 | 1; taker: number; spot: Vec2; minDistance: number; ownHalfOnly: boolean; ready: boolean } | null;
   /** May the player use his hands? (keeper in own area, ball in play, not a back-pass) */
   handsAllowed: boolean;
+  /** Keeper holding the ball in his hands, if any. Nobody may challenge him (Law 12). */
+  ballHeldBy: number | null;
 };
 
 export type BrainOutput = { command: BodyCommand; effort: number; swing: { action: BallAction; source: 'ai' | 'user' } | null };
@@ -111,7 +113,7 @@ export class PlayerBrain {
       if (ctx.now < order.until && !ctx.restart) return this.followOrder(order.action, ctx, ball);
       this.userIntent = null;
     }
-    this.committedToBall = this.believesBallIsMine(ctx, ball);
+    this.committedToBall = ctx.ballHeldBy === null && this.believesBallIsMine(ctx, ball);
     if (this.committedToBall) return this.playBall(ctx, ball);
     this.intent = null;
     return { command: this.steerAround(this.offBall(ctx, ball), ctx), effort: 1, swing: null };

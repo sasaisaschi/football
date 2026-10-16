@@ -102,16 +102,19 @@ export class MomentDirector {
     const ahead = (t: TeamId) => snapshot.players.filter(p => !p.sentOff && e.profiles[p.id].team === t && sign * (p.position.x - ball.x) > 0).length;
     const base = e.instructions[team];
     const instr = (over: Partial<TeamInstruction>): TeamInstruction => ({ ...base, ...over });
-    if (touch.team === team && u > -0.45 && u < 0.35) {
+    if (touch.team === team && u > -0.6 && u < 0.05 && e.time - e.halfStartedAt > 20) {
+      // A real counter: won in our half, the ball carrier is moving forward and the opponents are outnumbered
+      // or level ahead of the ball.
       const attackers = ahead(team), defenders = ahead((1 - team) as TeamId);
-      if (defenders - attackers > 3) return null; // no real counter on
+      const carrierV = e.bodies[touch.player].velocity();
+      if (attackers < 2 || defenders > attackers + 1 || sign * carrierV.x < 1.5) return null;
       const options: DecisionOption[] = [
         { id: 'counter', label: 'Schnell kontern', detail: 'Risiko hoch, Stürmer laufen tief', effect: { type: 'team', team, instruction: instr({ risk: 0.95, lineHeight: 0.5, press: 'high' }), seconds: 15 }, outlook: `${attackers} gegen ${defenders} vor dem Ball` },
         { id: 'secure', label: 'Ball sichern', detail: 'Tempo raus, Mannschaft nachrücken lassen', effect: { type: 'team', team, instruction: instr({ risk: 0.15, lineHeight: 0 }), seconds: 15 }, outlook: 'weniger Ballverlustrisiko, Gegner formiert sich' },
       ];
       return this.open(e, 'counter-attack', 'Ballgewinn – Konter?', `Ballgewinn ${Math.round((u + 1) * 52.5)} m vor dem eigenen Tor.`, touch.player, options, base.risk > 0.6 ? 'counter' : 'secure');
     }
-    if (touch.team !== team && u > 0.15) {
+    if (touch.team !== team && u > 0.15 && e.time - e.halfStartedAt > 20) {
       const options: DecisionOption[] = [
         { id: 'gegenpress', label: 'Sofort gegenpressen', detail: 'Hoch pressen, Linie rückt auf', effect: { type: 'team', team, instruction: instr({ press: 'high', lineHeight: 0.7 }), seconds: 10 }, outlook: 'schnelle Rückeroberung möglich, Raum hinter der Abwehr' },
         { id: 'drop', label: 'Fallen lassen', detail: 'Kompakt hinter den Ball', effect: { type: 'team', team, instruction: instr({ press: 'low', lineHeight: -0.6 }), seconds: 10 }, outlook: 'sicherer, Gegner baut ruhig auf' },
@@ -162,7 +165,7 @@ export class MomentDirector {
     const team = e.profiles[player].team;
     return {
       now: e.time, truth: e.truth(), sign: e.sign(team), instruction: e.instructions[team], possession: e.possession(),
-      ball: e.physics.ball, profiles: e.profiles, restart: null, handsAllowed: false,
+      ball: e.physics.ball, profiles: e.profiles, restart: null, handsAllowed: false, ballHeldBy: e.snapshot().ball.heldBy,
     };
   }
 }

@@ -71,6 +71,11 @@ export class KeeperHands {
     this.target = { x: shoulder.x + dx * k, y: Math.max(HANDS.radius, shoulder.y + dy * k), z: shoulder.z + dz * k };
   }
 
+  /** True once the hands have reached their current target (within `tolerance` metres). */
+  arrived(tolerance: number): boolean {
+    return Math.hypot(this.target.x - this.rel.x, this.target.y - this.rel.y, this.target.z - this.rel.z) <= tolerance;
+  }
+
   relax(): void {
     this.target = this.restRel();
   }

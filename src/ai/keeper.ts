@@ -39,7 +39,8 @@ export class KeeperSkill {
       if (ctx.now >= this.releaseAt) {
         const f = body.facing();
         this.hands.reachFor({ x: self.x + f.x * 0.6, y: 0.25, z: self.z + f.z * 0.6 });
-        if (this.hands.rel.y < 0.45) { this.hands.release(); this.releaseAt = 0; }
+        // Let go once the hands are as low as the arms allow; the ball drops in front of his feet.
+        if (this.hands.arrived(0.06) || ctx.now > this.releaseAt + 2.5) { this.hands.release(); this.releaseAt = 0; }
       }
       return { command: { target: self, speed: 0, face: { x: 0, z: self.z * 0.5 } }, effort: 1, swing: null };
     }

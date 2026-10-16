@@ -114,4 +114,21 @@ describe('autonomous 11 v 11 match', () => {
     expect(saves + goals).toBeGreaterThan(0);
     expect(saves).toBeGreaterThan(0);
   }, 120_000);
+
+  it('a keeper who catches the ball releases it within the six seconds of Law 12 and play goes on', () => {
+    const e = new MatchEngine({ seed: 1, halfMinutes: 10 });
+    const st = e.profiles.find(p => p.team === 0 && p.role === 'ST')!.id;
+    const gk = e.profiles.find(p => p.team === 1 && p.role === 'GK')!.id;
+    stageScenario(e, { [st]: { x: 34.6, z: 0.12 }, [gk]: { x: 51.5, z: 0 } }, { x: 35, y: 0.11, z: 0 });
+    e.bodies[st].heading = Math.PI / 2;
+    e.setUserIntent(st, { type: 'ball', action: { kind: 'shot', aim: { x: PITCH.halfLength, y: 1, z: 2.8 }, speed: 26 }, source: 'user', decidedAt: e.time });
+    runFor(e, 3, () => e.events.some(ev => ev.type === 'catch'));
+    const caught = e.events.find(ev => ev.type === 'catch');
+    expect(caught).toBeDefined();
+    runFor(e, 6);
+    const released = e.events.find(ev => ev.type === 'release');
+    expect(released).toBeDefined();
+    expect(released!.time - caught!.time).toBeLessThan(6);
+    expect(e.snapshot().ball.heldBy).toBeNull();
+  });
 });
