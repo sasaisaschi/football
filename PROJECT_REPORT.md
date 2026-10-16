@@ -92,7 +92,20 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 
 Behobene Ursachen: Torwart nahm Rückpässe nicht mit dem Fuß an (Eigentore), Torwart konnte einen gefangenen Ball nie loslassen (Armreichweite) und wurde dann minutenlang „angeschossen“, Spieler sprinteten ungebremst in Gegner, Torwartwahrnehmung wurde nicht aktualisiert, Hechtsprung wurde sofort abgebremst, Schuhe fuhren beim Start über den Anstoßpunkt.
 
-**Volle Partie (2 × 45 min):** wird nach Abschluss des laufenden `npm run sim` eingetragen.
+**Volle Partie (`npm run sim`, 2 × 45 min, Seed 2026, 17.10.2026, nach allen Korrekturen):** Partie läuft fehlerfrei bis Abpfiff; 632 s Rechenzeit (1,95 ms pro Physikschritt im Node-Test, parallel zu anderen Läufen).
+
+| Messwert | Ergebnis | realer Richtwert |
+| --- | --- | --- |
+| Ergebnis | 1 : 8 | ~1,5 : 1,2 |
+| Torschüsse | 59 / 26 | ~13 / 12 |
+| Pässe / Passquote (nächster Kontakt durch Mitspieler) | 915 / 47 % | ~900 / ~80 % |
+| Ballbesitz | 48 % / 52 % | – |
+| Ball im Spiel | 79 % | ~60 % |
+| Fouls / Gelb / Rot / Elfmeter | 26 / 2 / 0 / 1 | ~22 / ~4 / ~0,1 / ~0,3 |
+| Abseits / Ecken / Einwürfe / Abstöße | 6 / 38 / 159 / 75 | ~4 / ~10 / ~45 / ~18 |
+| Gefangene Bälle Torwart | 2 | mehrere |
+
+Bewertung: Foulrate realistisch; Torschüsse, Tore, Ausbälle und Passquote sind deutlich unrealistisch. Die frühere 2 × 10-Minuten-Messung zeigte 75 % Passquote, die volle Partie 47 % – die Kennzahl schwankt stark zwischen Seeds und Spielständen und braucht eine Messreihe über mehrere Seeds.
 
 ## 7. Bekannte Grenzen / offene Punkte
 
