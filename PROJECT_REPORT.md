@@ -1,94 +1,126 @@
 # THE 12TH MAN – Technical Report & Development Guide
 
-**Status:** Neuaufbau seit 16.10.2026 auf Branch `claude/12th-man-rebuild` (abgezweigt vom bereinigten `main` nach PR #3).
-**Rolle dieses Dokuments:** verbindliche Source of Truth für Architektur, tatsächlichen Stand, Versionen, Tests und nächste Schritte.
-**Kennzeichnung:** **Implementiert** = Code vorhanden · **Getestet** = durch tatsächlich ausgeführte Tests belegt · **Geplant** = noch nicht vorhanden · **Nicht geprüft** = vorhanden, aber ohne Nachweis.
+**Stand:** 17.10.2026 · Branch `claude/12th-man-rebuild` (vom bereinigten `main` nach PR #3, ohne übernommenen Altcode).
+**Rolle:** verbindliche Source of Truth für Architektur, tatsächlichen Stand, Versionen, Tests, Messwerte und nächste Schritte.
+**Kennzeichnung:** **Implementiert** = Code vorhanden · **Getestet** = durch tatsächlich ausgeführte Tests belegt · **Gemessen** = Zahl aus einem tatsächlichen Lauf · **Geplant** = nicht vorhanden · **Nicht geprüft** = vorhanden, ohne Nachweis.
 
-## 1. Produktauftrag (aus README.md)
+## 1. Produktauftrag (README.md)
 
-Elf gegen elf spielen eigenständig Fußball. Ein **Decisive Moment Director** erkennt seltene Situationen, in denen eine Entscheidung des Benutzers den Verlauf spürbar verbessern oder verschlechtern kann, und bietet nur tatsächlich ausführbare Optionen an. Die Entscheidung ändert Handlungsmöglichkeiten, nicht das Ergebnis: Spielerkörper, Fußkontakt, Ballphysik, Gegner und Schiedsrichter bestimmen, was passiert. Keine geskripteten Szenen, keine Teleports, keine garantierten Erfolge. Zwischen den Momenten bleibt der Spielzustand zusammenhängend; Leerlauf darf verdichtet (schneller abgespielt), aber nicht erfunden werden.
+Elf gegen elf spielen eigenständig Fußball. Ein **Decisive Moment Director** erkennt seltene Situationen, in denen eine Entscheidung des Benutzers den Verlauf spürbar beeinflussen kann, und bietet nur ausführbare Optionen an. Die Entscheidung ändert Handlungsmöglichkeiten, nicht das Ergebnis: Körper, Fußkontakt, Ballphysik, Gegner und Schiedsrichter bestimmen, was passiert. Keine geskripteten Szenen, keine Teleports, keine garantierten Erfolge. Leerlauf darf verdichtet (schneller abgespielt), aber nicht erfunden werden.
 
-Die frühere Implementierung (PR #1/#2) ist nur Git-Historie und **keine Vorlage**; es wurde kein Code übernommen.
+## 2. Tech Stack (installiert und geprüft)
 
-## 2. Tech Stack (tatsächlich installiert, 16.10.2026)
-
-Geprüft per `npm view <paket> version engines peerDependencies` gegen Node 24.20.0 / npm 11.19.0 (Systeminstallation unverändert, nur lokale Abhängigkeiten).
+Geprüft am 16.10.2026 per `npm view <paket> version engines peerDependencies` gegen Node 24.20.0 / npm 11.19.0. Die Systeminstallation von Node/npm wurde nicht verändert; alle Pakete sind lokal.
 
 | Paket | Version | Zweck | Kompatibilität |
 | --- | --- | --- | --- |
-| `three` | 0.186.1 | Rendering | keine Engine-Vorgabe |
-| `@dimforge/rapier3d-simd-compat` | 0.21.0 | Physik (WASM mit SIMD, inline) | WASM-SIMD: Chrome/Edge ≥ 91, Firefox ≥ 89, Safari ≥ 16.4 – alle aktuellen Zielbrowser |
-| `typescript` | 7.0.2 | Typprüfung (`tsc --noEmit`) | node ≥ 16.20 |
+| `three` | 0.186.1 | Rendering | – |
+| `@dimforge/rapier3d-simd-compat` | 0.21.0 | Physik (WASM mit SIMD, inline) | WASM-SIMD: Chrome/Edge ≥ 91, Firefox ≥ 89, Safari ≥ 16.4 |
+| `typescript` | 7.0.2 | Typprüfung | node ≥ 16.20 |
 | `vite` | 8.3.4 | Dev-Server, Build (Rolldown) | node ^20.19 ∥ ≥ 22.12 |
-| `vitest` | 5.0.5 | Tests | node ^22.12 ∥ ^24; peer vite ^6–^8 ✔ |
+| `vitest` | 5.0.5 | Tests | node ^22.12 ∥ ^24; peer vite ^6–^8 |
 | `@types/three` | 0.186.0 | Typen | passend zu three 0.186 |
-| `@types/node` | 24.19.2 | Typen für Tests/Skripte | Node-24-Linie (26.x bewusst nicht gewählt) |
+| `@types/node` | 24.19.2 | Typen (Node-24-Linie, nicht 26.x) | – |
 
-Kein React/Framework: Die Oberfläche besteht aus wenigen DOM-Panels über einem WebGL-Canvas; ein Framework bringt dafür keinen technischen Nutzen.
+Kein React/Framework (die Oberfläche besteht aus wenigen DOM-Panels über einem WebGL-Canvas), kein Backend, kein Tailwind.
 
 ## 3. Architektur
 
 ```text
 src/
-  engine/     A  Authoritative Match Engine – Zustand, Ablauf, Ereignisse, Snapshots (headless)
-  physics/    B  Physical World – Rapier-Welt, Feld, Ball, Körper, Schuhe, Torwarthände, Kontakte
-  ai/         C  Autonomous Football Intelligence – Wahrnehmung, Mannschaftsform, Entscheidungen
-  rules/      D  Rules & Referee – Tor, Aus, Abseits, Fouls, Karten, Spielfortsetzungen
-  director/   E  Decisive Moment Director – Erkennung, Bewertung, ausführbare Optionen
-  ui/         F  User Decision Interface + Broadcast-UI (DOM, CSS neben der TS-Datei)
-  render/     G  Broadcast Experience – Stadion, Spieler, Kamera (Three.js)
-  audio/      G  Stadionton aus echten Ereignissen (Web Audio)
-  styles/     design_variables.css – Design-Tokens
+  engine/    A  Match Engine: Zeit, Halbzeiten, Phasen, Spielfortsetzungen, Ereignisse, Snapshots (headless)
+  physics/   B  Rapier-Welt, Feld/Tore/Netze/Banden/Tribünenfront, Ball, Körper, Schuhe, Torwarthände
+  ai/        C  Wahrnehmung, Mannschaftsform, Optionsbewertung, Ausführung, Torwartspiel
+  rules/     D  Schiedsrichter: Tor, Aus, Abseits, Fouls, Karten, Elfmeter, Vorteil, Handspiel, Rückpass
+  director/  E  Decisive Moment Director
+  ui/        F  Startbildschirm, HUD/Ticker, Entscheidungspanel, Kommentar aus Ereignissen (CSS neben TS)
+  render/    G  Stadion, Rasen, Spielerfiguren, Ball, TV-Regie
+  audio/     G  synthetisierter Stadionton aus echten Ereignissen
+  app.ts     Spielschleife: fester Physikschritt, Interpolation, Zeitraffer, Ereignisverteilung
+  main.ts    Einstieg, Renderer, Licht, URL-Parameter
+scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 ```
 
-**Verbindliche Regeln der Architektur**
-1. **Single writer:** Nur `engine` + `physics` ändern Körper- und Ballzustand. Alle anderen Schichten lesen `MatchSnapshot` oder liefern Absichten (`PlayerIntent`, `TeamInstruction`).
-2. **Ball ohne Abkürzung:** Im laufenden Spiel bewegt sich der Ball nur durch Rapier-Kontakte, Schwerkraft, Luftwiderstand, Magnus-Kraft und Rollwiderstand. Der Schiedsrichter darf einen **toten** Ball zur Spielfortsetzung platzieren.
-3. **Absicht ≠ Ergebnis:** KI und Benutzer erzeugen dieselben `PlayerIntent`-Objekte; die Ausführung läuft über Körperbewegung und Schuhkontakt.
-4. **Fester Zeitschritt:** Physik 1/60 s; bei schnellen Schwüngen Teilschritte (Begründung folgt in Phase 2). Darstellung interpoliert und ist bildratenunabhängig.
-5. **Reproduzierbar:** Jede Zufallsentscheidung nutzt den seedbaren Generator `engine/rng.ts`.
-6. **Keine erfundenen Ereignisse:** Kamera, Ton, Kommentar reagieren nur auf `MatchEvent`s.
-
-**Schnittstellen:** `src/engine/types.ts` definiert `PlayerProfile`, `PlayerIntent`/`BallAction`/`MovementAction`, `TeamInstruction`, `MatchEvent`, `DecisionMoment`/`DecisionOption` und `MatchSnapshot`.
+**Verbindliche Regeln**
+1. **Single writer:** Nur `engine` + `physics` ändern Körper- und Ballzustand; alle anderen lesen `MatchSnapshot` oder liefern Absichten (`PlayerIntent`, `TeamInstruction`). Schnittstellen: `src/engine/types.ts`.
+2. **Ball ohne Abkürzung:** Im Spiel bewegt sich der Ball nur durch Rapier-Kontakte, Schwerkraft, Luftwiderstand, Magnus-Kraft und Rollwiderstand. Nur `MatchEngine.placeDeadBall` setzt den Ball, und nur aus Anstoß/Spielfortsetzung (Quelltext-Test `no-magnet.test.ts`).
+3. **Absicht ≠ Ergebnis:** KI und Benutzer erzeugen dieselben `PlayerIntent`s; ausgeführt wird über Körper und Schuhkontakt.
+4. **Entscheidung vor Handlung:** Der Director wird am Anfang eines Ticks befragt, bevor Spieler sich festlegen; läuft der Schwung schon, wird kein Moment mehr geöffnet.
+5. **Fester Zeitschritt** 1/60 s, Teilschritte nur bei schnellen Schwüngen; Darstellung interpoliert, Kamera zeitbasiert.
+6. **Reproduzierbar:** jede Zufallsentscheidung über `engine/rng.ts` (Seed); gleicher Seed → gleiche Partie (getestet).
+7. **Keine erfundenen Ereignisse:** Kamera, Ton, Ticker und Kommentar reagieren nur auf `MatchEvent`s.
 
 ## 4. Features & Status
 
-| Bereich | Status |
-| --- | --- |
-| Projektfundament, Verträge, IFAB-Geometrie, Seed-Zufall | Implementiert, getestet (Phase 1) |
-| Physikwelt, 22 Körper, Fußkontakte | Implementiert, getestet (Phase 2) |
-| Autonomer Fußball, Regeln, Torhüter | Geplant (Phase 3) |
-| Decisive Moment Director, Entscheidungen | Geplant (Phase 4) |
-| Stadion, Kamera, UI, Ton | Geplant (Phase 5) |
-
-## 5. Testing Status
-
-| Datum | Befehl | Ergebnis |
+| Bereich | Status | Wesentliche Dateien |
 | --- | --- | --- |
-| 16.10.2026 | `npm install` (exakte Zielversionen) | 0 Vulnerabilities, `npm ls` bestätigt Versionen |
-| 16.10.2026 | `npm run check` | siehe Phasenprotokoll unten |
+| Projektfundament, Verträge, IFAB-Geometrie, Seed-Zufall | Implementiert, getestet | `engine/types.ts`, `physics/pitch-geometry.ts`, `engine/rng.ts` |
+| Physikwelt: Ball (Drag-Crisis, Magnus, Rollwiderstand), Tore, Netze, Banden, Tribünenfront, 22 Körper | Implementiert, getestet | `physics/*` |
+| Physische Fußkontakte (Pass, Schuss, Dribbling, Klärung, Ballannahme), Luftlöcher | Implementiert, getestet | `physics/legs.ts`, `ai/execution.ts` |
+| Torwart: Reaktionszeit, Reichweite, Hechtsprung, Fangen als Rapier-Gelenk, Abwurf, Fußspiel bei Rückpass | Implementiert, getestet | `physics/hands.ts`, `ai/keeper.ts` |
+| Wahrnehmung (Blickfeld, Schulterblick, Rauschen, Latenz) | Implementiert, indirekt getestet | `ai/perception.ts` |
+| Positionsspiel 4-3-3, Ballgewinner dezentral, Jockeying, Pressing, Deckung, Ausweichen, Bremsen vor Körpern | Implementiert, getestet (Zonen-Test) | `ai/shape.ts`, `ai/brain.ts` |
+| Schiedsrichter: Tor, Aus, Abseits (Regel-11-Ausnahmen, Seitenwechsel), Fouls, Karten inkl. Notbremse und Gelb-Rot, Elfmeter, Vorteil, Handspiel, Rückpass, 9,15 m | Implementiert, getestet | `rules/referee.ts`, `engine/restarts.ts` |
+| Vollständige autonome Partie (2 Halbzeiten) | Implementiert, getestet | `engine/match-engine.ts` |
+| Decisive Moment Director: Abschluss/Ablage, Durchsetzen, Konter, Gegenpressing, Durchbruch des Gegners | Implementiert, getestet | `director/moment-director.ts` |
+| Entscheidungs-UI mit Countdown, Tasten 1–4, Rückmeldung zum Ausgang | Implementiert, im Browser getestet | `ui/decision-panel.*`, `app.ts` |
+| Stadion, Spielerfiguren mit IK an den Physikschuhen, TV-Regie, Ton, Ticker | Implementiert, im Browser geprüft | `render/*`, `audio/*`, `ui/*` |
 
-## 6. Phasenprotokoll
+## 5. Testing Status (tatsächlich ausgeführt)
 
-### Phase 1 – Fundament (16.10.2026)
-- Neues `package.json` (Skripte `dev`, `typecheck`, `test`, `build`, `check`, `test:browser`), `package-lock.json`, `tsconfig.json` (strict, `verbatimModuleSyntax`), `vite.config.ts` mit Vitest-Konfiguration, `index.html`, `.gitignore`.
-- Verträge in `src/engine/types.ts`, IFAB-Geometrie in `src/physics/pitch-geometry.ts`, Seed-Zufall in `src/engine/rng.ts`, Design-Tokens in `src/styles/design_variables.css` (neu angelegt; Änderungen daran künftig nur nach Abstimmung).
-- Tests: Feldmaße, Tor-/Aus-Regeln, Seitenwechsel, Strafraum, Reproduzierbarkeit des Zufalls.
+| Datum | Befehl / Lauf | Ergebnis |
+| --- | --- | --- |
+| 16.10.2026 | `npm install` (exakte Versionen) | 0 Vulnerabilities, `npm ls` bestätigt Versionen |
+| 17.10.2026 | `npm run check` | `tsc` ohne Fehler, **6 Testdateien / 45 Tests bestanden** (1 Datei übersprungen: Langsimulation, nur über `npm run sim`), `vite build` erfolgreich |
+| 17.10.2026 | `npm run test:browser` (Chrome 1600 × 900, ANGLE/D3D11, Intel Iris Xe) | `ok: true`, keine Konsolenfehler/-warnungen, Uhr läuft, **50–55 FPS**, echter Entscheidungsmoment erschienen, Simulation währenddessen eingefroren, Klick als `user`-Entscheidung protokolliert, Teamanweisung angewendet |
+| 17.10.2026 | `npm run sim` (2 × 45 min, Seed 2026) | siehe §6 |
 
-### Phase 2 – Physikalische Fußballwelt (16.10.2026)
-- `physics/world.ts`: eine Rapier-Welt je Partie, fester Schritt 1/60 s. **Teilschritte nur während schneller Schwünge** (Schuh ≤ 6 cm pro Teilschritt, max. 8), weil Rapiers CCD kinematische Körper nicht überstreicht – ohne Teilschritte landet ein 18-m/s-Schuh innerhalb eines Schritts im Ball (Befund aus der früheren Messung, hier neu umgesetzt und durch Tests abgesichert). Kontakte werden klassifiziert (Ball–Schuh/Körper/Hände, Körper–Körper mit Annäherungsgeschwindigkeit *vor* dem Aufprall für die Foulbewertung).
-- `physics/ball.ts`: Ball nach Regel 2; Luftwiderstand mit Drag-Crisis (Cd 0,45 → 0,25 zwischen 9 und 14 m/s), Magnus-Kraft (C_L = 1/(2 + 1/S)), Rollwiderstand μ_r = 0,065; Kräfte werden jeden Tick zurückgesetzt (Rapier hält `addForce` sonst dauerhaft).
-- `physics/pitch-colliders.ts`: Rasen, Pfosten und Latte auf der Torlinie, weiche Netze, Werbebanden am Rand des Auslaufs.
-- `physics/body.ts`: Torso als aufrechte Kapsel mit expliziter Blickrichtung; Beschleunigung fällt zur Höchstgeschwindigkeit hin ab, begrenztes Bremsen, begrenzte Querbeschleunigung, geschwindigkeitsabhängige Drehrate; Grenzen aus Fähigkeiten (8,0–9,9 m/s Spitze).
-- `physics/legs.ts`: zwei kinematische Schuhe; Schwung (Ausholen, Schlag mit konstanter Geschwindigkeit durch den Ball, Durchschwung, Rückführung) gegen die vorhergesagte Ballposition; nur bei erreichbarem Treffpunkt (Beinlänge 0,53 × Körpergröße) und passender Ausrichtung. Abflugwinkel nur über Treffpunkt unterhalb der Ballmitte (≤ 0,45 rad). Ausführungsfehler verschieben die Schuhbahn.
-- `engine/rosters.ts`: zwei fiktive Vereine, 4-3-3, seedbare Fähigkeiten.
-- **Tests (22, alle bestanden):** Aufprall 2 m → 0,5–0,9 m, Rollweg aus 8 m/s 15–25 m (Rollwiderstand + Luftwiderstand nachgerechnet), keine Kraftakkumulation, Magnus-Kurve in Richtung ω × v, Netz fängt, Pfosten/Latte prallen ab, Beschleunigungs-/Bremsgrenzen, 22 kollidierende Körper 30 s stabil, bitgleiche Wiederholung, Fußkontakt: Nähe kickt nie, Pass ±10 % Richtung/Tempo, Spannstoß > 22 m/s mit Lift, Richtungsabhängigkeit, Fehltreffer mit Ablenkung und Drall, Luftloch, unerreichbarer Ball, Ballannahme.
+**Testinhalte:** Feldmaße/Regel 9/10, Zufall reproduzierbar; Ballaufprall, Rollweg, keine Kraftakkumulation, Magnus-Richtung, Netz/Pfosten/Latte; Beschleunigungsgrenzen, 22 Körper stabil, bitgleiche Wiederholung; Fußkontakt (Nähe kickt nie, Richtung/Tempo, Spannstoß mit Lift, Richtungsabhängigkeit, Fehltreffer mit Drall, Luftloch, Reichweite, Ballannahme); Schiedsrichter (Abseits, Einwurf-Ausnahme, Seitenwechsel, Ecke/Abstoß/Einwurf/Tor/Eigentor, Foul von hinten, Zweikampf ≠ Foul, Notbremse = Rot + Elfmeter, taktisches Foul = Gelb, Gelb-Rot, Mitspieler-Kontakt, Handspiel außerhalb, Rückpass); vollständige Partie ohne ungültige Zustandsübergänge, gleicher Seed = gleiche Partie, kein kollektives Ballverfolgen, Torwart-Ergebnisse variieren, Ballfreigabe innerhalb von 6 s; Director (Moment friert ein, jede angebotene Option wird als echter Schwung ausgeführt, gleiche Lage + andere Entscheidung → anderer Verlauf, gleiche Entscheidung → unterschiedlicher Erfolg, Momente selten und mit Abstand); Quelltext „kein Magnetismus“.
+
+## 6. Messwerte
+
+**Fußkontakt:** Rapier-CCD überstreicht kinematische Körper nicht; ohne Teilschritte springt ein 18-m/s-Schuh in den Ball. Daher Teilschritte während Ausholen/Schlag (≤ 6 cm pro Teilschritt). Kinematischer Schuh ⇒ Ball ≈ 1,45 × Schuhgeschwindigkeit (real eher 1,2–1,35).
+
+**Kalibrierung Spielgeschehen** (Mittel aus 3 Seeds, je 2 × 5 min, hochgerechnet auf 90 min):
+
+| | vor Korrekturen | nach Korrekturen | realer Richtwert |
+| --- | --- | --- | --- |
+| Fouls | ≈ 100 | ≈ 42 | ~22 |
+| Ausbälle (Einwurf/Ecke/Abstoß) | ≈ 250 | ≈ 230 | ~75 |
+| Torschüsse | – | ≈ 90 | ~25 |
+| Tore | ≈ 15 (inkl. Eigentore durch Fehler) | ≈ 9 | ~2,7 |
+
+Behobene Ursachen: Torwart nahm Rückpässe nicht mit dem Fuß an (Eigentore), Torwart konnte einen gefangenen Ball nie loslassen (Armreichweite) und wurde dann minutenlang „angeschossen“, Spieler sprinteten ungebremst in Gegner, Torwartwahrnehmung wurde nicht aktualisiert, Hechtsprung wurde sofort abgebremst, Schuhe fuhren beim Start über den Anstoßpunkt.
+
+**Volle Partie (2 × 45 min):** wird nach Abschluss des laufenden `npm run sim` eingetragen.
 
 ## 7. Bekannte Grenzen / offene Punkte
-- Noch keine spielbare Anwendung (bis Phase 3).
-- Kinematischer Schuh mit unbegrenzter Masse: Ball ≈ 1,45 × Schuhgeschwindigkeit (real eher 1,2–1,35); Schwunggeschwindigkeiten sind darauf abgestimmt.
-- Volleys über Hüfthöhe und Kopfbälle sind noch nicht modelliert (Planung lehnt sie ab).
-- Ballkoeffizienten sind Literaturwerte, keine eigene Messreihe.
 
-## 8. Nächste Schritte
-Phase 3: Match Engine (Ablauf, Halbzeiten, Spielfortsetzungen), Torwarthände, Wahrnehmung und Entscheidungen der 22 Spieler, Schiedsrichter mit Abseits und Fouls.
+- **Spielqualität noch nicht realistisch:** zu viele Schüsse, Tore und Ausbälle, Fouls ≈ doppelt so häufig wie real (siehe §6). Ursachen liegen v. a. in Passgenauigkeit bei hohem Tempo, Ballannahme unter Druck und Schussauswahl.
+- Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
+- Einwurf wird mit dem Fuß ausgeführt; Abseits nutzt Körpermittelpunkte und nur „spielt den Ball“ als Beteiligung; absichtliches Spiel und Abpraller werden nicht unterschieden.
+- Fouls nur aus Körperkontakten; Schuh-gegen-Bein-Kontakte (Grätschen) gibt es nicht.
+- Der laufende Spielrhythmus der Beine ist rein visuell (ruhende Schuh-Kollider bleiben unter der Hüfte); Kick-Beine folgen exakt der Physik.
+- Ballparameter sind Literaturwerte, keine eigene Messreihe.
+- Bei Kurzspielen zeigt die Uhr echte Simulationszeit (z. B. 2 × 5 min), nicht 90 Minuten.
+- Ton ist vollständig synthetisiert (keine Fangesänge/Kommentarstimme).
+- `window.__match` ist ein lesender Zugriff für das Browser-Prüfskript.
+- Bundle: Physik-Chunk 4,6 MB (Rapier-WASM inline).
+- `design_variables.css` wurde für das neue Projekt angelegt; weitere Änderungen daran nur nach Abstimmung.
+
+## 8. Phasenprotokoll
+
+1. **Fundament** – neues `package.json`/Lockfile, strikte TS-Konfiguration, Vite/Vitest, Verträge, IFAB-Geometrie, Seed-Zufall.
+2. **Physikwelt** – Rapier-Welt mit Teilschritten, Ballmodell, Torgestänge/Netze/Banden, Körper mit begrenzter Motorik, kinematische Schuhe mit geplantem Schwung.
+3. **Eigenständiger Fußball** – Match Engine, Wahrnehmung, Positionsspiel, Ballgewinner, Torwart (Hände als Gelenk), Schiedsrichter, `npm run sim`.
+4. **Der zwölfte Mann** – Director vor der Spielerentscheidung, Optionen aus der Optionsbewertung des Spielers selbst, Bewegungs- und Teamanweisungen des Benutzers.
+5. **Erlebnis** – Stadion mit Shader-Zuschauern, IK-Figuren, TV-Regie inkl. taktischer Entscheidungskamera, Ton, Startbildschirm, HUD, Entscheidungspanel, Zeitraffer, Browser-Prüfskript.
+6. **Kalibrierung** – Bremsen vor Körpern, aktive Ballannahme, Passziele innerhalb des Feldes, Schussauswahl, Foul-Schwellen (gemessen über 3 Seeds).
+
+## 9. Nächste Schritte
+
+1. Spielqualität: Passgenauigkeit/Annahme unter Druck, Schussauswahl und Torwart-Positionierung verbessern, bis Schüsse/Tore/Ausbälle im realen Bereich liegen (Messung über `npm run sim` mit mehreren Seeds).
+2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
+3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
+4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
+5. Optionale KI-Rollen (Match Analyst, Pub Host) über Adapter; Physik und Spiel bleiben offline lauffähig.
