@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "source": "ARCHITECTURE.md section 8",
+  "status": "Design contract, not implemented",
+  "layers": [
+    "coach tactical principles",
+    "team formation and marking",
+    "individual perception and decisions",
+    "motor commands",
+    "Rapier world",
+    "rule engine"
+  ],
+  "perception": [
+    "visible/estimated ball position",
+    "player positions",
+    "occlusion",
+    "orientation",
+    "latency",
+    "uncertainty",
+    "teammate communication"
+  ],
+  "intents": [
+    {
+      "kind": "move",
+      "fields": [
+        "target",
+        "urgency"
+      ]
+    },
+    {
+      "kind": "kick",
+      "fields": [
+        "foot",
+        "desiredDirection",
+        "effort",
+        "spinIntent"
+      ]
+    },
+    {
+      "kind": "jump",
+      "fields": [
+        "effort"
+      ]
+    },
+    {
+      "kind": "block",
+      "fields": [
+        "direction"
+      ]
+    }
+  ],
+  "trainingResearch": [
+    "imitation learning",
+    "reinforcement learning",
+    "utility/GOAP",
+    "curriculum 1v0 to 11v11"
+  ],
+  "rule": "An intention never guarantees a successful physical contact."
+}
