@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "sources": [
+    "VISION.md",
+    "ARCHITECTURE.md section 17"
+  ],
+  "principles": [
+    "first 30 seconds should feel like a matchday, not a debugger",
+    "English football culture",
+    "football as a shared social experience",
+    "accessible interaction",
+    "high-quality TV-broadcast-like presentation",
+    "authentic crowd and sound timing",
+    "manager/coach participation without scripting match outcomes"
+  ],
+  "moments": [
+    "walk to ground",
+    "stadium reveal",
+    "anticipation",
+    "first whistle",
+    "pressure and chances",
+    "real goal",
+    "celebration",
+    "post-match analysis"
+  ],
+  "roles": [
+    "Pub Host",
+    "Football Manager",
+    "Match Director",
+    "Crowd Director",
+    "Match Analyst"
+  ],
+  "implementationStatus": "Most described experiences are product vision, not implemented features."
+}
