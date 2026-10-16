@@ -603,3 +603,18 @@ Jede Ereignis-ID muss eindeutig und zeitlich zuordenbar sein. Die Analyse darf n
 - **Konflikt E:** Ursprüngliche `PROJECT_REPORT.md` war eine generische Aufforderung zur Projektauswertung. **Auflösung:** aktueller Report ist die operative Source of Truth; Originalvorlage bleibt unten als Referenz erhalten.
 
 **Letzter dokumentierter Vorgang:** Ergänzung dieses technischen Leitfadens am 16.10.2026. Kein Build und kein Browser-Lauf durchgeführt. Keine produktiven Quelldateien geändert.
+
+## 20. Pflicht-Gate vor jeder Implementierung
+
+**Fehlerursache aus der bisherigen Entwicklung:** Der erste 3v3-Prototyp entstand ohne konsequenten Abgleich mit der vollständigen Vision und einem verbindlichen Projektbericht. Dies darf nicht wiederholt werden.
+
+**Vor jedem Coding-Schritt zwingend:**
+1. `PROJECT_REPORT.md` im Repo-Root **lesen** und die aktuelle Aufgabe gegen Regeln, offene Punkte und Phasen abgleichen.
+2. `VISION.md` und betroffene Architektur-/Quellcodedateien **lesen**, nicht nur aus Erinnerungen rekonstruieren.
+3. Im Arbeitsplan explizit festhalten: **Ist-Zustand**, **Zielzustand**, **betroffene Dateien**, **zu bewahrende Invarianten**, **Prüfmethode**.
+4. Bei Konflikt zwischen Auftrag, Dokumentation und Code **vor einer irreversiblen Änderung klären**; Codebefund ist kein automatischer Auftrag zur Änderung der Vision.
+5. Nach Änderung reale Prüfungen ausführen; nur überprüfte Aufgaben als erledigt markieren und den Bericht aktualisieren.
+6. **Kommunikation knapp halten:** bevorzugt konkrete Änderungen, Pfade, Testergebnis, verbleibender Blocker. Keine wiederholten Erklärungen und keine bloßen Fortschrittsbehauptungen.
+7. Wenn keine Implementierung möglich ist, einen **konkreten, ausführbaren nächsten Schritt** oder eine exakt lokalisierte technische Blockade dokumentieren statt weitere allgemeine Texte zu produzieren.
+
+**Entscheidungsfilter:** Keine neue Datei, kein Frameworkwechsel, kein zusätzlicher Service, keine weitere Abstraktion und kein neues Asset ohne belegbaren Nutzen für die reale Anwendung. Erst das größte Hindernis der nächsten integrierten Abnahmeszene lösen.
