@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "verifiedFromSource": [
+    "Current pitch is 42x28m 3v3 prototype rather than 105x68m full match",
+    "Goal detection is simplified and goalpost rigid body collisions are not verified",
+    "Foot-ball interaction uses distance and impulse, not contact geometry",
+    "GLB loader silently falls back when models cannot be loaded",
+    "Crowd stand texture is a rudimentary SVG",
+    "No verified photorealistic four-view stadium set in repo",
+    "Some archive copy attempts were blocked; originals remain tracked"
+  ],
+  "notVerified": [
+    "full Git tree and all binary files",
+    "browser runtime and visual quality",
+    "device performance",
+    "third-party licenses",
+    "official hackathon rules"
+  ],
+  "protection": [
+    "never mark unverified media present",
+    "do not replace existing source with archive text copies",
+    "avoid putting secrets in public folder",
+    "test after changes"
+  ],
+  "source": [
+    "src/main.ts",
+    "src/stadium.ts",
+    "src/player-visuals.ts",
+    "public/archive/README.md"
+  ]
+}
