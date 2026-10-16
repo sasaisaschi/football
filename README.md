@@ -29,3 +29,8 @@ Open the Vite URL in the browser.
 Decisive-moment detection and the user decision UI (the engine already accepts user intents via `Match.setUserIntent`), keeper hands and dives, fouls and cards, perception limits for agents, Magnus effect, calibrated rolling resistance, replay, Microsoft Foundry integration, real player models and public deployment.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the broader research and design backlog.
+
+
+### Trainerentscheidungen (Feature-Branch)
+
+Auf `feature/decisive-moments-v1` erscheint bei ausgewählten wichtigen Matchzuständen ein Trainerfenster (Abschluss, Pass, Dribbling oder defensive Auswahl). Die laufende Simulation pausiert während der Entscheidung und führt die gewählte Ballaktion über die existierende physikalische `Match.setUserIntent`-Schnittstelle aus. **Erste Heuristik, noch kein trainiertes KI-Modell; Tests und Browserverhalten in diesem Branch noch nicht verifiziert.** Weitere Einschränkungen: `PROJECT_REPORT.md` §23.
