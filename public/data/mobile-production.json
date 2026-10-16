@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "source": "ARCHITECTURE.md section 17; VISION.md chapter 5; prior mobile discussion",
+  "status": "Research and opt-in design options",
+  "uses": [
+    "record original crowd ambience and chants",
+    "capture short fan reaction clips",
+    "voice coach interaction",
+    "companion tactics interface",
+    "shared supporter reactions",
+    "microphone/speaker interaction",
+    "optional AR stadium portal",
+    "orientation-based gestures"
+  ],
+  "workflow": [
+    "explicit opt-in",
+    "device permission check",
+    "capture locally",
+    "preview before sharing",
+    "rights and moderation check",
+    "upload only after confirmation",
+    "event-driven playback"
+  ],
+  "limitations": [
+    "recording rights and consent",
+    "device and browser API differences",
+    "network latency",
+    "battery and thermal constraints",
+    "not a substitute for real 3D geometry"
+  ],
+  "note": "Original standalone mobile capability PDF has not been recovered as a binary."
+}
