@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "source": "VISION.md and stadium image discussions",
+  "status": "Specification only; no accepted photorealistic image set",
+  "assetTypes": [
+    {
+      "id": "stadium-panorama",
+      "formatCandidates": [
+        "PNG",
+        "WebP",
+        "AVIF"
+      ],
+      "requirements": [
+        "four separate consistent camera views",
+        "same stadium",
+        "same lighting",
+        "fixed camera origin",
+        "no baked players",
+        "licensed/provenance recorded"
+      ]
+    },
+    {
+      "id": "crowd-atlas",
+      "formatCandidates": [
+        "PNG",
+        "WebP"
+      ],
+      "requirements": [
+        "supporter diversity",
+        "no synchronized repetition",
+        "animation frames or layers",
+        "team-specific color sections"
+      ]
+    },
+    {
+      "id": "pitch",
+      "formatCandidates": [
+        "WebP",
+        "PNG"
+      ],
+      "requirements": [
+        "grass material and realistic scale",
+        "correct lines from 3D coordinates, not painted wrong in panorama"
+      ]
+    },
+    {
+      "id": "flags-tifos",
+      "formatCandidates": [
+        "PNG",
+        "WebP"
+      ],
+      "requirements": [
+        "distinct sections",
+        "reusable animation masks"
+      ]
+    },
+    {
+      "id": "player",
+      "formatCandidates": [
+        "GLB"
+      ],
+      "requirements": [
+        "rig",
+        "scale",
+        "idle/walk/run/kick/celebrate clips",
+        "rights to redistribute"
+      ]
+    },
+    {
+      "id": "sound",
+      "formatCandidates": [
+        "WAV",
+        "OGG",
+        "MP3"
+      ],
+      "requirements": [
+        "stadium ambience",
+        "chant layers",
+        "match-event stingers",
+        "rights and consent"
+      ]
+    }
+  ],
+  "pipeline": [
+    "source asset",
+    "provenance",
+    "license",
+    "camera metadata",
+    "preview and visual approval",
+    "commit actual binary",
+    "wire into runtime",
+    "test"
+  ],
+  "policy": "No unverified image or model may be marked present."
+}
