@@ -1,4 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-simd-compat';
+import { GROUPS } from './collision-groups';
 
 /** Size-5 match ball: circumference 0.69 m, mass 0.43 kg (IFAB Law 2 range 0.68–0.70 m, 410–450 g). */
 export const BALL = {
@@ -22,7 +23,8 @@ export function createBall(world: RAPIER.World, x = 0, z = 0): RAPIER.RigidBody 
       .setAngularDamping(BALL.angularDamping),
   );
   world.createCollider(
-    RAPIER.ColliderDesc.ball(BALL.radius).setMass(BALL.mass).setRestitution(BALL.restitution).setFriction(BALL.friction),
+    RAPIER.ColliderDesc.ball(BALL.radius).setMass(BALL.mass).setRestitution(BALL.restitution).setFriction(BALL.friction)
+      .setCollisionGroups(GROUPS.ball).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
     body,
   );
   return body;

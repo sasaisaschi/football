@@ -1,5 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-simd-compat';
 import { BALL } from './ball';
+import { GROUPS } from './collision-groups';
 
 /**
  * IFAB Law 1 reference pitch. Axes: X = length (goals at ±halfLength), Y = up, Z = width.
@@ -34,7 +35,7 @@ export function attackDirection(team: number): 1 | -1 {
 export function createPitchPhysics(world: RAPIER.World): void {
   const ground = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0));
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid(PITCH.halfLength + PITCH.runOff, 0.1, PITCH.halfWidth + PITCH.runOff).setFriction(0.8),
+    RAPIER.ColliderDesc.cuboid(PITCH.halfLength + PITCH.runOff, 0.1, PITCH.halfWidth + PITCH.runOff).setFriction(0.8).setCollisionGroups(GROUPS.world),
     ground,
   );
   for (const side of [-1, 1]) createGoalPhysics(world, side);
@@ -46,7 +47,7 @@ function createGoalPhysics(world: RAPIER.World, side: number): void {
   const postX = side * (PITCH.halfLength - r);
   const postZ = PITCH.goalHalfWidth + r;
   const barY = PITCH.goalHeight + r;
-  const frame = (desc: RAPIER.ColliderDesc) => world.createCollider(desc.setRestitution(0.6).setFriction(0.3), body);
+  const frame = (desc: RAPIER.ColliderDesc) => world.createCollider(desc.setRestitution(0.6).setFriction(0.3).setCollisionGroups(GROUPS.world), body);
   for (const z of [-postZ, postZ]) {
     frame(RAPIER.ColliderDesc.cylinder((PITCH.goalHeight + 2 * r) / 2, r).setTranslation(postX, (PITCH.goalHeight + 2 * r) / 2, z));
   }
@@ -57,7 +58,7 @@ function createGoalPhysics(world: RAPIER.World, side: number): void {
   );
   // Net: thin, soft panels that absorb the ball instead of letting it fly through the goal.
   const net = (hx: number, hy: number, hz: number, x: number, y: number, z: number) =>
-    world.createCollider(RAPIER.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x, y, z).setRestitution(0.05).setFriction(1), body);
+    world.createCollider(RAPIER.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x, y, z).setRestitution(0.05).setFriction(1).setCollisionGroups(GROUPS.world), body);
   const backX = side * (PITCH.halfLength + PITCH.goalDepth);
   const midX = side * (PITCH.halfLength + PITCH.goalDepth / 2);
   net(0.02, barY / 2, postZ, backX, barY / 2, 0);
