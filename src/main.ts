@@ -29,13 +29,15 @@ const goalFlash=document.querySelector<HTMLElement>('#goal-flash')!;
 async function start(): Promise<void> {
   await RAPIER.init();
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#101a32');
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 400);
-  camera.position.set(0, 32, 37);
+  scene.background = new THREE.Color('#081322');
+  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 400);
+  camera.position.set(0, 23, 43);
   camera.lookAt(0, 0, 0);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.12;
   viewport.prepend(renderer.domElement);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x24402b, 2.2));
   const sunlight = new THREE.DirectionalLight(0xffffff, 2.4);
@@ -54,7 +56,7 @@ async function start(): Promise<void> {
   let introTime=0;
   let introFinished=false;
   const startCamera=new THREE.Vector3(-67,29,76);
-  const endCamera=new THREE.Vector3(0,32,37);
+  const endCamera=new THREE.Vector3(0,23,43);
   camera.position.copy(startCamera);camera.lookAt(0,5,0);
   const introSkip=document.createElement('button');introSkip.className='intro-skip';introSkip.textContent='ZUM ANPFIFF →';intro.append(introSkip);
   introSkip.addEventListener('click',()=>{introTime=introDuration;});
@@ -315,7 +317,7 @@ async function start(): Promise<void> {
       camera.position.copy(startCamera).lerp(endCamera,smooth);
       camera.lookAt(0,5*(1-smooth),0);
     }
-    else if(cameraMode===0){camera.position.lerp(new THREE.Vector3(bp.x*.3,32,37),.025);camera.lookAt(bp.x*.3,0,0);}
+    else if(cameraMode===0){camera.position.lerp(new THREE.Vector3(bp.x*.26,23,43),.025);camera.lookAt(bp.x*.3,0,0);}
     else if(cameraMode===1){camera.position.lerp(new THREE.Vector3(bp.x-12,12,bp.z+17),.04);camera.lookAt(bp.x,0,bp.z);}
     else{camera.position.lerp(new THREE.Vector3(0,58,.1),.035);camera.lookAt(0,0,0);}
     stadium.update(time,Math.min(1,Math.abs(bp.x)/21));
