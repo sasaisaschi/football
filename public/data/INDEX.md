@@ -37,3 +37,15 @@ Die Sicherungskopien unter `/public/archive/` sind **keine** autoritativen Quell
 ## Was diese Sammlung nicht ist
 
 Kein vollständiges Repository-Backup, keine Garantie über alle früheren Chatprotokolle, kein fertiger Assetkatalog mit allen Binärdateien und kein Nachweis, dass generierte Bilder tatsächlich in GitHub liegen. `public/` wird von Vite statisch ausgeliefert; niemals Geheimnisse dort ablegen.
+
+## Ergänzung — subsystembezogene Dokumentation (2026-10-16)
+
+- [camera-system.json](./camera-system.json) — konkrete Kamerakoordinaten, Modi und Regieziele
+- [audio-system.json](./audio-system.json) — aktueller Web-Audio-Code und spätere Tonkulisse
+- [animation-system.json](./animation-system.json) — GLB-Clip-Zuordnung, Bewegungen und Crowd-Animation
+- [user-experience.json](./user-experience.json) — Matchday-Erlebnis und Interaktionsprinzipien
+- [asset-provenance-template.json](./asset-provenance-template.json) — Metadatenschema für tatsächliche Assets, kein Nachweis ihrer Existenz
+- [known-gaps.json](./known-gaps.json) — überprüfte Lücken und ungeprüfte Fragen
+- [integration-boundaries.json](./integration-boundaries.json) — Systemgrenzen und physikalische Autorität
+
+Diese Dateien vertiefen vorhandene Themen; sie sind nicht automatisch zusätzliche implementierte Features.
