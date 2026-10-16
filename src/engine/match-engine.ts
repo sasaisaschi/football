@@ -170,6 +170,7 @@ export class MatchEngine {
 
   step(): void {
     if (this.phase === 'decision' || this.phase === 'full-time') return;
+    if (this.consultDirector()) return;
     this.tick++;
     this.time += PHYSICS_DT;
     for (const t of [0, 1] as const) {
@@ -194,14 +195,17 @@ export class MatchEngine {
     this.handleContacts(contacts, states);
     if (this.phase === 'in-play') this.apply(this.referee.checkBall(this.ballPos(), this.half));
     this.checkClock();
-    if (this.phase === 'in-play' && this.director) {
-      const moment = this.director(this);
-      if (moment) {
-        this.moment = moment;
-        this.phase = 'decision';
-        this.emit({ type: 'moment', momentId: moment.id, team: moment.team, kind: moment.kind });
-      }
-    }
+  }
+
+  /** The director looks at the state before players commit to this tick's actions, so a decision can still matter. */
+  private consultDirector(): boolean {
+    if (this.phase !== 'in-play' || !this.director) return false;
+    const moment = this.director(this);
+    if (!moment) return false;
+    this.moment = moment;
+    this.phase = 'decision';
+    this.emit({ type: 'moment', momentId: moment.id, team: moment.team, kind: moment.kind });
+    return true;
   }
 
   private think(p: PlayerProfile, truth: Truth): BrainOutput {

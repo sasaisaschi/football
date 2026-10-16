@@ -58,7 +58,8 @@ export function shapeTarget(role: Role, ctx: ShapeContext): Vec2 {
   let v = slot.v * (ctx.inPossession ? 1 : 0.72) + ball.v * (ctx.inPossession ? 0.12 : 0.3);
   if (!ctx.inPossession && !FORWARDS.has(role)) u = Math.min(u, ball.u - (DEFENDERS.has(role) ? 0.1 : 0.04));
   if (DEFENDERS.has(role)) u = Math.max(u, -0.9);
-  if (ctx.inPossession && FORWARDS.has(role)) u = Math.min(u, Math.max(ctx.offsideLineU - 0.012, ball.u));
+  // Forwards attack the space behind as far as the offside line allows; bold teams push them further up.
+  if (ctx.inPossession && FORWARDS.has(role)) u = Math.min(Math.max(u, ball.u + 0.1 + ctx.instruction.risk * 0.15), Math.max(ctx.offsideLineU - 0.012, ball.u));
   u = Math.max(-0.95, Math.min(0.95, u));
   v = Math.max(-0.93, Math.min(0.93, v));
   return toWorld(ctx.sign, u, v);

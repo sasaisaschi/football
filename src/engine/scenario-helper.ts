@@ -27,7 +27,8 @@ export function stageScenario(e: MatchEngine, players: Record<number, Vec2>, bal
   for (const brain of e.brains) brain.perception.reset(truth);
 }
 
+/** Steps the engine for `seconds` of match time; stops early at full time, at an open decision or when `until` holds. */
 export function runFor(e: MatchEngine, seconds: number, until?: () => boolean): void {
   const end = e.time + seconds;
-  while (e.time < end && e.phase !== 'full-time' && !(until?.() ?? false)) e.step();
+  while (e.time < end && e.phase !== 'full-time' && e.phase !== 'decision' && !(until?.() ?? false)) e.step();
 }

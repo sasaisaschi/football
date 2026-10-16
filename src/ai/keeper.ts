@@ -86,7 +86,8 @@ export class KeeperSkill {
     this.hands.relax();
     // With the ball at his feet (after a back-pass or a release) the keeper plays like an outfield player.
     const dBall = Math.hypot(ballPos.x - self.x, ballPos.z - self.z);
-    if (dBall < 6 && (ctx.possession === this.brain.profile.team || !this.hands.active())) return normal();
+    // A ball he may not handle (back-pass) or his team's ball close by: he plays it with his feet.
+    if (dBall < 12 && inPenaltyArea(ballPos.x, ballPos.z, goalSide) && (ctx.possession === this.brain.profile.team || !this.hands.active())) return normal();
     const spot = keeperShape(ctx.sign, ballPos);
     return { command: { target: spot, speed: 6, face: { x: ballPos.x, z: ballPos.z } }, effort: 1, swing: null };
   }

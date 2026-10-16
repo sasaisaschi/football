@@ -121,7 +121,7 @@ export class Referee {
     const fromBehind = (ox * hx + oz * hz) / od < -0.5;
     // Two players going for the same ball is a contest, not a foul, unless it is clumsy, fast or from behind.
     const contest = Math.hypot(ball.x - os.pos.x, ball.z - os.pos.z) < 1.6;
-    const threshold = fromBehind ? 2.2 : contest ? 4.5 : 3.2;
+    const threshold = fromBehind ? 2.8 : contest ? 5 : 3.8;
     const careless = closingSpeed >= threshold || tactical || keeperHolding === victim;
     if (!careless) return null;
 

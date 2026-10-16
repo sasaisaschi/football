@@ -3,7 +3,7 @@ import type { BallAction, PlayerIntent, PlayerProfile, RestartKind, TeamInstruct
 import type { Rng } from '../engine/rng';
 import type { BodyCommand, PlayerBody } from '../physics/body';
 import type { Legs } from '../physics/legs';
-import { PITCH } from '../physics/pitch-geometry';
+import { PITCH, inPenaltyArea } from '../physics/pitch-geometry';
 import { approach, trySwing } from './execution';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { Perception, type Truth } from './perception';
@@ -85,10 +85,11 @@ export class PlayerBrain {
   /** Do I believe I am my team's quickest player to the ball? Decentralised, so two may go, or none. */
   private believesBallIsMine(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): boolean {
     if (ctx.restart) return ctx.restart.taker === this.profile.id;
-    if (this.profile.role === 'GK') return false;
+    // The keeper only plays the ball with his feet inside his own area (back-passes, loose balls).
+    if (this.profile.role === 'GK' && !inPenaltyArea(ball.pos.x, ball.pos.z, (-ctx.sign) as 1 | -1)) return false;
     const mine = PlayerBrain.interceptTime(this.body.position(), this.body.limits.maxSpeed, ball).t - (this.committedToBall ? 0.25 : 0);
     for (const p of ctx.profiles) {
-      if (p.team !== this.profile.team || p.id === this.profile.id || p.role === 'GK') continue;
+      if (p.team !== this.profile.team || p.id === this.profile.id) continue;
       const pos = this.perception.playerNow(p.id, ctx.now);
       if (!pos) continue;
       if (PlayerBrain.interceptTime(pos, 8.4, ball).t < mine - 0.05) return false;
@@ -105,10 +106,33 @@ export class PlayerBrain {
       const v = this.body.velocity();
       return { command: { target: { x: self.x + v.x * 0.4, z: self.z + v.z * 0.4 }, speed: this.body.speed() * 0.85 }, effort: 0.5, swing: null };
     }
+    const order = this.userIntent;
+    if (order?.type === 'move') {
+      if (ctx.now < order.until && !ctx.restart) return this.followOrder(order.action, ctx, ball);
+      this.userIntent = null;
+    }
     this.committedToBall = this.believesBallIsMine(ctx, ball);
     if (this.committedToBall) return this.playBall(ctx, ball);
     this.intent = null;
     return { command: this.steerAround(this.offBall(ctx, ball), ctx), effort: 1, swing: null };
+  }
+
+  /** A movement order from the coach (via a decision moment). The body still has to make it happen. */
+  private followOrder(action: Extract<PlayerIntent, { type: 'move' }>['action'], ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): BrainOutput {
+    const max = this.body.limits.maxSpeed;
+    switch (action.kind) {
+      case 'press': case 'tactical-foul': case 'mark': {
+        const target = this.perception.playerNow(action.target, ctx.now) ?? ball.pos;
+        // A tactical foul means running into the opponent's path; whether it becomes a foul is the referee's call.
+        const lead = action.kind === 'tactical-foul' ? 0.35 : 0;
+        const v = this.perception.others.get(action.target)?.vel ?? { x: 0, z: 0 };
+        return { command: { target: { x: target.x + v.x * lead, z: target.z + v.z * lead }, speed: max, face: target }, effort: 1, swing: null };
+      }
+      case 'run-behind': case 'recover':
+        return { command: { target: action.target, speed: max, face: ball.pos }, effort: 1, swing: null };
+      case 'hold-shape':
+        return { command: this.steerAround(this.offBall(ctx, ball), ctx), effort: 1, swing: null };
+    }
   }
 
   /** Off the ball, players run around each other instead of through each other. */
@@ -204,7 +228,9 @@ export class PlayerBrain {
     const noise = 0.03 * (1.2 - this.profile.abilities.vision);
     let best = options[0], bestScore = -Infinity;
     for (const o of options) {
-      const riskBonus = (o.success < 0.6 ? 1 : 0) * (ctx.instruction.risk - 0.5) * 0.02;
+      // The coach's risk setting trades safety for threat: bold teams value forward threat, cautious ones possession.
+      const forward = o.kind === 'shot' || (o.kind === 'pass' && 'aim' in o.action && ctx.sign * (o.action.aim.x - pic.ball.pos.x) > 8) || o.kind === 'dribble';
+      const riskBonus = (ctx.instruction.risk - 0.5) * (forward ? 0.04 : -0.02);
       const score = o.value + riskBonus + this.rng.gauss() * noise;
       if (score > bestScore) { bestScore = score; best = o; }
     }
@@ -226,7 +252,10 @@ export class PlayerBrain {
       const ballU = toTeam(ctx.sign, ball.pos).u;
       const nearBall = Math.hypot(ball.pos.x - self.x, ball.pos.z - self.z);
       if (ctx.instruction.press !== 'low' && nearBall < (ctx.instruction.press === 'high' ? 16 : 10) && MIDFIELDERS.has(role) && ballU > -0.2) {
-        target = { x: (ball.pos.x * 2 + target.x) / 3, z: (ball.pos.z * 2 + target.z) / 3 };
+        // Second presser: close the passing lane goal-side of the ball, not the ball itself.
+        const goalX = -ctx.sign * PITCH.halfLength;
+        const gx = goalX - ball.pos.x, gz = -ball.pos.z, gd = Math.hypot(gx, gz) || 1;
+        target = { x: ball.pos.x + (gx / gd) * 4 + (target.x - ball.pos.x) * 0.2, z: ball.pos.z + (gz / gd) * 4 + (target.z - ball.pos.z) * 0.2 };
       } else if (DEFENDERS.has(role) || MIDFIELDERS.has(role)) {
         let mark: Vec2 | null = null, best = 9;
         for (const o of opponents) {
