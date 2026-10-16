@@ -43,7 +43,6 @@ export function createStadium(scene: THREE.Scene) {
   );
   const palette=['#e8edf1','#ef883c','#1686b5','#223b58','#f5c45b','#b8c4d0','#b85c39'].map(c=>new THREE.Color(c));
   const dummy=new THREE.Object3D();
-  const seeds=new Float32Array(total);
   let n=0;
   for(let side=0;side<4;side++)for(let row=0;row<rows;row++)for(let j=0;j<columns;j++) {
     const along=(j/(columns-1)-.5)*(side<2?57:46);
@@ -56,8 +55,8 @@ export function createStadium(scene: THREE.Scene) {
     dummy.scale.set(.88,.86+(j*13+row*7)%7*.028,.86);
     dummy.updateMatrix();crowd.setMatrixAt(n,dummy.matrix);
     const section=(Math.floor(j/19)+Math.floor(row/7))%4;
-    crowd.setColorAt(n,palette[(section===0?1:section===1?2:section===2?0:3)+(j*17+row*11)%7===0?4:(section===0?1:section===1?2:section===2?0:3)]);
-    seeds[n]=(j*11+row*7+side*13)%17;
+    const colorIndex=(j*17+row*11)%11===0?4:section===0?1:section===1?2:section===2?0:3;
+    crowd.setColorAt(n,palette[colorIndex]);
     n++;
   }
   crowd.instanceMatrix.needsUpdate=true;
