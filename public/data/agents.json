@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "experienceRoles": [
+    "Pub Host",
+    "Football Manager",
+    "Match Director",
+    "Crowd Director",
+    "Match Analyst"
+  ],
+  "additionalProposedRole": "Referee",
+  "current": "Simple reactive 3v3 agents with attack/defend tactical controls",
+  "footballTasks": [
+    "press",
+    "cover",
+    "mark",
+    "pass",
+    "dribble",
+    "shoot",
+    "defend",
+    "save",
+    "set pieces",
+    "referee decisions"
+  ],
+  "notImplemented": [
+    "full roles and formation",
+    "goalkeeper",
+    "real foot contacts",
+    "full rules",
+    "trained tactics",
+    "LLM agent roles"
+  ],
+  "principle": "Agents choose attempts; Rapier owns physical outcomes"
+}
