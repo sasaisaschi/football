@@ -3,3 +3,12 @@
 /* Matchday chapter one: cinematic opening in the existing live match. */
 .match-intro{position:absolute;inset:0;z-index:8;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:linear-gradient(90deg,rgba(4,9,22,.77),rgba(4,9,22,.08) 55%,rgba(4,9,22,.65));text-shadow:0 3px 25px #000;transition:opacity .25s}.intro-eyebrow{font-size:clamp(11px,1.3vw,18px);font-weight:800;letter-spacing:.42em;color:#ffb16c}.intro-title{font-size:clamp(40px,8vw,130px);font-weight:1000;line-height:1.05;letter-spacing:-.045em;margin:20px 12px}.intro-subtitle{font-size:clamp(10px,1.4vw,18px);letter-spacing:.22em;font-weight:700;color:#e5efff}.intro-progress{width:min(420px,65vw);height:3px;background:#ffffff55;margin-top:32px}.intro-progress span{display:block;height:100%;width:0;background:#ff913d}.intro-skip{pointer-events:auto;position:absolute;bottom:32px;right:32px;background:#101d35dd;border-color:#ff913d}
 button.active{background:#344b6c;border-color:#ff913d}
+/* Decisive moments: the simulation pauses only when a consequential decision is offered. */
+.moment-panel[hidden]{display:none}
+.moment-panel{position:absolute;z-index:12;left:50%;bottom:12%;transform:translateX(-50%);width:min(620px,calc(100% - 32px));background:#081427f5;border:1px solid #ff913d;border-top:4px solid #ff913d;border-radius:8px;padding:24px;box-shadow:0 16px 60px #000b;text-align:center}
+.moment-eyebrow{color:#ffb16c;font-size:11px;font-weight:900;letter-spacing:.2em}
+.moment-panel h2{font-size:clamp(21px,3vw,32px);margin:12px 0}
+.moment-panel p{color:#d9e7f5;font-size:14px;margin:0 0 18px}
+.moment-options{display:flex;justify-content:center;flex-wrap:wrap;gap:12px;margin-bottom:14px}
+.moment-options button{background:#bd541b;border-color:#ff9a39;font-size:13px;padding:14px 18px}
+#moment-skip{background:transparent;color:#b8c9d9;border:0;font-size:10px}
