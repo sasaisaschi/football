@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:browser": "node scripts/browser-check.mjs",
     "check": "npm run typecheck && npm run test && npm run build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sim": "vitest run src/engine/full-match.test.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-simd-compat": "^0.21.0",

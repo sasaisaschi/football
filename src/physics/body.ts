@@ -111,7 +111,8 @@ export class PlayerBody {
       const along = dvx * ux + dvz * uz;
       const lx = dvx - along * ux, lz = dvz - along * uz;
       const accel = L.accel0 * Math.max(0.04, 1 - speed / L.maxSpeed) * effort;
-      const a = Math.max(-L.maxBrake * dt, Math.min(accel * dt, along));
+      // Effort 0 means airborne or committed (e.g. a dive): the body neither pushes nor brakes.
+      const a = Math.max(-L.maxBrake * effort * dt, Math.min(accel * dt, along));
       const lat = Math.hypot(lx, lz);
       const latMax = L.maxLateral * effort * dt;
       const k = lat > latMax ? latMax / lat : 1;

@@ -181,6 +181,17 @@ export class Legs {
     };
   }
 
+  /** Moves both boots to rest under the hips immediately (after the body was placed while the ball was dead). */
+  snap(): void {
+    this.swing = null;
+    const p = this.owner.body.translation();
+    for (const side of [0, 1] as const) {
+      const boot = this.boots[side];
+      boot.rel = this.rest(side);
+      boot.body.setTranslation({ x: p.x + boot.rel.x, y: boot.rel.y, z: p.z + boot.rel.z }, true);
+    }
+  }
+
   start(plan: StrikePlan): void {
     this.swing = { plan, phase: 'windup', t: 0, from: { ...this.boots[plan.side].rel } };
   }

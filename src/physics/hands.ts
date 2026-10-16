@@ -1,0 +1,130 @@
+import RAPIER from '@dimforge/rapier3d-simd-compat';
+import type { Vec3 } from '../engine/types';
+import type { PlayerBody } from './body';
+import { BALL_SPEC } from './pitch-geometry';
+import { GROUPS } from './groups';
+
+/**
+ * Goalkeeper hands: one kinematic collider for both hands that moves at limited speed inside the arm's reach.
+ * A dive is a bounded sideways push of the keeper's body. A catch is a real Rapier joint between hands and
+ * ball, created only when the ball arrives slowly enough to be held; otherwise the hands simply parry it.
+ */
+export const HANDS = { radius: 0.15, maxSpeed: 9, armReach: 0.78, restitution: 0.25, friction: 1 } as const;
+
+export class KeeperHands {
+  readonly body: RAPIER.RigidBody;
+  readonly collider: RAPIER.Collider;
+  /** Hands position relative to the keeper's ground point. */
+  rel: Vec3;
+  target: Vec3;
+  private joint: RAPIER.ImpulseJoint | null = null;
+  heldSince = 0;
+  diveUntil = 0;
+  recoverUntil = 0;
+
+  constructor(private readonly world: RAPIER.World, private readonly keeper: PlayerBody) {
+    this.rel = this.restRel();
+    this.target = { ...this.rel };
+    const p = keeper.body.translation();
+    this.body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(p.x + this.rel.x, this.rel.y, p.z + this.rel.z));
+    this.collider = world.createCollider(
+      RAPIER.ColliderDesc.ball(HANDS.radius)
+        .setRestitution(HANDS.restitution)
+        .setFriction(HANDS.friction)
+        .setCollisionGroups(GROUPS.hands)
+        .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
+      this.body,
+    );
+    this.collider.setEnabled(false);
+  }
+
+  shoulderHeight(): number {
+    return this.keeper.height * 0.82;
+  }
+
+  restRel(): Vec3 {
+    const f = this.keeper.facing();
+    return { x: f.x * 0.3, y: this.keeper.height * 0.6, z: f.z * 0.3 };
+  }
+
+  /** Hands may only be used inside the own penalty area while the ball is in play (Law 12 handling). */
+  setActive(active: boolean): void {
+    if (this.collider.isEnabled() !== active) this.collider.setEnabled(active);
+  }
+
+  active(): boolean {
+    return this.collider.isEnabled();
+  }
+
+  holding(): boolean {
+    return this.joint !== null;
+  }
+
+  /** Reach a world point if the arms allow it; the target is clamped to the reach envelope around the shoulders. */
+  reachFor(world: Vec3): void {
+    const p = this.keeper.body.translation();
+    const rel = { x: world.x - p.x, y: world.y, z: world.z - p.z };
+    const shoulder = { x: 0, y: this.shoulderHeight(), z: 0 };
+    const dx = rel.x - shoulder.x, dy = rel.y - shoulder.y, dz = rel.z - shoulder.z;
+    const d = Math.hypot(dx, dy, dz);
+    const k = d > HANDS.armReach + 0.25 ? (HANDS.armReach + 0.25) / d : 1;
+    this.target = { x: shoulder.x + dx * k, y: Math.max(HANDS.radius, shoulder.y + dy * k), z: shoulder.z + dz * k };
+  }
+
+  relax(): void {
+    this.target = this.restRel();
+  }
+
+  /** A dive: one bounded push sideways (and slightly up), after which the keeper needs time to get up. */
+  dive(towards: { x: number; z: number }, now: number, power: number): void {
+    const p = this.keeper.body.translation();
+    const dx = towards.x - p.x, dz = towards.z - p.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const speed = 3.2 + 2 * power;
+    const v = this.keeper.body.linvel();
+    this.keeper.body.setLinvel({ x: v.x * 0.3 + (dx / d) * speed, y: v.y, z: v.z * 0.3 + (dz / d) * speed }, true);
+    this.diveUntil = now + 0.55;
+    this.recoverUntil = now + 1.4;
+  }
+
+  /** Catch: attach the ball to the hands with a spherical joint (the ball can still spin, it cannot leave). */
+  catchBall(ball: RAPIER.RigidBody, now: number): void {
+    if (this.joint) return;
+    const h = this.body.translation(), b = ball.translation();
+    const d = Math.hypot(b.x - h.x, b.y - h.y, b.z - h.z) || 1;
+    const gap = HANDS.radius + BALL_SPEC.radius;
+    const anchor = { x: ((b.x - h.x) / d) * gap, y: ((b.y - h.y) / d) * gap, z: ((b.z - h.z) / d) * gap };
+    this.joint = this.world.createImpulseJoint(RAPIER.JointData.spherical(anchor, { x: 0, y: 0, z: 0 }), this.body, ball, true);
+    this.heldSince = now;
+  }
+
+  release(): void {
+    if (!this.joint) return;
+    this.world.removeImpulseJoint(this.joint, true);
+    this.joint = null;
+  }
+
+  /** Puts the hands back in front of the chest immediately (after the keeper was placed). */
+  snap(): void {
+    this.rel = this.restRel();
+    this.target = { ...this.rel };
+    const p = this.keeper.body.translation();
+    this.body.setTranslation({ x: p.x + this.rel.x, y: this.rel.y, z: p.z + this.rel.z }, true);
+  }
+
+  /** Moves the hands towards their target at limited speed. Call before every physics (sub)step. */
+  update(dt: number): void {
+    const step = HANDS.maxSpeed * dt;
+    const d = { x: this.target.x - this.rel.x, y: this.target.y - this.rel.y, z: this.target.z - this.rel.z };
+    const n = Math.hypot(d.x, d.y, d.z);
+    const k = n > step ? step / n : 1;
+    this.rel = { x: this.rel.x + d.x * k, y: this.rel.y + d.y * k, z: this.rel.z + d.z * k };
+    const p = this.keeper.body.translation();
+    this.body.setNextKinematicTranslation({ x: p.x + this.rel.x, y: this.rel.y, z: p.z + this.rel.z });
+  }
+
+  world3(): Vec3 {
+    const t = this.body.translation();
+    return { x: t.x, y: t.y, z: t.z };
+  }
+}
