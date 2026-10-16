@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "provenance": "Prior project conversation 2026-10-14; source of product requirements, not implementation proof",
+  "audience": [
+    "children",
+    "older adults",
+    "casual supporters",
+    "football enthusiasts"
+  ],
+  "requirements": [
+    "immediately understandable",
+    "interactive during live simulated matches",
+    "simple entry with optional tactical depth",
+    "spoken output and accessible feedback",
+    "coach perspective first, without foreclosing player perspective"
+  ],
+  "interactionConcepts": [
+    {
+      "name": "Jackbox-style companion",
+      "mechanism": "join from mobile browser or QR",
+      "status": "discussed option, not implemented"
+    },
+    {
+      "name": "collective supporter voting",
+      "mechanism": "WebSocket group input and bounded collective choices",
+      "status": "discussed option, not implemented"
+    },
+    {
+      "name": "crowd karaoke",
+      "mechanism": "optional Web Audio / voice contribution",
+      "status": "discussed option, not implemented"
+    },
+    {
+      "name": "location/AR discovery",
+      "mechanism": "optional QR, location and AR",
+      "status": "discussed option, not implemented"
+    },
+    {
+      "name": "coach interaction",
+      "mechanism": "tactical choices with readable consequences",
+      "status": "basic attack/defend buttons implemented"
+    }
+  ],
+  "safety": [
+    "microphone and location participation only with permission",
+    "collective input must not script physical outcomes",
+    "accessible non-phone fallback"
+  ],
+  "sources": [
+    "VISION.md",
+    "ARCHITECTURE.md",
+    "prior football discussion 2026-10-14"
+  ]
+}
