@@ -56,7 +56,7 @@ src/
 | Bereich | Status |
 | --- | --- |
 | Projektfundament, Verträge, IFAB-Geometrie, Seed-Zufall | Implementiert, getestet (Phase 1) |
-| Physikwelt, 22 Körper, Fußkontakte | Geplant (Phase 2) |
+| Physikwelt, 22 Körper, Fußkontakte | Implementiert, getestet (Phase 2) |
 | Autonomer Fußball, Regeln, Torhüter | Geplant (Phase 3) |
 | Decisive Moment Director, Entscheidungen | Geplant (Phase 4) |
 | Stadion, Kamera, UI, Ton | Geplant (Phase 5) |
@@ -75,8 +75,20 @@ src/
 - Verträge in `src/engine/types.ts`, IFAB-Geometrie in `src/physics/pitch-geometry.ts`, Seed-Zufall in `src/engine/rng.ts`, Design-Tokens in `src/styles/design_variables.css` (neu angelegt; Änderungen daran künftig nur nach Abstimmung).
 - Tests: Feldmaße, Tor-/Aus-Regeln, Seitenwechsel, Strafraum, Reproduzierbarkeit des Zufalls.
 
+### Phase 2 – Physikalische Fußballwelt (16.10.2026)
+- `physics/world.ts`: eine Rapier-Welt je Partie, fester Schritt 1/60 s. **Teilschritte nur während schneller Schwünge** (Schuh ≤ 6 cm pro Teilschritt, max. 8), weil Rapiers CCD kinematische Körper nicht überstreicht – ohne Teilschritte landet ein 18-m/s-Schuh innerhalb eines Schritts im Ball (Befund aus der früheren Messung, hier neu umgesetzt und durch Tests abgesichert). Kontakte werden klassifiziert (Ball–Schuh/Körper/Hände, Körper–Körper mit Annäherungsgeschwindigkeit *vor* dem Aufprall für die Foulbewertung).
+- `physics/ball.ts`: Ball nach Regel 2; Luftwiderstand mit Drag-Crisis (Cd 0,45 → 0,25 zwischen 9 und 14 m/s), Magnus-Kraft (C_L = 1/(2 + 1/S)), Rollwiderstand μ_r = 0,065; Kräfte werden jeden Tick zurückgesetzt (Rapier hält `addForce` sonst dauerhaft).
+- `physics/pitch-colliders.ts`: Rasen, Pfosten und Latte auf der Torlinie, weiche Netze, Werbebanden am Rand des Auslaufs.
+- `physics/body.ts`: Torso als aufrechte Kapsel mit expliziter Blickrichtung; Beschleunigung fällt zur Höchstgeschwindigkeit hin ab, begrenztes Bremsen, begrenzte Querbeschleunigung, geschwindigkeitsabhängige Drehrate; Grenzen aus Fähigkeiten (8,0–9,9 m/s Spitze).
+- `physics/legs.ts`: zwei kinematische Schuhe; Schwung (Ausholen, Schlag mit konstanter Geschwindigkeit durch den Ball, Durchschwung, Rückführung) gegen die vorhergesagte Ballposition; nur bei erreichbarem Treffpunkt (Beinlänge 0,53 × Körpergröße) und passender Ausrichtung. Abflugwinkel nur über Treffpunkt unterhalb der Ballmitte (≤ 0,45 rad). Ausführungsfehler verschieben die Schuhbahn.
+- `engine/rosters.ts`: zwei fiktive Vereine, 4-3-3, seedbare Fähigkeiten.
+- **Tests (22, alle bestanden):** Aufprall 2 m → 0,5–0,9 m, Rollweg aus 8 m/s 15–25 m (Rollwiderstand + Luftwiderstand nachgerechnet), keine Kraftakkumulation, Magnus-Kurve in Richtung ω × v, Netz fängt, Pfosten/Latte prallen ab, Beschleunigungs-/Bremsgrenzen, 22 kollidierende Körper 30 s stabil, bitgleiche Wiederholung, Fußkontakt: Nähe kickt nie, Pass ±10 % Richtung/Tempo, Spannstoß > 22 m/s mit Lift, Richtungsabhängigkeit, Fehltreffer mit Ablenkung und Drall, Luftloch, unerreichbarer Ball, Ballannahme.
+
 ## 7. Bekannte Grenzen / offene Punkte
-- Noch keine spielbare Anwendung (Phase 1).
+- Noch keine spielbare Anwendung (bis Phase 3).
+- Kinematischer Schuh mit unbegrenzter Masse: Ball ≈ 1,45 × Schuhgeschwindigkeit (real eher 1,2–1,35); Schwunggeschwindigkeiten sind darauf abgestimmt.
+- Volleys über Hüfthöhe und Kopfbälle sind noch nicht modelliert (Planung lehnt sie ab).
+- Ballkoeffizienten sind Literaturwerte, keine eigene Messreihe.
 
 ## 8. Nächste Schritte
-Phase 2: Rapier-Welt, Feld mit Torgestänge und Netz, Ball mit Luftwiderstand/Magnus/Rollwiderstand, 22 Spielerkörper mit begrenzter Motorik, physikalische Schuhkontakte.
+Phase 3: Match Engine (Ablauf, Halbzeiten, Spielfortsetzungen), Torwarthände, Wahrnehmung und Entscheidungen der 22 Spieler, Schiedsrichter mit Abseits und Fouls.

@@ -1,0 +1,104 @@
+import RAPIER from '@dimforge/rapier3d-simd-compat';
+import { applyBallForces, createBall } from './ball';
+import type { Legs } from './legs';
+import { createPitchColliders } from './pitch-colliders';
+
+export const PHYSICS_DT = 1 / 60;
+/** Largest boot travel per (sub)step. Rapier's CCD does not sweep kinematic bodies, so fast strikes need substeps. */
+const MAX_BOOT_TRAVEL = 0.06;
+const MAX_SUBSTEPS = 8;
+
+export type ContactPart = 'boot' | 'body' | 'hands';
+export type BallContact = { kind: 'ball'; player: number; part: ContactPart };
+export type BodyContact = { kind: 'bodies'; a: number; b: number; closingSpeed: number };
+export type Contact = BallContact | BodyContact;
+
+type Owner = { player: number; part: ContactPart; body: RAPIER.RigidBody };
+
+/** Hooks a participant into each (sub)step: legs and hands stage their kinematic poses here. */
+export type Kinematic = { update(dt: number): void; strikeSpeedNow?(): number };
+
+/**
+ * The only Rapier world of a match. Fixed 1/60 s ticks; while any boot is in a fast wind-up or strike the
+ * tick is split into substeps so the boot moves at most 6 cm per substep.
+ */
+export class PhysicsWorld {
+  readonly world: RAPIER.World;
+  readonly ball: RAPIER.RigidBody;
+  readonly ballHandle: number;
+  private readonly owners = new Map<number, Owner>();
+  private readonly kinematics: Kinematic[] = [];
+  private readonly legs: Legs[] = [];
+  private readonly queue = new RAPIER.EventQueue(true);
+  /** Body velocities at the start of the tick, so contact closing speeds are measured before the impact. */
+  private readonly preVelocity = new Map<number, { x: number; z: number }>();
+
+  constructor() {
+    this.world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+    this.world.timestep = PHYSICS_DT;
+    createPitchColliders(this.world);
+    this.ball = createBall(this.world);
+    this.ballHandle = this.ball.collider(0).handle;
+  }
+
+  registerCollider(collider: RAPIER.Collider, player: number, part: ContactPart): void {
+    this.owners.set(collider.handle, { player, part, body: collider.parent()! });
+  }
+
+  registerLegs(legs: Legs, player: number): void {
+    this.legs.push(legs);
+    this.kinematics.push(legs);
+    for (const boot of legs.boots) this.registerCollider(boot.collider, player, 'boot');
+  }
+
+  registerKinematic(k: Kinematic): void {
+    this.kinematics.push(k);
+  }
+
+  substepsNeeded(): number {
+    let fastest = 0;
+    for (const l of this.legs) fastest = Math.max(fastest, l.strikeSpeedNow());
+    return Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil((fastest * PHYSICS_DT) / MAX_BOOT_TRAVEL)));
+  }
+
+  /** Advances one tick. Body impulses must already be applied for this tick. Returns contacts in order. */
+  step(): Contact[] {
+    applyBallForces(this.ball);
+    for (const o of this.owners.values()) {
+      if (o.part !== 'body') continue;
+      const v = o.body.linvel();
+      this.preVelocity.set(o.player, { x: v.x, z: v.z });
+    }
+    const n = this.substepsNeeded();
+    const dt = PHYSICS_DT / n;
+    this.world.timestep = dt;
+    const contacts: Contact[] = [];
+    for (let i = 0; i < n; i++) {
+      for (const k of this.kinematics) k.update(dt);
+      this.world.step(this.queue);
+      this.queue.drainCollisionEvents((h1, h2, started) => {
+        if (!started) return;
+        const c = this.classify(h1, h2);
+        if (c) contacts.push(c);
+      });
+    }
+    this.world.timestep = PHYSICS_DT;
+    return contacts;
+  }
+
+  private classify(h1: number, h2: number): Contact | null {
+    if (h1 === this.ballHandle || h2 === this.ballHandle) {
+      const owner = this.owners.get(h1 === this.ballHandle ? h2 : h1);
+      return owner ? { kind: 'ball', player: owner.player, part: owner.part } : null;
+    }
+    const a = this.owners.get(h1), b = this.owners.get(h2);
+    if (!a || !b || a.part !== 'body' || b.part !== 'body') return null;
+    const pa = a.body.translation(), pb = b.body.translation();
+    const va = this.preVelocity.get(a.player) ?? a.body.linvel();
+    const vb = this.preVelocity.get(b.player) ?? b.body.linvel();
+    const dx = pb.x - pa.x, dz = pb.z - pa.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const closingSpeed = ((va.x - vb.x) * dx + (va.z - vb.z) * dz) / d;
+    return { kind: 'bodies', a: a.player, b: b.player, closingSpeed };
+  }
+}
