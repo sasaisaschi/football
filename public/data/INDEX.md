@@ -58,3 +58,7 @@ Diese Dateien vertiefen vorhandene Themen; sie sind nicht automatisch zusätzlic
 - [production-decisions.json](./production-decisions.json) — verbindliche Nutzeranforderungen gegenüber noch offenen Technologieentscheidungen
 
 Die Inhalte stammen aus früheren Projektgesprächen und sind als rekonstruierte Anforderungen oder Konzepte markiert, nicht als fertige Funktionen.
+
+## Verbindliche Zielbeschreibung zur Lösungsfindung
+
+- [TARGET_ARCHITECTURE.md](./TARGET_ARCHITECTURE.md) — kompromisslose angestrebte Gesamtarchitektur, konkrete Systemgrenzen, ungelöste technische Hindernisse und Abnahmeszene. **Zielzustand, nicht Implementierungsnachweis.**
