@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Use one record per actual binary asset after import and verification",
+  "fields": {
+    "id": "stable unique identifier",
+    "path": "path relative to public/",
+    "type": "image|model|audio|video|font|other",
+    "origin": "created|licensed|user-supplied|external",
+    "sourceUrl": "optional exact source URL",
+    "license": "license name or custom permission",
+    "author": "creator or rights holder",
+    "attribution": "required credit text",
+    "dateAdded": "ISO date",
+    "fileBytes": "measured size",
+    "sha256": "measured checksum",
+    "dimensions": "pixel dimensions or 3D bounds when applicable",
+    "camera": "optional position/rotation/FOV for stadium images",
+    "usage": "which scene or module uses it",
+    "verifiedInRepository": "true only after reading actual committed file",
+    "approvedForProduction": "true only after visual/legal review"
+  },
+  "exampleStatus": "schema example only; not a record of existing asset"
+}
