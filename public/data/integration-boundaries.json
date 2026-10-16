@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "sources": [
+    "ARCHITECTURE.md sections 3,8,9,10",
+    "VISION.md"
+  ],
+  "runtime": {
+    "simulation": "Rapier authoritative world state",
+    "rendering": "Three.js reads world state",
+    "agents": "decisions issue bounded movement/kick attempts",
+    "rules": "future separate referee authority",
+    "audio": "event-driven, not match-authoritative",
+    "cloud": "optional slower reasoning and grounded commentary",
+    "assets": "static images/audio/models loaded from public"
+  },
+  "invariants": [
+    "no simultaneous Rapier and Google Research Football authority",
+    "no cloud dependency for simulation stepping",
+    "no hidden guaranteed passes or goals",
+    "no cinematic event unless match state supports it",
+    "no client-side secret keys"
+  ],
+  "status": "Architecture boundaries partly proposed; implementation is currently concentrated in src/main.ts."
+}
