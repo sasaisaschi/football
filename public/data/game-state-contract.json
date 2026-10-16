@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "source": "src/main.ts and ARCHITECTURE.md",
+  "status": "Current source observed; proposed fields clearly separated",
+  "observed": {
+    "ball": [
+      "position",
+      "rotation",
+      "linear velocity",
+      "angular velocity"
+    ],
+    "players": [
+      "rigid body",
+      "visual mesh",
+      "team",
+      "number",
+      "cooldown",
+      "kick count",
+      "initial position"
+    ],
+    "match": [
+      "elapsed seconds",
+      "score orange",
+      "score blue",
+      "shot count",
+      "paused",
+      "tactical mode",
+      "camera mode",
+      "kickoff delay"
+    ],
+    "ui": [
+      "clock",
+      "scoreboard",
+      "ball speed",
+      "event feed",
+      "goal flash",
+      "status"
+    ],
+    "events": [
+      "pass",
+      "shot",
+      "goal",
+      "out",
+      "kickoff",
+      "coach instruction"
+    ]
+  },
+  "proposedNotImplemented": {
+    "worldSnapshots": [
+      "tick",
+      "ball state",
+      "all player states",
+      "match phase"
+    ],
+    "matchEvents": [
+      "timestamp",
+      "actor",
+      "team",
+      "type",
+      "physics references",
+      "decision rationale"
+    ],
+    "referee": [
+      "restart type",
+      "foul decision",
+      "offside decision",
+      "cards"
+    ],
+    "analytics": [
+      "passes",
+      "interceptions",
+      "shots on target",
+      "possession",
+      "expected threat"
+    ],
+    "audit": "Cloud-generated narration must cite events actually recorded."
+  }
+}
