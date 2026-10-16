@@ -1,31 +1,13 @@
-# THE 12TH MAN — Autonomous Matchday
+# THE 12TH MAN — CLEAN RESTART
 
-Browser prototype of a physically grounded, autonomous football match for the Microsoft × Premier League hackathon.
+This branch is a clean restart. No previous application code, dependencies, lockfiles, build configuration, archived files or legacy architecture are carried forward.
 
-## Start locally
+## Product mandate
 
-```powershell
-cd D:\football
-git pull
-npm install
-npm run check
-npm run dev
-```
+Build a new 11-versus-11 football experience for the Microsoft × Premier League hackathon. The user does **not** play every action or passively watch a scripted match. A Match Director identifies rare consequential situations in which the user's choice could materially improve or worsen their team's outcome. The user chooses among actually executable options. Autonomous players, physically consistent ball/body/foot contacts and an independent referee determine what happens. No fabricated scenes, predetermined goals, ball teleportation, scripted results or predetermined success. The coherent match state persists between interventions; unimportant passages may be condensed without inventing outcomes. The experience should feel like a live football broadcast, not a physics debugger.
 
-Open the Vite URL in the browser.
+## Fresh implementation rules
 
-## Implemented (prototype)
+Start from first principles. Select the newest mutually compatible **stable** runtime, packages, physics/rendering and testing stack at implementation time; justify choices, do not pin obsolete versions or reuse legacy scaffolding. Do not touch the user's system-wide Node/npm installation. Write a new architecture and tests before extending features. Use real 11v11 and IFAB geometry from the outset. Establish clear boundaries between authoritative simulation, match-direction, user choice, refereeing and presentation. Keep all generated files and configuration consistent. Verify installation, typecheck, tests, build and actual browser behavior before declaring success. Record exact versions, commands, measurements and limitations in a newly written PROJECT_REPORT.md.
 
-- 11 v 11 with goalkeepers on a 105 × 68 m IFAB pitch; posts, crossbar and net are physical colliders
-- Rapier 3D (SIMD build) as the single physics authority, fixed 60 Hz step, substeps during strikes
-- Physical boot/ball contacts: each player has two kinematic boot colliders driven by a bounded leg swing; passes, shots, dribbles, clearances and first touches only happen if the boot really meets the ball
-- 4-3-3 positional play, coach tactic (high press / deep block), ball winner per team, offside-line discipline
-- Referee: goals (whole ball over the line), throw-ins, corners, goal kicks, kickoffs, offside, 9.15 m distance
-- Match event log, contact diagnostics overlay (button KONTAKTE), stadium, intro, HUD
-- `npm run check` = typecheck + build + Vitest suite (contact physics, rules, motion bounds, "no magnetism")
-
-## Not yet implemented
-
-Decisive-moment detection and the user decision UI (the engine already accepts user intents via `Match.setUserIntent`), keeper hands and dives, fouls and cards, perception limits for agents, Magnus effect, calibrated rolling resistance, replay, Microsoft Foundry integration, real player models and public deployment.
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the broader research and design backlog.
+The former implementation is available only in Git history on main; it is **not** an implementation template. Do not cherry-pick or copy old files. The user-approved product principles above, not the old technical design, govern the rebuild.
