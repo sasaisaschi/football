@@ -105,7 +105,8 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     const aimZ = side * (PITCH.goalHalfWidth - 0.65);
     const xg = shotXg(pic, from, { x: gx, z: aimZ });
     const dist = Math.hypot(gx - from.x, aimZ - from.z);
-    out.push({
+    // Only a real chance is worth a shot; speculative efforts mostly give the ball away.
+    if (xg >= 0.06) out.push({
       kind: 'shot',
       action: { kind: 'shot', aim: { x: gx, y: Math.min(1.6, 0.35 + dist / 40), z: aimZ }, speed: 24 + 4 * pic.self.abilities.shooting },
       success: xg,
@@ -119,11 +120,11 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     if (dist < 5 || dist > 50) continue;
     const lead = Math.min(1.2, dist / 15);
     const target = { x: m.pos.x + m.vel.x * lead, z: m.pos.z + m.vel.z * lead };
-    if (Math.abs(target.x) > PITCH.halfLength - 0.5 || Math.abs(target.z) > PITCH.halfWidth - 0.5) continue;
+    if (Math.abs(target.x) > PITCH.halfLength - 2 || Math.abs(target.z) > PITCH.halfWidth - 3) continue;
     const u = toTeam(sign, target).u;
     if (u > pic.offsideLineU - 0.01 && u > toTeam(sign, from).u) continue; // receiver would be offside
     const td = Math.hypot(target.x - from.x, target.z - from.z);
-    const ground = groundPassSpeed(td, 5);
+    const ground = groundPassSpeed(td, 3.5);
     const groundSafe = laneSafety(pic, from, target, ground, false, 0);
     const loftSpeed = loftedPassSpeed(td, Math.min(MAX_ELEVATION, 0.42));
     const loftSafe = td > 16 ? laneSafety(pic, from, target, loftSpeed, true, loftedTime(loftSpeed, 0.42)) * 0.8 : 0;
@@ -149,7 +150,7 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     const base = Math.atan2(0, sign) + a;
     const dir = { x: Math.cos(base), z: Math.sin(base) };
     const ahead = { x: from.x + dir.x * 6, z: from.z + dir.z * 6 };
-    if (Math.abs(ahead.z) > PITCH.halfWidth - 1 || Math.abs(ahead.x) > PITCH.halfLength - 1) continue;
+    if (Math.abs(ahead.z) > PITCH.halfWidth - 4 || Math.abs(ahead.x) > PITCH.halfLength - 2) continue;
     let gap = 9;
     for (const o of pic.opponents) gap = Math.min(gap, segmentDistance(o.pos, from, ahead).d);
     const score = gap + threatAt(sign, ahead) * 20;
@@ -163,7 +164,7 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     const run = Math.hypot(pic.vel.x, pic.vel.z);
     out.push({
       kind: 'dribble',
-      action: { kind: 'dribble', direction: best.dir, speed: Math.max(3.5, Math.min(7.5, run + 2.2)) },
+      action: { kind: 'dribble', direction: best.dir, speed: Math.max(3, Math.min(6, run + 1.3)) },
       success,
       value: success * threatAt(sign, ahead) - (1 - success) * lossCost(from) * 1.2,
       note: 'Ball am Fuß',

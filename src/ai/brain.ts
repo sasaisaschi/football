@@ -89,6 +89,8 @@ export class PlayerBrain {
     if (ctx.restart) return ctx.restart.taker === this.profile.id;
     // The keeper only plays the ball with his feet inside his own area (back-passes, loose balls).
     if (this.profile.role === 'GK' && !inPenaltyArea(ball.pos.x, ball.pos.z, (-ctx.sign) as 1 | -1)) return false;
+    // A ball played towards me is mine to receive (the passer looked at me; the receiver knows it).
+    if (this.ballComingToMe(ball)) return true;
     const mine = PlayerBrain.interceptTime(this.body.position(), this.body.limits.maxSpeed, ball).t - (this.committedToBall ? 0.25 : 0);
     for (const p of ctx.profiles) {
       if (p.team !== this.profile.team || p.id === this.profile.id) continue;
@@ -99,7 +101,50 @@ export class PlayerBrain {
     return true;
   }
 
+  /** Is the moving ball's path passing within reach of me, ahead of it, and no further than a pass length? */
+  private ballComingToMe(ball: { pos: Vec2; vel: Vec2 }): boolean {
+    const speed = Math.hypot(ball.vel.x, ball.vel.z);
+    if (speed < 3) return false;
+    const self = this.body.position();
+    const dx = self.x - ball.pos.x, dz = self.z - ball.pos.z;
+    const along = (dx * ball.vel.x + dz * ball.vel.z) / speed;
+    if (along < 1 || along > 40) return false;
+    const lateral = Math.abs(dx * ball.vel.z - dz * ball.vel.x) / speed;
+    return lateral < 2.2;
+  }
+
   think(ctx: BrainContext): BrainOutput {
+    const out = this.decide(ctx);
+    const order = this.userIntent;
+    if (order?.type === 'move' && order.action.kind === 'tactical-foul') return out;
+    return { ...out, command: this.controlledApproach(out.command, ctx) };
+  }
+
+  /**
+   * Footballers do not sprint into each other: when a body is close ahead on the running line, the player
+   * slows to a controllable challenging speed. A tactical foul order skips this on purpose.
+   */
+  private controlledApproach(cmd: BodyCommand, ctx: BrainContext): BodyCommand {
+    const self = this.body.position();
+    const v = this.body.velocity();
+    const speed = Math.hypot(v.x, v.z);
+    if (speed < 2.5) return cmd;
+    const ux = v.x / speed, uz = v.z / speed;
+    let limit = cmd.speed;
+    for (const [id] of this.perception.others) {
+      const p = this.perception.playerNow(id, ctx.now);
+      if (!p) continue;
+      const dx = p.x - self.x, dz = p.z - self.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 3 || d < 0.01) continue;
+      const ahead = (dx * ux + dz * uz) / d;
+      if (ahead < 0.6) continue;
+      limit = Math.min(limit, 1.8 + (d - 0.6) * 1.4);
+    }
+    return limit < cmd.speed ? { ...cmd, speed: Math.max(1.5, limit) } : cmd;
+  }
+
+  private decide(ctx: BrainContext): BrainOutput {
     const self = this.body.position();
     this.perception.observe(ctx.truth, self, this.body.heading);
     const believed = this.perception.ballNow(ctx.now);
@@ -179,7 +224,8 @@ export class PlayerBrain {
     }
     if (distance > 3.5) {
       this.intent = null;
-      return { command: { target: intercept.at, speed: this.body.limits.maxSpeed, face: ball.pos }, effort: 1, swing: null };
+      // On the way to the ball, run around bodies instead of through them; challenges happen at the ball.
+      return { command: this.steerAround({ target: intercept.at, speed: this.body.limits.maxSpeed, face: ball.pos }, ctx), effort: 1, swing: null };
     }
     if (this.userIntent?.type === 'ball') {
       this.intent = this.userIntent;

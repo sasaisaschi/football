@@ -110,7 +110,7 @@ export class Referee {
     const [offender, victim] = towards(sa, sb) >= towards(sb, sa) ? [a, b] : [b, a];
     const vs = states.get(victim)!, os = states.get(offender)!;
     const victimNearBall = Math.hypot(ball.x - vs.pos.x, ball.z - vs.pos.z) < 2.2;
-    const victimOnBall = (this.lastTouch?.player === victim && now - this.lastTouch.time < 1.2) || victimNearBall;
+    const victimOnBall = (this.lastTouch?.player === victim && now - this.lastTouch.time < 0.6) || victimNearBall;
     const tactical = os.hasTacticalFoulIntent;
     if (!victimOnBall && !tactical && keeperHolding !== victim) return null;
     const playedBallFirst = now - (this.lastBallContact.get(offender) ?? -9) < 0.35;
@@ -121,7 +121,7 @@ export class Referee {
     const fromBehind = (ox * hx + oz * hz) / od < -0.5;
     // Two players going for the same ball is a contest, not a foul, unless it is clumsy, fast or from behind.
     const contest = Math.hypot(ball.x - os.pos.x, ball.z - os.pos.z) < 1.6;
-    const threshold = fromBehind ? 2.8 : contest ? 5 : 3.8;
+    const threshold = fromBehind ? 2.8 : contest ? 5.6 : 4;
     const careless = closingSpeed >= threshold || tactical || keeperHolding === victim;
     if (!careless) return null;
 
