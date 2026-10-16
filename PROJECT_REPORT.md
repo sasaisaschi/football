@@ -11,7 +11,7 @@
 
 **Unverhandelbare Vision:** Ein Spielzug soll aus eigenständigen Entscheidungen, tatsächlichen Körper- und Ballkontakten und dem regelkonformen Spielzustand entstehen. Kamera, Publikum, Kommentar und Analyse reagieren auf reale Ereignisse. Keine geskripteten Tore oder nachträglich erfundenen Aktionen. Die ersten 30 Sekunden sollen sich wie ein großer Fußballabend anfühlen, nicht wie ein Physikdebugger.
 
-**Ist-Zustand:** Browser-Prototyp mit vereinfachtem 3-gegen-3 auf 42 × 28 m, Ball- und Spielerkörpern in Rapier, einfacher Agentenlogik, Impuls-Kicks, Tore/Score, Kamera, Intro und HUD. **Nicht** gleichzusetzen mit dem Ziel eines überzeugenden 11-gegen-11-Spiels. Grundlage: `README.md`, `src/main.ts`, `src/stadium.ts`, `src/player-visuals.ts` (früher eingesehen; kein aktueller Laufzeittest).
+**Ist-Zustand (geprüft 16.10.2026, siehe §22):** Browser-Anwendung mit **11 gegen 11 auf 105 × 68 m**, Torhütern, 4-3-3-Positionsspiel, Rapier-Körpern, **physikalischen Fuß-/Ballkontakten** (kinematische Schuh-Kollider, begrenzter Beinschwung, keine Distanz-Impulse mehr), Schiedsrichterlogik für Tor, Aus, Einwurf, Ecke, Abstoß, Anstoß und Abseits, Ereignisprotokoll, Kontakt-Diagnose, Stadion, Intro und HUD. Spielerisch noch roh: geringe Passquote, Torhüter ohne Hände, keine Fouls, keine Entscheidungsmomente für den Benutzer.
 
 **Dokumentenhierarchie:**
 1. `PROJECT_REPORT.md`: verbindlicher Entwicklungsstand, Arbeitsregeln, Entscheidungen und Roadmap.
@@ -25,13 +25,13 @@
 
 | Bereich | Tatsächlicher Stand / Regel |
 | --- | --- |
-| Runtime | Browser, TypeScript 5.9, **Vite 7.1** laut `package.json`; `src/main.ts` als aktueller Einstieg |
-| Rendering | Three.js |
-| Physik | `@dimforge/rapier3d-compat`; aktuell autoritative Ball-/Körperphysik |
+| Runtime | Browser, **TypeScript 7.0.2**, **Vite 8.3.4** (Nutzerfreigabe 16.10.2026: Versionsbindung aufgehoben); `src/main.ts` als Einstieg |
+| Rendering | Three.js 0.186.1 |
+| Physik | `@dimforge/rapier3d-simd-compat` 0.21.0 (gleiche API wie `-compat`, WASM-SIMD); einzige autoritative Physik |
 | UI | **Derzeit kein React installiert**: bestehende HTML/CSS-Oberfläche in `src/main.ts` und `src/style.css`. React 19/TSX, Vite 8 und Lucide sind allgemeine **Ziel-/Standardregeln**, nicht der Ist-Zustand dieses Repositories. **Kein eigenmächtiger Stack-Umbau** |
 | Assets | Statische Dateien unter `public/`; einfacher `crowd-stand.svg`; optionale GLB-Modellpfade sind im Code, tatsächliche Binärdateien noch nicht vollständig geprüft |
 | KI | Gegenwärtig einfache lokale Spielerheuristiken; Cloud-/Foundry-Agenten sind **geplant**, nicht als funktionierend bestätigt |
-| Qualität | `npm run check` laut README/Projektdefinition vorgesehen; **in dieser Dokumentationsrunde nicht ausgeführt** |
+| Qualität | `npm run check` = `tsc --noEmit` + `vite build` + `vitest run` (Vitest 5.0.5); zuletzt grün am 16.10.2026, siehe §7 |
 
 **Koordinaten im aktuellen Code:** X = Spielfeldlänge, Y = Höhe, Z = Spielfeldbreite. `ARCHITECTURE.md` enthält eine abweichende **vorgeschlagene** Konvention. Bestehenden Code nicht ohne expliziten Migrationsplan umdeuten.
 
@@ -45,10 +45,23 @@ football/
   README.md               # Start und tatsächlich vorhandene Funktionen
   package.json
   src/
-    main.ts               # aktuelle Spielschleife, Physik, Agenten, UI-Anbindung
+    main.ts               # Rendering, HUD, Kamera, Ton; liest nur den Match-Zustand
+    match.ts              # headless autoritative Partie: Welt, 22 Spieler, Ball, Ablauf, Ereignisse
+    referee.ts            # Regelinstanz: Tor, Aus, Spielfortsetzungen, Abseits
+    team.ts               # Spielertyp, 4-3-3, Positionsspiel, Abseitslinie, Ballgewinner-Schätzung
+    kick-decision.ts      # ActionIntent (KI oder Benutzer), Entscheidung, Ausführungsfehler
+    foot-contact.ts       # kinematische Schuh-Kollider, Beinschwung, Teilschritte bei Schüssen
+    player-motor.ts       # Körperkapsel, Blickrichtung, begrenzte Beschleunigung/Drehung
+    ball.ts               # Ball, Luftwiderstand, Ballplatzierung durch den Schiedsrichter
+    pitch.ts              # IFAB-Maße, Tor-/Netzkollider, Regel-9/10-Geometrie
+    pitch-visuals.ts      # Markierungen, Tore, Netze
+    collision-groups.ts   # Rapier-Interaktionsgruppen
+    player-figure.ts      # Platzhalterfigur, Kickbein folgt dem Physikfuß
+    player-visuals.ts     # optionale GLB-Modelle (nicht vorhanden)
+    diagnostics.ts        # zuschaltbare Kontakt-Diagnose
     stadium.ts            # Stadionaufbau, Publikum, Texturpanels
-    player-visuals.ts     # optionale GLB-Animationen und Fallback
-    style.css             # aktuelle UI-Styles
+    style.css             # UI-Styles
+    *.test.ts             # Vitest: Ball, Platz, Fußkontakt, Regeln, Match, kein Magnetismus
   public/
     assets/stadium/       # vorhandene statische Stadionassets
     data/                 # recherchierte, kategorisierte Projektinformationen
@@ -73,14 +86,15 @@ football/
 | Funktion | Status | Grundlage / Einschränkung |
 | --- | --- | --- |
 | Browser-Spielfeld, Score, Zeit, HUD | Implementiert | `src/main.ts`, `README.md` |
-| 3v3, einfache Laufwege, Schuss-/Passversuche | Teilweise | heuristische Agenten, keine ausgearbeitete Mannschaftsintelligenz |
-| Rapier-Ball und dynamische Spielerkörper | Teilweise | echter Physikkern, aber Fußkontakt derzeit distanzbasierter Impuls |
+| 11v11, 4-3-3, Positionsspiel, Pressing/tief stehen, Torhüter | Teilweise | `team.ts`, `match.ts`; Wahrnehmung noch allwissend, Passquote niedrig, Torhüter ohne Hände/Hechtsprung |
+| Physische Fuß-/Ballkontakte (Pass, Schuss, Dribbling, Klärung, Ballannahme) | Implementiert, getestet | `foot-contact.ts`; kinematischer Schuh mit unbegrenzter Masse (Näherung), siehe §22 |
 | Intro, Kameramodi, einfacher Stadionton | Teilweise | visuell/akustisch noch weit vom Ziel |
 | Stadiongeometrie und Crowd-Textur | Teilweise | einfache SVG-/Geometrie-Darstellung, keine abgenommene hochwertige Arena |
 | GLB-Spieler und Animation | Teilweise | Lade-/Fallback-Code vorhanden; reale GLB-Dateien nicht bestätigt |
-| 11v11, Torhüter, vollständige IFAB-Regeln | Geplant | noch nicht als funktionsfähig belegt |
-| Ballspin, Magnus, realistische Kontakte, validierte Biomechanik | Geplant | keine Kalibrierung oder Messreihe bestätigt |
-| Replay, Eventlog, Entscheidungsinspektion | Geplant | Zielarchitektur, nicht bestehender Produktionsnachweis |
+| Regeln: Tor, Aus, Einwurf, Ecke, Abstoß, Anstoß, Abseits, 9,15 m | Teilweise | `referee.ts`; Einwurf mit dem Fuß, keine Fouls/Karten/Vorteil, Abseits nur bei Ballberührung |
+| Entscheidungsmomente für den Benutzer | Geplant (Schnittstelle vorhanden) | `Match.setUserIntent` führt Benutzerabsichten über dieselbe Physik aus; Erkennung und UI fehlen |
+| Ballspin aus Kontakt | Implementiert | entsteht durch Reibung beim exzentrischen Kontakt; **Magnus-Effekt fehlt**, Rollwiderstand nur über Dämpfung |
+| Ereignisprotokoll (MatchEvent), Seed | Implementiert | `match.ts`; Replay und Entscheidungsinspektion noch geplant |
 | Fünf Erlebnisrollen, Cloud/Foundry-Integration | Geplant | nicht als funktionierend getestet |
 | Smartphone-Companion, Fanaufnahmen, AR | Geplant / offen | Einwilligung, Rechte, technische Machbarkeit prüfen |
 
@@ -105,11 +119,16 @@ football/
 
 ## 7. Testing Status
 
-**In dieser Arbeitsrunde wurde kein Build, Browserlauf oder Physikbenchmark durchgeführt.** GitHub-Dateien wurden gelesen und Dokumentationsänderungen geschrieben. Ein Commit beweist keine funktionierende Laufzeit.
+**Stand 16.10.2026 (tatsächlich ausgeführt, Windows 11, Node 24.20, Intel Iris Xe):**
+- `npm run check`: `tsc` ohne Fehler, `vite build` erfolgreich (Warnung: Bundle 5,3 MB wegen eingebettetem Rapier-WASM), **6 Testdateien / 27 Tests bestanden**.
+- Browser: Claude-in-Chrome-Erweiterung war nicht verbunden; geprüft wurde mit Headless-Chrome über das DevTools-Protokoll (Skript nicht im Repo). Mit GPU (ANGLE/D3D11, Intel Iris Xe) **53,7 FPS bei 1600 × 900**, Simulation in Echtzeit, keine Konsolenfehler; einzige Warnung: fehlende GLB-Modelle. Screenshots von TV-Kamera, Nahkamera mit Kontakt-Diagnose und Draufsicht geprüft. **Keine manuelle Interaktion durch einen Menschen, kein Ton-Test, kein Mobilgerät.**
+- Ein Commit beweist weiterhin keine Abnahme durch den Nutzer.
 
 **Lokal auszuführen:** `npm install`, `npm run check`, `npm run dev`; danach Sichtprüfung und echte Interaktion im Browser. Prüfergebnis mit Datum, Umgebung und Fehlerausgabe hier ergänzen.
 
-**Fehlende wesentliche Prüfungen:** Ballfall und Rollreibung, Schuss-/Spinflug, CCD am Pfosten, echte Fußkontakte, Sprint-/Bremskurven, unabhängige Interzeption, Matchereignis-Replay, FPS/RAM auf Zielhardware, Asset-Vollständigkeit und Bildgeometrie. Kein Test darf ohne tatsächlichen Lauf als bestanden markiert werden.
+**Vorhandene Tests:** Luftwiderstand ohne Kraftakkumulation; Tor-/Aus-Geometrie (Regel 9/10); Netz fängt Schüsse, Pfosten und Latte prallen ab; Fußkontakt (Nähe allein bewegt den Ball nicht, Zielrichtung/-tempo, Spannstoß, Richtungsabhängigkeit, Fehltreffer erzeugt Ablenkung und Drall, Luftloch, Reichweite, Ballannahme); Bewegungsgrenzen; Abseits inkl. Einwurf-Ausnahme; Ecke/Abstoß/Einwurf-Zuteilung; Tor mit Anstoß; 90-s-Partie ohne NaN/Ausreißer; Quelltextprüfung „kein Magnetismus“.
+
+**Fehlende wesentliche Prüfungen:** Ballfall/Rollreibung gegen Messwerte, Spinflug/Magnus, Torwartaktionen, Fouls, Replay, RAM, Mobilgeräte, Asset-Vollständigkeit und Bildgeometrie. Kein Test darf ohne tatsächlichen Lauf als bestanden markiert werden.
 
 ---
 
@@ -118,14 +137,14 @@ football/
 ### Phase 1 – Critical Fixes & Stabilization
 > Muss vor umfangreicher Erweiterung geklärt werden.
 - [ ] Repository-Dateibaum und sämtliche Binärassets vollständig inventarisieren; keine nicht vorhandenen Bilder/GLBs behaupten.
-- [ ] `npm run check` und Browserlauf tatsächlich ausführen, Fehler und Ergebnisse dokumentieren.
-- [ ] Bestehende 3v3-Spielschleife auf physikalische Fehler und widersprüchliche Koordinatenannahmen prüfen.
+- [x] `npm run check` und Browserlauf tatsächlich ausführen, Fehler und Ergebnisse dokumentieren (16.10.2026, §7/§22).
+- [x] Bestehende Spielschleife auf physikalische Fehler prüfen: akkumulierende Luftwiderstandskraft gefunden und behoben (§22).
 - [ ] Bild-/Stadionansichten geometrisch korrekt spezifizieren und nur tatsächlich akzeptierte Assets integrieren.
 - [ ] Relevante Hackathon-Regeln, Termin/Zeitzone und Lizenzbedingungen offiziell prüfen.
 
 ### Phase 2 – Core Improvements
 > Zusammenhängende Physik, Agenten und glaubwürdige Darstellung.
-- [ ] Echte Fuß-/Ballkontaktlösung prototypisch **in der bestehenden Anwendung** messen und vergleichen.
+- [x] Echte Fuß-/Ballkontaktlösung **in der bestehenden Anwendung** umgesetzt und gemessen (§22).
 - [ ] Agentenwahrnehmung, Taktik, Motorik und Simulationszustand mit klaren Zuständigkeiten entflechten.
 - [ ] Physik-, Ereignis- und Snapshot-Schnittstellen implementieren und testen.
 - [ ] Bild-/2,5D-/3D-Stadionpipeline auf echter Zielhardware prüfen.
@@ -133,7 +152,8 @@ football/
 
 ### Phase 3 – Feature Extensions
 > Spieltiefe und Interaktion.
-- [ ] Von 3v3 zu taktisch glaubwürdigem 11v11 mit Torhütern skalieren.
+- [ ] Taktisch glaubwürdiges 11v11: Grundgerüst mit 22 Spielern, Torhütern und Positionsspiel steht; Wahrnehmungsgrenzen, Passqualität, Torwarttechnik offen.
+- [ ] KI erkennt spielentscheidende Momente; Benutzer wählt dort aus physikalisch möglichen Optionen (`Match.setUserIntent` vorhanden, Erkennung/UI fehlen).
 - [ ] Vollständige relevante Spielregeln und Schiedsrichterentscheidungen schrittweise validieren.
 - [ ] Trainer-/Managerinteraktion, Match Analyst und Ereignis-kompatiblen Kommentar ergänzen.
 - [ ] Replays, Diagnostik und erklärbare Spielerentscheidungen bereitstellen.
@@ -596,7 +616,7 @@ Jede Ereignis-ID muss eindeutig und zeitlich zuordenbar sein. Die Analyse darf n
 
 ## 19. Konflikt- und Änderungsregister
 
-- **Konflikt A:** Allgemeiner Standard React 19/Vite 8 vs. `package.json` mit Vite 7.1 und ohne React. **Auflösung:** tatsächlichen Ist-Zustand anerkennen; Migration nur nach konkretem Bedarf und Entscheidung.
+- **Konflikt A:** Allgemeiner Standard React 19/Vite 8 vs. Vite 7 ohne React. **Auflösung 16.10.2026 (Nutzer):** Versionsbindung aufgehoben, auf Vite 8/TS 7/three 0.186 aktualisiert; React nur bei echtem technischem Nutzen – derzeit keiner, da die UI aus wenigen DOM-Elementen über einem WebGL-Canvas besteht.
 - **Konflikt B:** Vorgeschlagene Koordinaten in `ARCHITECTURE.md` vs. bestehender Code. **Auflösung:** aktuellen Code als Laufzeitrealität verwenden; Migration explizit planen und testen.
 - **Konflikt C:** `VISION.md` beschreibt vollständige Matchday-Welt, `README.md` beschreibt 3v3. **Auflösung:** verschiedene Reifegrade; Vision nicht durch Prototyp ersetzen.
 - **Konflikt D:** Vier gewünschte Stadionansichten vs. aktuell wiederverwendete einzelne SVG-Textur. **Auflösung:** als fehlende Assetproduktion dokumentieren, keine vorhandene Lösung behaupten.
@@ -661,3 +681,38 @@ Der Matchday kann logisch fünf Rollen haben: Pub Host, Football Manager, Match 
 7. Wenn keine Implementierung möglich ist, einen **konkreten, ausführbaren nächsten Schritt** oder eine exakt lokalisierte technische Blockade dokumentieren statt weitere allgemeine Texte zu produzieren.
 
 **Entscheidungsfilter:** Keine neue Datei, kein Frameworkwechsel, kein zusätzlicher Service, keine weitere Abstraktion und kein neues Asset ohne belegbaren Nutzen für die reale Anwendung. Erst das größte Hindernis der nächsten integrierten Abnahmeszene lösen.
+
+## 22. Arbeitsblock 16.10.2026 – physikalische Fuß-/Ballkontakte und 11 gegen 11
+
+**Nutzerentscheidungen dieses Tages:** (1) Spielphilosophie „entscheidende Momente“: Die KI erkennt spielrelevante Wendepunkte, der Benutzer entscheidet dort zwischen tatsächlich möglichen Optionen, Physik und Regelwerk bestimmen die Folgen; dazwischen darf verdichtet werden, aber nur aus einem zusammenhängenden Spielzustand. (2) Fußball von Anfang an 11 gegen 11 mit Torhütern, kein 3v3→5v5-Ausbau. (3) Aktuelle stabile Abhängigkeiten statt Versionsbindung; React nur bei technischem Nutzen.
+
+**Commits (Branch `claude/12th-man-development-df7030`):**
+1. `fix(physics)` – Rapier-`addForce` ist persistent (per Headless-Probe gemessen: 1 N blieb über drei Schritte stehen). Der Luftwiderstand wurde jeden Tick addiert und nie zurückgesetzt: Ball überbremst, danach rückwärts beschleunigt. Jetzt `resetForces` + Neuberechnung je Tick (`ball.ts`).
+2. `build` – three 0.186.1, Vite 8.3.4, TypeScript 7.0.2, Vitest 5.0.5, `@types/node`, Rapier-SIMD-Build.
+3. `feat(pitch)` – 105 × 68 m nach IFAB Regel 1, Pfosten/Latte/Netz als Kollider, Tor nur bei vollständig überquerter Linie (Regel 10), Stadion und Kameras skaliert.
+4. `feat(sim)` – headless `Match` mit 22 Spielern, Fußkontakt, Entscheidungen, Positionsspiel, Schiedsrichter, Ereignisprotokoll und Tests.
+5. `feat(app)` – Darstellung liest nur noch `Match`; Kickbein folgt dem Physikfuß; Kontakt-Diagnose; TV-Kamera in der Arena.
+
+**Wie ein Ballkontakt jetzt entsteht:** Entscheidung (`kick-decision.ts`, KI oder Benutzer) → Anlauf hinter den Ball auf der Seite des Schussbeins (`match.ts`) → Planung eines Beinschwungs gegen die vorhergesagte Ballposition, nur wenn Hüfte/Beinlänge (0,95 m) und Körperausrichtung es zulassen (`planSwing`) → Ausführungsfehler verschieben die **Fußbahn** (Druck, Körperwinkel, Relativgeschwindigkeit, Kraft) → kinematischer Schuh fährt Ausholen, Schlag, Durchschwung → **Rapier** löst den Kontakt. Trifft der Schuh nicht, passiert nichts (Luftloch). Kein Code setzt Ballgeschwindigkeit, -richtung oder -position während des Spiels (automatischer Test).
+
+**Gemessene Fakten und daraus folgende Entscheidungen:**
+- Rapier-CCD erfasst Bewegungen **kinematischer** Körper nicht zuverlässig: Ein Spannstoß mit 18 m/s sprang bei 1/60 s um 0,30 m pro Schritt in den Ball, der Ball wurde nach oben gedrückt statt geschossen. Lösung: Während Ausholen/Schlag wird der Schritt in bis zu 8 Teilschritte zerlegt (Fuß ≤ 7 cm pro Teilschritt); sonst bleibt 1/60 s.
+- Ein Fuß, der im Kontaktschritt abbremst, überträgt nur einen Teil seiner Geschwindigkeit; deshalb läuft der Schlag mit voller Geschwindigkeit 0,25 m durch den Ball.
+- Der Abflugwinkel entsteht nur aus der Kontaktgeometrie (Treffpunkt unterhalb der Ballmitte, max. ≈ 25,8°); die Schlagbahn ist waagerecht.
+- Effektive Restitution Schuh/Ball in Rapier ≈ 0,45 (Ball ≈ 1,45 × Schuhgeschwindigkeit), als Konstante `CONTACT_RESTITUTION` dokumentiert. Reale Werte liegen eher bei 1,2–1,35, da der echte Fuß endliche Masse hat – bekannte Näherung.
+- Headless-Partien, je 5 Minuten, Seeds 1–3: 107–119 Schussbewegungen, davon ca. 78–80 % mit Fußkontakt; Verhältnis erreichtes/gewolltes Balltempo Median 1,04–1,11, 10. Perzentil 0,01–0,14 (Streifschüsse), 90. Perzentil 1,39–1,57; 3 Torschüsse je Partie, insgesamt 1 Tor in 15 Minuten. Pässe zum gewollten Mitspieler 21–29, abgefangen 21–30 → **Passqualität noch klar unzureichend**.
+- Rechenzeit: ca. 0,5–0,64 ms pro Physikschritt mit 22 Spielern (Node); 53,7 FPS im Browser auf Intel Iris Xe.
+
+**Bekannte Grenzen / offene Punkte (nicht erledigt):**
+- Agentenwahrnehmung ist allwissend; keine Blickfelder, Verzögerung oder Kommunikation. Passwahl und Laufwege daher schwach (Priorität 2).
+- Torhüter ohne Hände, Hechtsprung und Fangen; Paraden nur mit Körper/Füßen.
+- Füße kollidieren nur mit dem Ball, nicht mit gegnerischen Beinen; Zweikämpfe nur über Körperkapseln. Fouls, Vorteil, Karten fehlen.
+- Einwurf wird vereinfacht mit dem Fuß ausgeführt; Abseits nutzt Körpermittelpunkte und wertet nur Ballberührung als Beteiligung; absichtliches Spielen und Abprallen werden nicht unterschieden.
+- Bei Spielfortsetzungen platziert der Schiedsrichter den toten Ball (zulässig, da der Ball nicht im Spiel ist).
+- Kein Magnus-Effekt; Rollwiderstand nur als Dämpfung; Ballparameter nicht gegen Messreihen kalibriert.
+- Determinismus: Seed-basierter Zufallsgenerator vorhanden, plattformübergreifende Reproduzierbarkeit von Rapier nicht geprüft.
+- Entscheidungsmomente für den Benutzer: nur Schnittstelle (`Match.setUserIntent`), keine Erkennung, keine UI.
+- GLB-Spielermodelle fehlen weiterhin; Platzhalterfiguren. Die Intro-Kamerafahrt startet außerhalb des Stadions und fährt durch das Dach.
+- Bundlegröße 5,3 MB (Rapier-WASM inline).
+
+**Nächste sinnvolle Schritte:** (a) Wahrnehmung und Passauswahl verbessern, Passquote messbar steigern; (b) Torwarttechnik mit eigenem Hand-Kollider; (c) Erkennung entscheidender Momente auf Basis des Ereignisprotokolls plus erste Entscheidungs-UI über `setUserIntent`; (d) Magnus-Effekt und Rollwiderstand kalibrieren; (e) Fouls im Schiedsrichter.

@@ -1,4 +1,4 @@
-# Football — Autonomous Match 002
+# THE 12TH MAN — Autonomous Matchday
 
 Browser prototype of a physically grounded, autonomous football match for the Microsoft × Premier League hackathon.
 
@@ -16,14 +16,16 @@ Open the Vite URL in the browser.
 
 ## Implemented (prototype)
 
-- Three.js 3D pitch, 42 × 28 m small-sided test field with visible goals
-- Rapier 3D ball and dynamic player capsules, fixed 60 Hz target timestep
-- Three orange vs three blue reactive agents, bounded acceleration and support positioning
-- Kick attempts via impulses, simple drag, goal detection, scoreboard, kickoff reset
-- Pause, restart, time, ball speed and shot counter
+- 11 v 11 with goalkeepers on a 105 × 68 m IFAB pitch; posts, crossbar and net are physical colliders
+- Rapier 3D (SIMD build) as the single physics authority, fixed 60 Hz step, substeps during strikes
+- Physical boot/ball contacts: each player has two kinematic boot colliders driven by a bounded leg swing; passes, shots, dribbles, clearances and first touches only happen if the boot really meets the ball
+- 4-3-3 positional play, coach tactic (high press / deep block), ball winner per team, offside-line discipline
+- Referee: goals (whole ball over the line), throw-ins, corners, goal kicks, kickoffs, offside, 9.15 m distance
+- Match event log, contact diagnostics overlay (button KONTAKTE), stadium, intro, HUD
+- `npm run check` = typecheck + build + Vitest suite (contact physics, rules, motion bounds, "no magnetism")
 
 ## Not yet implemented
 
-Trained AI, physical foot geometry (kicks are currently triggered by proximity), realistic animation, calibrated aerodynamics, full football rules, robust goal-frame collision, advanced tactics, Microsoft Foundry integration, replay, automated physics verification and public deployment. The first version is intentionally a rough gameplay test; do not mistake it for a complete football simulator.
+Decisive-moment detection and the user decision UI (the engine already accepts user intents via `Match.setUserIntent`), keeper hands and dives, fouls and cards, perception limits for agents, Magnus effect, calibrated rolling resistance, replay, Microsoft Foundry integration, real player models and public deployment.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the broader research and design backlog.
