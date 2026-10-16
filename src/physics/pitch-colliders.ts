@@ -11,7 +11,7 @@ export function createPitchColliders(world: RAPIER.World): void {
   const fixed = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
   const add = (desc: RAPIER.ColliderDesc) => world.createCollider(desc.setCollisionGroups(GROUPS.world), fixed);
   add(
-    RAPIER.ColliderDesc.cuboid(PITCH.halfLength + PITCH.runOff + 2, 0.5, PITCH.halfWidth + PITCH.runOff + 2)
+    RAPIER.ColliderDesc.cuboid(PITCH.halfLength + PITCH.runOff + 3, 0.5, PITCH.halfWidth + PITCH.runOff + 3)
       .setTranslation(0, -0.5, 0)
       .setFriction(0.8)
       .setRestitution(0.55),
@@ -46,4 +46,14 @@ export function createPitchColliders(world: RAPIER.World): void {
     board(BOARDS.x, 0.1, 0, s * BOARDS.z);
     board(0.1, BOARDS.z, s * BOARDS.x, 0);
   }
+  // Front wall of the stands behind the boards: a ball cleared over the boards lands in the crowd, not in the void.
+  const wall = (hx: number, hz: number, x: number, z: number) =>
+    add(RAPIER.ColliderDesc.cuboid(hx, STANDS.height / 2, hz).setTranslation(x, STANDS.height / 2, z).setRestitution(0.2).setFriction(0.8));
+  for (const s of [-1, 1]) {
+    wall(STANDS.x + 1, 0.5, 0, s * (STANDS.z + 0.5));
+    wall(0.5, STANDS.z + 1, s * (STANDS.x + 0.5), 0);
+  }
 }
+
+/** Inner face of the stands (spectator area) around the run-off. */
+export const STANDS = { x: PITCH.halfLength + PITCH.runOff + 1.5, z: PITCH.halfWidth + PITCH.runOff + 1.5, height: 14 } as const;

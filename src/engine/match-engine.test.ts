@@ -1,6 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-simd-compat';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { PITCH } from '../physics/pitch-geometry';
+import { STANDS } from '../physics/pitch-colliders';
 import { MatchEngine } from './match-engine';
 import { runFor, stageScenario } from './scenario-helper';
 import type { MatchEvent, MatchPhase } from './types';
@@ -33,8 +34,10 @@ describe('autonomous 11 v 11 match', () => {
       if (e.phase === 'in-play') inPlayTicks++;
       const b = e.ballPos();
       expect(Number.isFinite(b.x) && Number.isFinite(b.y) && Number.isFinite(b.z)).toBe(true);
-      expect(Math.abs(b.x)).toBeLessThan(PITCH.halfLength + PITCH.runOff + 1);
-      expect(Math.abs(b.z)).toBeLessThan(PITCH.halfWidth + PITCH.runOff + 1);
+      // The ball can fly over the boards but never leaves the stadium.
+      expect(Math.abs(b.x)).toBeLessThan(STANDS.x);
+      expect(Math.abs(b.z)).toBeLessThan(STANDS.z);
+      expect(b.y).toBeGreaterThan(0);
       const v = e.physics.ball.linvel();
       maxBallSpeed = Math.max(maxBallSpeed, Math.hypot(v.x, v.y, v.z));
       if (e.tick % 30 === 0) {
