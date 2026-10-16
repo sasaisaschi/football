@@ -1,0 +1,39 @@
+/* THE 12TH MAN design tokens. Single source for colours, type, radii and shadows. */
+:root {
+  --c-night: #060b16;
+  --c-panel: #0b1426;
+  --c-panel-raised: #12203a;
+  --c-line: #2a3d5c;
+  --c-text: #f3f6fb;
+  --c-text-muted: #9fb2cc;
+  --c-accent: #ff8a2a;
+  --c-accent-strong: #ff6a00;
+  --c-home: #ff8a2a;
+  --c-away: #4cc3ff;
+  --c-live: #d7263d;
+  --c-good: #3ddc84;
+  --c-warn: #ffd23f;
+  --c-pitch: #1d7a45;
+
+  --font-ui: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-score: 'Bahnschrift', 'DIN Alternate', 'Segoe UI', sans-serif;
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 20px;
+  --fs-xl: 28px;
+  --fs-hero: clamp(36px, 7vw, 96px);
+  --tracking: 0.08em;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --shadow-panel: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 24px rgba(255, 138, 42, 0.45);
+  --transition: 180ms ease;
+}
