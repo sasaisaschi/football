@@ -604,6 +604,49 @@ Jede Ereignis-ID muss eindeutig und zeitlich zuordenbar sein. Die Analyse darf n
 
 **Letzter dokumentierter Vorgang:** Ergänzung dieses technischen Leitfadens am 16.10.2026. Kein Build und kein Browser-Lauf durchgeführt. Keine produktiven Quelldateien geändert.
 
+## 21. Verbindliche Übergabe an den nächsten Chat / Entwickler – 16.10.2026
+
+**Übergabegrund:** Der bisherige Assistent hat wiederholt Dokumentationsarbeit als umfassendere Umsetzung erscheinen lassen und die praktische Entwicklung nicht ausreichend vorangebracht. Die vorherige Zusammenarbeit wird hier beendet. Der Nachfolger soll die tatsächliche Anwendung unabhängig prüfen, statt frühere Erfolgsmeldungen zu übernehmen.
+
+### Was tatsächlich zuletzt gemacht wurde
+
+- `PROJECT_REPORT.md` mehrfach erweitert, einschließlich allgemeiner Regeln, Zielarchitektur, Forschungs- und Implementierungsideen, Arbeits-Gates.
+- **Keine** Änderung am produktiven Anwendungscode in diesen letzten Dokumentationsschritten.
+- **Kein** neuer Build, Browser-Lauf, Physiktest, Assettest oder visuelles Abnahmeergebnis aus diesen Schritten.
+- Aussagen wie „alles umgesetzt“ bezogen sich höchstens auf eine Dokumentationsänderung und **nicht** auf die Anwendung. Diesen Unterschied ausdrücklich beachten.
+
+### Wie die Anwendung aussehen soll
+
+**THE 12TH MAN** soll keine 3v3-Technikdemo bleiben, sondern eine hochwertige, glaubwürdige Fußball-Matchday-Erfahrung werden. Der Nutzer erlebt den englischen Fußballabend als zusammenhängende Welt: Ankommen, Pub-/Fanatmosphäre, Stadion, Einlauf, Anpfiff, emotionaler Spielverlauf, Trainerentscheidungen, Publikumsreaktionen, TV-Inszenierung, Analyse und Wiederholung. Visuell soll das Ganze nach hochwertiger Fußballübertragung und lebendigem Stadion wirken, nicht nach einer abstrakten Sandbox.
+
+Auf dem Platz spielen langfristig **22 autonome Spieler**, mit Positionsrollen, Wahrnehmung, Mannschaftstaktik und individuellen Entscheidungen. Der Trainer kann taktisch Einfluss nehmen, aber **kein Ergebnis erzwingen**. Pässe, Dribblings, Zweikämpfe, Schüsse, Abpraller und Tore entstehen aus begrenzten motorischen Aktionen, echter Ball-/Körperphysik und Regelentscheidungen. Der Ball darf nicht durch unsichtbare Magneten, Zielkoordinaten oder garantierte Treffer gesteuert werden. Kamera, Kommentator, Match Analyst und Crowd Director reagieren auf **tatsächlich geschehene** Spielereignisse.
+
+Die Präsentation darf **Bildflächen, 2,5D und 3D intelligent kombinieren**. Besonders wichtig sind konsistente Stadionsichten, nachvollziehbare Perspektive, glaubwürdige Spieler und leistungsfähige Darstellung. Vier gewünschte Stadionansichten sind vom **identischen Mittelpunkt** des Spielfelds auf ca. **1,75 m Augenhöhe** mit 90° Drehschritten aufzubauen; bisher ist kein abgenommener Satz als vorhandenes Asset bestätigt. **Keine neue Bildgenerierung ohne ausdrücklichen Nutzerauftrag.**
+
+Der Matchday kann logisch fünf Rollen haben: Pub Host, Football Manager, Match Director, Crowd Director, Match Analyst. Das sind **keine** Vorgaben, fünf separate LLM-Prozesse zu betreiben. Smartphone-Beteiligung (Companion, Faninteraktion, gegebenenfalls Sensorik/AR) bleibt Teil der Vision, ist aber noch keine geprüfte Implementierung. Microsoft/Azure/Foundry können für geeignete KI-Funktionen genutzt werden, müssen aber unabhängig von der Echtzeitphysik bleiben.
+
+### Ist-Zustand, den der Nachfolger verifizieren muss
+
+`src/main.ts` enthält einen einfachen **3v3**-Prototyp auf verkleinertem Feld mit Three.js, Rapier, heuristischen Agenten, Impulskicks, Tor-/Punktestand, Intro, Kamera und HUD. `src/stadium.ts` baut einfache Tribünen, Crowd-Instanzen und vier Panels aus **derselben SVG-Textur**. `src/player-visuals.ts` lädt optional GLBs, deren tatsächliche Verfügbarkeit nicht bestätigt ist. `package.json` enthält **Vite 7.1, Three.js, Rapier, TypeScript; kein React**. Die generische Regelvorlage nennt React 19/Vite 8 als Standard, ist aber **keine Aufforderung zu einer automatischen Migration**. Die Achsenkonvention im Code weicht von einem Vorschlag in `ARCHITECTURE.md` ab.
+
+### Konkreter Arbeitsauftrag für den Nachfolger
+
+1. **Zuerst** diese `PROJECT_REPORT.md`, `VISION.md`, `public/data/TARGET_ARCHITECTURE.md`, `ARCHITECTURE.md` und betroffene Originalquellen lesen. Die ausführliche Datennavigation steht in `public/data/INDEX.md`.
+2. Einen **unabhängigen Ist-Befund** erstellen: tatsächliche Dateistruktur, Assets, Startverhalten, `npm run check`, sichtbare Anwendung, Fehler und technische Grenzen. Nur tatsächlich ausgeführte Prüfungen als bestanden melden.
+3. Danach **eine** integrierte, überprüfbare technische Verbesserung am **bestehenden Spiel** auswählen, die direkt zur Vision beiträgt. Besonders kritisch ist der Übergang von distanzbasierten Ballimpulsen zu physikalisch nachvollziehbaren Fuß-/Ballkontakten sowie glaubwürdiger Spielerbewegung. Vorher den vorhandenen Code und realistische Lösungsoptionen vergleichen.
+4. Nicht zuerst weitere umfangreiche Dokumentation, neue Architekturordner oder Ersatzprototypen erzeugen. **Liefergegenstand ist funktionierende Anwendung**, nicht mehr Text.
+5. Jede konkrete Änderung mit Pfad, tatsächlichem Test, Ergebnis und gegebenenfalls Commit belegen. Dokumentation **danach** aktualisieren.
+6. Wenn die benötigte Laufzeit-/Testumgebung fehlt, **genau** benennen, welche Prüfung nicht möglich war; keine erfolgreiche Funktion suggerieren.
+7. Entscheidungen, die die Produktvision oder fundamentale Architektur ändern, vorher mit dem Nutzer abstimmen.
+
+### Kommunikationsregel für die Fortsetzung
+
+**Kurz, sachlich, handlungsorientiert.** Keine langen Entschuldigungen, keine mehrfachen Wiederholungen der Vision, keine allgemeinen Versprechen. Nach Möglichkeit direkt an Code und Tests arbeiten. Bei Statusmeldungen präzise trennen: **Datei geändert / Commit erstellt / Build geprüft / Browser getestet / Funktion abgenommen**.
+
+### Wichtigste Priorität
+
+**Die nächste Sitzung soll nicht erneut die Source of Truth verlängern, sondern die bestehende Anwendung prüfen und nachweisbar verbessern.** Das Ziel bleibt das große, glaubwürdige THE-12TH-MAN-Erlebnis. Eine kleinere technische Zwischenstufe ist nur dann sinnvoll, wenn sie messbar auf dieses Ziel einzahlt.
+
 ## 20. Pflicht-Gate vor jeder Implementierung
 
 **Fehlerursache aus der bisherigen Entwicklung:** Der erste 3v3-Prototyp entstand ohne konsequenten Abgleich mit der vollständigen Vision und einem verbindlichen Projektbericht. Dies darf nicht wiederholt werden.
