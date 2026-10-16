@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "provenance": "Earlier project mobile capability discussion, reconstructed from prior conversation; not a complete verbatim original",
+  "hardwareCategories": [
+    {
+      "name": "image capture",
+      "examples": [
+        "front/rear camera",
+        "video",
+        "photo",
+        "computer vision"
+      ],
+      "footballUse": [
+        "capture supporter media",
+        "AR portal",
+        "club memorabilia"
+      ]
+    },
+    {
+      "name": "audio",
+      "examples": [
+        "microphone",
+        "speakers",
+        "speech input/output",
+        "music/noise recognition"
+      ],
+      "footballUse": [
+        "spoken coaching",
+        "chant participation",
+        "commentary"
+      ]
+    },
+    {
+      "name": "motion",
+      "examples": [
+        "accelerometer",
+        "gyroscope",
+        "orientation",
+        "compass"
+      ],
+      "footballUse": [
+        "gesture and perspective input"
+      ]
+    },
+    {
+      "name": "proximity and location",
+      "examples": [
+        "GPS",
+        "compass",
+        "proximity where exposed"
+      ],
+      "footballUse": [
+        "optional real-world matchday interaction"
+      ]
+    },
+    {
+      "name": "touch and feedback",
+      "examples": [
+        "touchscreen",
+        "haptics"
+      ],
+      "footballUse": [
+        "tactics",
+        "voting",
+        "goal reaction"
+      ]
+    },
+    {
+      "name": "compute",
+      "examples": [
+        "CPU",
+        "GPU",
+        "NPU when available"
+      ],
+      "footballUse": [
+        "local audio/vision processing",
+        "rendering and sensor fusion"
+      ]
+    },
+    {
+      "name": "tracking and augmented reality",
+      "examples": [
+        "camera tracking",
+        "AR",
+        "depth on supported devices"
+      ],
+      "footballUse": [
+        "virtual pitch and stadium experiences"
+      ]
+    },
+    {
+      "name": "communication",
+      "examples": [
+        "mobile data",
+        "Wi-Fi",
+        "WebSockets",
+        "Bluetooth if supported"
+      ],
+      "footballUse": [
+        "synchronized second-screen interaction"
+      ]
+    }
+  ],
+  "limitations": [
+    "not every phone or browser exposes every sensor",
+    "GPU/NPU presence does not guarantee browser inference API",
+    "permissions and consent required",
+    "latency and battery are real constraints"
+  ],
+  "implementationStatus": "research inventory only"
+}
