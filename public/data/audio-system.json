@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "sources": [
+    "src/main.ts",
+    "VISION.md chapters 1,4,5"
+  ],
+  "implemented": {
+    "engine": "Web Audio API",
+    "crowd": "looping filtered random noise with gain adjusted to ball position",
+    "goalHorn": "three oscillators, brief sawtooth chord",
+    "toggle": "user enables/disables sound"
+  },
+  "planned": [
+    "recorded crowd ambience",
+    "team-specific chants",
+    "reactive fan sections",
+    "referee whistle",
+    "ball contact sounds",
+    "commentary",
+    "pub/approach soundscape",
+    "spatial mixing",
+    "goal and miss reactions"
+  ],
+  "constraints": [
+    "no unconsented recordings",
+    "licenses for recorded sound",
+    "commentary must follow actual events",
+    "mobile autoplay/permissions vary"
+  ]
+}
