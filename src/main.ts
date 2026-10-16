@@ -208,19 +208,47 @@ async function start(): Promise<void> {
       const factor=length>maxAcceleration?maxAcceleration/length:1;
       const mass=p.body.mass();
       p.body.applyImpulse({x:ax*factor*mass*dt,y:0,z:az*factor*mass*dt},true);
-      // Attempt a physical kick only if close to the live ball.
-      if(distance<.72 && b.y<.55 && p.cooldown<=0 && kickoffDelay===0) {
-        const towardGoal=p.team===0?1:-1;
-        const goalZ=Math.max(-1.5,Math.min(1.5,-b.z*.12));
-        const angle=Math.atan2(goalZ-b.z,towardGoal*(21-b.x*towardGoal));
-        const power=7.5+Math.min(2,Math.hypot(vel.x,vel.z)*.35);
-        const shotX=towardGoal*Math.cos(angle)*power;
-        const shotZ=Math.sin(angle)*power;
-        ball.applyImpulse({x:shotX*.43,y:.43*(.8+(p.number%3)*.35),z:shotZ*.43},true);
-        ball.applyTorqueImpulse({x:0,y:(p.team===0?-.06:.06),z:0},true);
-        p.cooldown=.85;contacts++;
-        lastContactText=`#${p.number} (${p.team===0?'Orange':'Blau'}) schießt! t=${time.toFixed(1)} s`;
-        logEvent(`${p.team===0?'ORANGE':'BLAU'} #${p.number}: Schussversuch`);
+      // Possession decision: controlled passes and genuine shots are distinct events.
+      if(distance<.82 && b.y<.55 && p.cooldown<=0 && kickoffDelay===0) {
+        const direction=p.team===0?1:-1;
+        const goalDistance=21-direction*b.x;
+        const defenders=players.filter(q=>q.team!==p.team);
+        const pressure=defenders.some(q=>{
+          const o=q.body.translation();
+          return Math.hypot(o.x-pos.x,o.z-pos.z)<3;
+        });
+        const options=teammates.filter(q=>q!==p).map(q=>{
+          const o=q.body.translation();
+          const advance=(o.x-pos.x)*direction;
+          const clearance=Math.min(...defenders.map(d=>{
+            const v=d.body.translation();return Math.hypot(v.x-o.x,v.z-o.z);
+          }));
+          return {q,o,score:advance*.5+clearance*.8-Math.hypot(o.x-pos.x,o.z-pos.z)*.12};
+        }).sort((a,b)=>b.score-a.score);
+        const shot=goalDistance<11 && Math.abs(b.z)<8 && (!pressure || goalDistance<5);
+        let impulseX:number,impulseZ:number,impulseY:number;
+        let action:string;
+        if(shot) {
+          const targetZ=Math.max(-1.5,Math.min(1.5,-b.z*.18));
+          const dx=direction*goalDistance,dz=targetZ-b.z;
+          const norm=Math.hypot(dx,dz)||1;
+          impulseX=dx/norm*4.1;impulseZ=dz/norm*4.1;impulseY=.45;
+          contacts++;
+          action='Torschuss';
+        } else if(options.length && (pressure || options[0].score>1.5)) {
+          const target=options[0].o;
+          const dx=target.x-b.x,dz=target.z-b.z;
+          const norm=Math.hypot(dx,dz)||1;
+          impulseX=dx/norm*2.2;impulseZ=dz/norm*2.2;impulseY=.12;
+          action='Pass';
+        } else {
+          impulseX=direction*.95;impulseZ=Math.max(-.5,Math.min(.5,-b.z*.06));impulseY=.04;
+          action='Dribbling';
+        }
+        ball.applyImpulse({x:impulseX,y:impulseY,z:impulseZ},true);
+        p.cooldown=action==='Dribbling'?.65:1.2;
+        lastContactText=`#${p.number} (${p.team===0?'Orange':'Blau'}): ${action} · ${time.toFixed(1)} s`;
+        if(action!=='Dribbling')logEvent(`${p.team===0?'ORANGE':'BLAU'} #${p.number}: ${action}`);
       }
     }
     const v=ball.linvel(),speed=Math.hypot(v.x,v.y,v.z);
@@ -279,7 +307,7 @@ async function start(): Promise<void> {
     if(goalFlash.classList.contains('active')&&kickoffDelay===0)goalFlash.classList.remove('active');
     if(crowdGain&&soundEnabled)crowdGain.gain.value=.08+Math.min(.16,Math.abs(bp.x)/21*.16);
     speedLabel.textContent=`BALL ${velocity.length().toFixed(1)} M/S`;
-    contactLabel.textContent=`SHOTS ${contacts}`;
+    contactLabel.textContent=`TORSCHÜSSE ${contacts}`;
     scoreLabel.textContent=`${orange} : ${blue}`;
     status.textContent=lastContactText;
     if(!introFinished){
