@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "source": "VISION.md chapters 1-10; ARCHITECTURE.md section 17; earlier 2026-10-14 conversation",
+  "product": "THE 12TH MAN / MATCHDAY",
+  "audience": "Cross-generational football fans; simple access without childish presentation",
+  "culturalReference": "English football matchday, pub, supporters, chants, club identity, walk to stadium",
+  "experienceBeats": [
+    "outside the stadium",
+    "social anticipation and pub host",
+    "stadium reveal and crowd chants",
+    "kickoff and readable live play",
+    "emergent chances and tension",
+    "goal only when physically scored",
+    "stadium-wide celebration",
+    "grounded post-match analysis"
+  ],
+  "presentationRules": [
+    "not a laboratory prototype",
+    "not a conventional chatbot as main UI",
+    "emotional matchday first",
+    "camera must preserve ball visibility",
+    "sound and crowd react to real events",
+    "no guaranteed match outcome"
+  ],
+  "production": "Finite compute; image-based static environment, animated crowds, selective 3D for moving/physical actors",
+  "status": "Vision, not completed runtime."
+}
