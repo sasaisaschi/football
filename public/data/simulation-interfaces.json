@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "provenance": "Prior architectural discussions 2026-10-15 and ARCHITECTURE.md; candidate API not yet present as separate modules",
+  "layers": [
+    {
+      "name": "observation",
+      "responsibility": "world facts available to a given agent; no omniscient state by default"
+    },
+    {
+      "name": "decision",
+      "responsibility": "team/agent intent, tactics, communication"
+    },
+    {
+      "name": "execution",
+      "responsibility": "bounded motor commands, contact attempts"
+    },
+    {
+      "name": "physics",
+      "responsibility": "Rapier steps authoritative positions, velocities and collisions"
+    },
+    {
+      "name": "presentation",
+      "responsibility": "camera, stadium visuals, audio, commentary and UI read world/events"
+    }
+  ],
+  "candidateOperations": [
+    "observe",
+    "move",
+    "kick",
+    "tackle",
+    "communicate",
+    "evaluate",
+    "snapshot",
+    "restore"
+  ],
+  "replay": {
+    "proposal": "capture world state and event log, restore for deterministic review",
+    "status": "not implemented"
+  },
+  "time": {
+    "targetHz": 60,
+    "authority": "src/main.ts"
+  },
+  "initialSlice": {
+    "priorProposal": "1v1 plus goalkeeper",
+    "actualCode": "3v3 without dedicated keeper"
+  },
+  "rules": [
+    "never confuse a candidate interface with implemented API",
+    "do not run two authoritative physics engines",
+    "preserve single source of physical truth"
+  ]
+}
