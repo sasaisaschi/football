@@ -25,10 +25,10 @@
 
 | Bereich | Tatsächlicher Stand / Regel |
 | --- | --- |
-| Runtime | Browser, TypeScript, Vite; `src/main.ts` als aktueller Einstieg |
+| Runtime | Browser, TypeScript 5.9, **Vite 7.1** laut `package.json`; `src/main.ts` als aktueller Einstieg |
 | Rendering | Three.js |
 | Physik | `@dimforge/rapier3d-compat`; aktuell autoritative Ball-/Körperphysik |
-| UI | Bestehende HTML/CSS-Oberfläche; Standardvorgabe für neue geeignete Komponenten React 19/TSX, Vite 8, klassisches CSS, Lucide – **kein** eigenmächtiger Stack-Umbau |
+| UI | **Derzeit kein React installiert**: bestehende HTML/CSS-Oberfläche in `src/main.ts` und `src/style.css`. React 19/TSX, Vite 8 und Lucide sind allgemeine **Ziel-/Standardregeln**, nicht der Ist-Zustand dieses Repositories. **Kein eigenmächtiger Stack-Umbau** |
 | Assets | Statische Dateien unter `public/`; einfacher `crowd-stand.svg`; optionale GLB-Modellpfade sind im Code, tatsächliche Binärdateien noch nicht vollständig geprüft |
 | KI | Gegenwärtig einfache lokale Spielerheuristiken; Cloud-/Foundry-Agenten sind **geplant**, nicht als funktionierend bestätigt |
 | Qualität | `npm run check` laut README/Projektdefinition vorgesehen; **in dieser Dokumentationsrunde nicht ausgeführt** |
@@ -395,3 +395,211 @@ The report must follow this structure:
 
 
 </details>
+
+---
+
+# Erweiterter technischer Leitfaden – konkrete Verträge, Qualitätsziele und offene Lösungswege
+
+**Einordnung:** Dieser Abschnitt präzisiert die Zielarchitektur und dokumentiert überprüfbare Vorschläge. Er ist **keine Behauptung**, dass die folgenden Interfaces, Tests oder Subsysteme bereits implementiert seien. Technische Parameter sind Startannahmen, sofern nicht ausdrücklich als Codebefund bezeichnet.
+
+## 8. Konkrete Quellcodebefunde vom 16.10.2026
+
+- `package.json`: `three ^0.180.0`, `@dimforge/rapier3d-compat ^0.21.0`, `typescript ^5.9.0`, `vite ^7.1.0`, `@types/three ^0.180.0`. Skripte: `dev`, `build`, `check`, `preview`. **Kein React, kein Testframework und kein Linter als direkte Abhängigkeit** in der eingesehenen Datei. Versionen sind Paket-Spezifikationen, keine Messung der installierten Lockfile-Versionen.
+- `src/main.ts`: DOM-Aufbau über `app.innerHTML`, Buttons `attack`, `defend`, `camera`, `sound`, `pause`, `reset`; `RAPIER.init()`, Three.js `WebGLRenderer`, Schatten und ACES-Tonemapping. Intro auf 16 Sekunden ausgelegt; drei Kamerapfade sichtbar.
+- `src/stadium.ts`: instanziiertes Crowd-Mesh, Tribünengeometrie, Canvas-Banner, vier Bildpanels aus **derselben** `/assets/stadium/crowd-stand.svg`, Flutlicht und einfache Crowd-Bewegung. Die Bildpanels sind **keine** vier akzeptierten fotorealistischen Stadionansichten.
+- `src/player-visuals.ts`: `GLTFLoader` mit Cache, optionalen Pfaden `/models/orange-footballer.glb` und `/models/blue-footballer.glb`, Clipsuche für idle/run/walk/kick/celebrate, AnimationMixer, Größen-Normalisierung auf ca. 1,85 m. **Existenz der GLBs und der passenden Clips nicht geprüft.** Der Code sagt ausdrücklich, dass die Animation keinen physischen Ballkontakt vortäuschen soll.
+- Die derzeitige Struktur ist funktional, aber `src/main.ts` vereint viele Verantwortlichkeiten. Eine spätere Modularisierung soll auf realen Zuständigkeitsgrenzen beruhen, **nicht** auf künstlichen 500-Zeilen-Splits.
+- Die allgemeinen Regeln nennen Vite 8 und React 19 als Standard; der reale Ist-Zustand ist **Vite 7 ohne React**. Eine Migration ist eine eigenständige, zu begründende Entscheidung.
+
+## 9. Zentrales Weltmodell
+
+**Ziel:** Eine durchgängige, reproduzierbar beobachtbare Spielwelt, die unabhängig von Bildrate, Kommentator, Cloud und UI weiterlaufen kann.
+
+### 9.1 Zustand und Eigentümerschaft
+
+| Teilzustand | Schreibberechtigung | Leser |
+| --- | --- | --- |
+| Ballposition, -rotation, -geschwindigkeit, Kollisionen | Simulationskern/Physik | Regeln, Agentenwahrnehmung, Darstellung, Eventdetektor |
+| Spielerkörper und physikalische Bewegung | Simulationskern über begrenzte Motorbefehle | Agenten, Regeln, Darstellung |
+| Spielphase, Spielstand, Ball im/außer Spiel, Karten | Regelwerk nach beobachteten Ereignissen | UI, Agenten, Regie, Analyse |
+| Mannschaftsstrategie und Rollen | Trainer-/Teamlogik | Spieleragenten |
+| Präsentationskamera, Tonmischung, Effekte | Match Director/Crowd Director | Benutzer |
+| Kommentartext, taktische Erklärung | Analyse-/Sprachdienst | UI/Audio |
+| Replay-/Diagnosedaten | Event-/Snapshot-System als Beobachter | Replay, Analyse, Tests |
+
+**Invariante:** Kein Darstellungs- oder Sprachsystem schreibt Ballposition oder erzwingt Treffer. Schiedsrichterentscheidungen dürfen den regelkonformen Neustart auslösen; sie ändern nicht heimlich eine bereits berechnete Flugbahn.
+
+### 9.2 Zeitmodell
+
+- Physik in festem Zeitschritt, aktuell 1/60 s als Referenz. 1/120 s nur nach gemessener Notwendigkeit und Performanceprüfung.
+- Bildschirmdarstellung unabhängig, mit Interpolation zwischen zwei gültigen Simulationszuständen.
+- Motorik/Agentenplanung dürfen unterschiedliche Raten besitzen; jede Rate und die Datenalterung müssen explizit sein.
+- Cloud-Antworten sind asynchron und dürfen niemals einen Physiktick blockieren.
+- Zeitstempel unterscheiden **Simulationszeit**, **reale Uhrzeit** und **Medien-/Audiozeit**.
+- Pause stoppt die Simulation, nicht zwangsläufig UI oder Audio; Restart setzt alle relevanten Zustände konsistent zurück.
+- Ein Browser-Tab im Hintergrund darf keine unbeschränkte Catch-up-Schleife auslösen. Bei längerer Unterbrechung definierten Pause-/Resync-Modus verwenden.
+
+### 9.3 Ereignisse und Replay
+
+**Vorgeschlagener Eventvertrag, noch nicht implementiert:**
+```ts
+type MatchEvent = {
+  id: string;
+  tick: number;
+  type: string;
+  actors: string[];
+  position?: [number, number, number];
+  source: "physics" | "rules" | "coach" | "agent";
+  evidence?: string[];
+  payload?: Record<string, unknown>;
+};
+```
+Jede Ereignis-ID muss eindeutig und zeitlich zuordenbar sein. Die Analyse darf nur behaupten, was die gespeicherten Zustände/Ereignisse stützen. Snapshots enthalten mindestens Ball, Spieler, Spielphase, Score, aktive Taktik und determinismusrelevante Parameter. **Reproduzierbarkeit nicht voraussetzen**: Rapier-/Browser-/Floating-Point-Unterschiede und Zufallsquellen experimentell prüfen. Wenn exaktes deterministisches Replay nicht erreichbar ist, aufgezeichnete Zustände zur visuellen Wiedergabe verwenden und die Grenze offen benennen.
+
+## 10. Fußballphysik – gewünschtes Verhalten und Prüfplan
+
+### 10.1 Ball
+- Referenz für regulären Fußball: 410–450 g Startmasse, Umfang 68–70 cm; Norm und gewähltes Modell vor finaler Umsetzung prüfen. Der Prototyp verwendet laut dokumentiertem Codebefund einen Radius um 0,11 m und eine Masse um 0,43 kg; **diese Geometrie ist nicht als normgerechter Spielball validiert**.
+- Physikalische Effekte: Schwerkraft, Boden-/Pfosten-/Körperkontakte, Rollwiderstand, Gleitreibung, Luftwiderstand, Rotation/Magnus-Effekt und Dämpfung.
+- Kick erzeugt Impuls/Drehmoment aus realem Kontaktpunkt, relativer Fuß-/Ballbewegung und der Kontaktgeometrie. Zielrichtung ist ein **Wunsch**, keine Garantie.
+- Hohe Ballgeschwindigkeiten erfordern Prüfung auf Tunneling, besonders an Pfosten, Latte und schmalen Kollidern.
+- Keine Ballmagneten, kein Snap-to-foot, keine automatische Passannahme, keine Schusskorrektur zum Tor.
+
+### 10.2 Spielerbewegung
+- Fähigkeiten wie Beschleunigung, Maximaltempo, Wendigkeit, Ausdauer, Körpergröße, Fußpräferenz und Balance beeinflussen die Ausführung; Werte müssen begründet oder als Gameplay-Parameter gekennzeichnet sein.
+- Bewegungsabsicht wird in begrenzte Kräfte, Geschwindigkeits-/Drehänderungen und Körperposen umgesetzt. Keine sofortige Richtungsumkehr bei voller Geschwindigkeit.
+- Animation folgt bzw. koordiniert sich mit realen Kontakten. **Eine Kick-Animation allein darf keinen Treffer auslösen.**
+- Torwart benötigt Wahrnehmung, Antizipation, Reichweite, Sprung-/Fallbewegung und echte Interaktion mit dem Ball; keine garantierten Saves.
+- Bei physikalisch vereinfachten Körpern klar benennen, welche Kontakte approximiert sind. Biomechanische Vollsimulation ist **eine Lösungsoption, keine stillschweigende Voraussetzung**.
+
+### 10.3 Prüf-Szenarien
+1. Ball aus bekannter Höhe fallen lassen: Aufprallhöhe, Energieverlust, Penetration messen.
+2. Ball auf ebener Fläche rollen lassen: Geschwindigkeit und Weg bis zum Stillstand dokumentieren.
+3. Flachpass, Lupfer und Effetschuss unter gleichen Ausgangsbedingungen vergleichen.
+4. Pfosten-/Lattenkontakt bei hoher Geschwindigkeit auf CCD und plausible Abpraller prüfen.
+5. Sprint, Stoppen, Richtungswechsel und Zweikampf mit begrenzter Beschleunigung prüfen.
+6. Spieler A versucht Pass; Spieler B reagiert unabhängig; Ausgang variiert mit Wahrnehmung und Physik.
+7. Alle Szenen bei niedriger und hoher Render-FPS ausführen: Simulationsausgang darf nicht direkt von FPS abhängen.
+8. Gleiche Startbedingungen mehrfach prüfen und Abweichungen dokumentieren; keine unbelegte Determinismusbehauptung.
+
+## 11. Fußballintelligenz – Entscheidungsarchitektur
+
+**Ebenen:** Trainerabsicht → Teamprinzipien → individuelle Wahrnehmung → Entscheidung → Motorik → Physik → Regelauswertung.
+
+- Traineranweisung `hoch pressen` erhöht etwa den taktischen Pressingdruck, ohne jeden Spieler blind zum Ball zu schicken.
+- Mannschaftsorganisation berücksichtigt Formation, Restverteidigung, Passdreiecke, Breite, Tiefe, Laufwege, Deckungsschatten und freie Räume.
+- Individuelle Rollen unterscheiden Innenverteidiger, Außenverteidiger, Mittelfeld, Flügel, Stürmer und Torwart. Positionsspezifische Aufgaben ersetzen nicht individuelle Entscheidungen.
+- Wahrnehmung umfasst Blick-/Sichtgrenzen, Entfernungen, Orientierung, Verzögerung, Unsicherheit und Teamkommunikation. Perfekte globale Sicht ist nur expliziter Debugmodus.
+- Entscheidungsalternativen: Raum besetzen, anbieten, täuschen, passen, dribbeln, abschließen, sichern, pressen, verzögern, abfangen, klären.
+- Entscheidungen sind **Absichten**. Erfolg hängt von Ausführung, Gegner und Physik ab.
+- Fehler müssen erklärbar entstehen: ungenaue Wahrnehmung, Timing, Technik, Druck, Ausdauer, Risikowahl – nicht nur reines Zufallsrauschen.
+- Trainingsverfahren (Imitation Learning, RL, Google Research Football als Referenz) sind **Forschungsoptionen**, keine bereits integrierten KI-Funktionen.
+- LLMs eignen sich eher für Trainerdialog, Strategiebesprechung und Analyse als für millisekundenschnelle Fußkontakte.
+
+**Akzeptanz:** Bei einem Ballverlust organisieren sich Mitspieler sichtbar unterschiedlich: einer presst, einer sichert, einer deckt den Passweg. Beim Angriff entstehen mehrere plausible Handlungsoptionen. Das Verhalten muss durch Zustände/Entscheidungsprotokolle nachweisbar sein.
+
+## 12. Regeln und Schiedsrichter
+
+**Ziel:** vollständiger, nachvollziehbarer Fußball mit Anstoß, Tor, Einwurf, Eckstoß, Abstoß, Freistoß, Strafstoß, Abseits, Fouls, Vorteilsregel, Karten, Halbzeiten, Nachspielzeit und Auswechslungen, soweit für das gewählte Spielmodell relevant.
+
+- Spielphase als expliziter Zustandsautomat statt verstreuter UI-Bedingungen.
+- Tore nur nach regelkonformer Überquerung der Torlinie; Sensorgeometrie und Kollisionsgeometrie unterscheiden.
+- Abseits benötigt Moment der Ballabgabe, beteiligte Spielerpositionen und aktive Beteiligung; kein bloßer Ballbesitz-Check.
+- Fouls sind **nicht** identisch mit jedem physikalischen Kontakt; Absicht, Risiko, Spielaktion und Regeldefinition müssen gesondert modelliert werden.
+- Standardsituationen positionieren Spieler regelgerecht; danach gelten dieselben Physikregeln.
+- Schiedsrichterentscheidung als Ereignis mit Ursache, betroffenen Spielern und Spielfortsetzung dokumentieren.
+- IFAB-Regelversion, Sonderregeln und Spielfeldabmessungen explizit versionieren.
+
+## 13. Stadion- und Bildproduktion
+
+**Kernziel:** Ein einziges kohärentes Stadion, das in TV-Totalen und ausgewählten Nahaufnahmen als zusammenhängender Ort wirkt.
+
+**Vier Perspektiven:** Ausgangspunkt Mittelpunkt des Spielfelds, Augenhöhe ca. 1,75 m; Drehungen 0°, 90°, 180°, 270°; jeweils gegenüberliegendes Tor bzw. gegenüberliegende Längstribüne. Perspektive, Linien, Tore, Tribünenform, Licht, Werbung und Zuschauerfarben müssen zusammenpassen. Beim Blick zum Tor liegt die Mittellinie quer unter dem Kamerastandpunkt; beim Blick zur Seitenlinie verläuft sie von der Mitte zur Seitenlinie.
+
+**Grenze:** Vier Standbilder erlauben keine beliebig freie Kamera oder korrekte Parallaxe. Zu prüfen sind tiefengestaffelte Bildflächen, perspektivisch kalibrierte Geometrie, projektive Texturen, selektive 3D-Architektur oder zusätzliche Kamera-/Assetansichten. Vor endgültiger Festlegung eine konkrete Kamerafahrt visuell testen.
+
+**Qualitätsstufen:**
+- Spielfeld/Spieler/Ball: präzise Geometrie, korrekte räumliche Zuordnung.
+- Nahe Tribünen und relevante Menschen: mehr Tiefe/Animation/Details.
+- Ferne Ränge: hochwertige Bild- und Tiefenebenen, wenn geometrisch ausreichend.
+- Zuschauerreaktionen: lokal differenzierte Wellen statt synchronem Hüpfen.
+- Beleuchtung: Flutlicht, Schatten, Farbtemperatur, Nacht-/Abendstimmung, Kontrast und Lesbarkeit.
+- Kamera: Haupt-TV-Perspektive für Übersicht, situative Hintertor-/Nahkamera, Replay, Intro. Nie Ball und Spielkontext für einen Effekt dauerhaft verlieren.
+
+**Assetvertrag:** Für jede Bild-, Modell- oder Audiodatei mindestens Dateipfad, Quelle, Lizenz, Ersteller, Version, Perspektive/Koordinaten, technische Parameter, Einsatzort, Prüfergebnis und Status festhalten. **Generierte, aber nicht im Repo gespeicherte Bilder sind keine verfügbaren Assets.** Keine neue Bildgenerierung ohne ausdrücklichen Auftrag.
+
+## 14. Sound, Fans und Matchday
+
+- Klangwelt beginnt vor dem Anpfiff: Straße, Pub, Stimmen, Stadionzugang, Gesänge, Einlauf, Pfiff.
+- Crowd Director reagiert auf **tatsächliche** Druckphasen, Ballgewinne, Chancen, Paraden, Fouls, Fehlschüsse und Tore.
+- Unmittelbare Reaktionen möglichst lokal und latenzarm; optionale generative Sprache auf asynchroner Ebene.
+- Ton besteht aus getrennten Mischschichten: Grundatmosphäre, Heim-/Auswärtskurve, Reaktion, Stadionsprecher, Kommentar, Musik, Ball-/Kontaktgeräusche.
+- Bei Toren: erst bestätigtes Regelereignis, dann Torjubel, Kamerawechsel und Kommentareskalation. Kein voreiliger Jubel.
+- Optionales Mikrofon-/Fanmaterial nur mit ausdrücklicher Einwilligung, klaren Nutzungsrechten, Rückzugsmöglichkeit und geeigneter Moderation.
+- Audio im Browser benötigt oft eine Benutzerinteraktion; Autoplay-Regeln respektieren und Bedienung transparent gestalten.
+
+## 15. Erlebnisrollen und Providergrenzen
+
+| Rolle | Zweck | Erlaubte Ausgabe | Verboten |
+| --- | --- | --- | --- |
+| Football Manager | Taktik und Trainerkommunikation | begrenzte Teamprinzipien, Erklärung | Tor/Passerfolg garantieren |
+| Match Director | TV-Regie, Kamera, Timing | Kamera-/Schnitt-/Replay-Vorschläge | physikalischen Spielzustand manipulieren |
+| Crowd Director | Fanreaktion und Klang | Audio-/Crowd-Cues aus Events | nicht geschehene Tore behaupten |
+| Match Analyst | Spielzüge erklären | ereignisbelegte Analyse | nicht belegte Aktionen erfinden |
+| Pub Host | Matchday-Kultur und Community | Dialog, Moderation | unautorisierte Aufnahme oder Datennutzung |
+
+- Diese Rollen sind **logische Produktrollen**, nicht automatisch getrennte Cloud-Agenten oder Prozesse.
+- Adapter für Microsoft/Azure, lokale Modelle und andere Provider dürfen austauschbar sein. Vorhandene Providerarchitektur prüfen, bevor neue geschaffen wird.
+- Kein Modell darf eine direkte, ungeprüfte Mutation des Physikzustands auslösen.
+- Jede sprachliche Tatsachenbehauptung zu einem Spielzug sollte Event-IDs oder Snapshots referenzieren können.
+- Latenz, Kosten, Offlinefähigkeit, Datenschutz und Berechtigungen messen; keine Cloud-Verfügbarkeit voraussetzen.
+
+## 16. Smartphone und Gemeinschaft
+
+**Mögliche** zweite Ebene: Browser-Companion, taktische Eingaben, Fan-Abstimmungen, Gesänge, Foto-/Videoeinreichungen, AR, Bewegungs-/Lagesensoren, Haptik, Audio- und Spracherkennung. **Keine dieser Möglichkeiten ist allein durch die Dokumentation implementiert.**
+
+- Gerätefähigkeiten durch Feature Detection ermitteln, nicht aus Modellbezeichnungen ableiten.
+- Kamera, Mikrofon, Standort und Bewegungssensoren nur mit transparenter Einwilligung.
+- Nicht jeder Browser bietet GPU/NPU, AR, Sensoren oder Hintergrundbetrieb gleichermaßen.
+- Keine notwendige Smartphone-Pflicht: Kernspiel und Trainerbedienung müssen auch ohne Companion funktionieren.
+- Gemeinschaftliche Eingaben können Taktik oder Faninszenierung beeinflussen, aber keine garantierten physischen Ereignisse.
+- Netzwerkverzögerung, Verbindungsabbrüche, Missbrauchsschutz und Synchronisierung früh prüfen.
+
+## 17. Qualitätssicherung und Abnahmeszenen
+
+**Gate A – technisch lauffähig:** Installation, TypeScript, Vite-Build, Browserstart und UI-Interaktion wirklich geprüft. Fehlerausgabe und Datum im Report dokumentieren.
+
+**Gate B – physikalisch glaubwürdig:** Ballbewegung, Kollisionen, Körpersteuerung, Kontakt und Geschwindigkeit in gemeinsamen Tests; keine Teleportation oder unbegrenzte Beschleunigung.
+
+**Gate C – Fußball erkennbar:** Positionsspiel, mehrere sinnvolle Entscheidungen, Gegnerreaktion und regelkonforme Tore statt zufälligem Ballverfolgen.
+
+**Gate D – visuell überzeugend:** akzeptiertes Stadion mit korrekter Perspektive, glaubwürdige Spielerbewegungen, stabile Kamera und ausreichende FPS auf realer Hardware.
+
+**Gate E – emotionales Matchday-Erlebnis:** Audio, Fans, TV-Regie und Kommentar folgen tatsächlichen Ereignissen; Intro und erste Minute erzeugen Stadiongefühl.
+
+**Gate F – überprüfbare KI:** Traineranweisung ändert nachweisbar Taktik, Analyst erklärt einen realen Spielzug anhand aufgezeichneter Daten, Cloud-Ausfall stoppt nicht die Partie.
+
+**Integrationsszene:** Unentschieden im Abendstadion; Trainer erhöht Umschaltbereitschaft; Außenverteidiger startet, Gegner reagiert, Pass öffnet Raum, Stürmer schießt, Pfostenkontakt, Abpraller, zweiter Spieler entscheidet eigenständig, eventuell Tor. **Kein festgelegter Ausgang.** Alles in Event-/Snapshotdaten nachvollziehbar.
+
+## 18. Arbeitsprotokoll für jedes folgende KI-Modell
+
+1. `PROJECT_REPORT.md` vollständig lesen, dann `VISION.md`, `ARCHITECTURE.md`, `public/data/TARGET_ARCHITECTURE.md`, `public/data/INDEX.md` und relevante Originalquellen.
+2. **Ist-Lage** in drei Sätzen: Was funktioniert? Was ist kaputt? Was ist das wichtigste nächste Ziel?
+3. Vor Änderungen: Abhängigkeiten, vorhandene Adapter, Architekturentscheidungen und Referenzdesign prüfen.
+4. Eine konkrete, begrenzte Aufgabe auswählen, deren Ergebnis in der realen Anwendung sichtbar oder messbar ist.
+5. Keine stillschweigende Änderung von Framework, Physikautorität, Ordnerkonvention, UI-Design, Lizenzierung oder API-Verträgen.
+6. Änderungen mit realen Pfaden, Commit, Tests und **tatsächlichen** Ergebnissen berichten; nicht bestandene oder nicht gelaufene Tests offen markieren.
+7. `PROJECT_REPORT.md` nach dem Arbeitsblock aktualisieren, offene Punkte nicht als erledigt abhaken.
+8. Vor dem nächsten Arbeitsschritt **Selbstprüfung**: Bringt die Tätigkeit das echte Spiel näher an die Vision, oder produziert sie nur neue Dateien und abstrakte Architektur?
+9. Wenn eine technische Sackgasse erreicht wird, das Hindernis präzise beschreiben, zwei oder mehr Lösungsansätze mit messbaren Kriterien vergleichen und **nicht eigenmächtig die Vision verkleinern**.
+10. Für größere Entscheidungen ausdrückliche Nutzerfreigabe einholen; keine zusätzlichen GitHub-Actions-Workflows ohne Freigabe.
+
+## 19. Konflikt- und Änderungsregister
+
+- **Konflikt A:** Allgemeiner Standard React 19/Vite 8 vs. `package.json` mit Vite 7.1 und ohne React. **Auflösung:** tatsächlichen Ist-Zustand anerkennen; Migration nur nach konkretem Bedarf und Entscheidung.
+- **Konflikt B:** Vorgeschlagene Koordinaten in `ARCHITECTURE.md` vs. bestehender Code. **Auflösung:** aktuellen Code als Laufzeitrealität verwenden; Migration explizit planen und testen.
+- **Konflikt C:** `VISION.md` beschreibt vollständige Matchday-Welt, `README.md` beschreibt 3v3. **Auflösung:** verschiedene Reifegrade; Vision nicht durch Prototyp ersetzen.
+- **Konflikt D:** Vier gewünschte Stadionansichten vs. aktuell wiederverwendete einzelne SVG-Textur. **Auflösung:** als fehlende Assetproduktion dokumentieren, keine vorhandene Lösung behaupten.
+- **Konflikt E:** Ursprüngliche `PROJECT_REPORT.md` war eine generische Aufforderung zur Projektauswertung. **Auflösung:** aktueller Report ist die operative Source of Truth; Originalvorlage bleibt unten als Referenz erhalten.
+
+**Letzter dokumentierter Vorgang:** Ergänzung dieses technischen Leitfadens am 16.10.2026. Kein Build und kein Browser-Lauf durchgeführt. Keine produktiven Quelldateien geändert.
