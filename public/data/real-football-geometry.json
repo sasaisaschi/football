@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-16",
+  "kind": "Research reference, not active prototype dimensions",
+  "referencePreset": {
+    "pitchLengthMeters": 105,
+    "pitchWidthMeters": 68,
+    "goalWidthMeters": 7.32,
+    "crossbarHeightMeters": 2.44,
+    "penaltyAreaDepthMeters": 16.5,
+    "goalAreaDepthMeters": 5.5,
+    "penaltyMarkMeters": 11,
+    "centerCircleRadiusMeters": 9.15,
+    "cornerArcRadiusMeters": 1,
+    "ballCircumferenceCentimeters": [
+      68,
+      70
+    ],
+    "ballMassGrams": [
+      410,
+      450
+    ]
+  },
+  "prototype": {
+    "pitchLengthMeters": 42,
+    "pitchWidthMeters": 28,
+    "goalWidthMeters": 5,
+    "goalHeightMeters": 2,
+    "centerCircleRadiusMeters": 4
+  },
+  "warning": "Reference values are from earlier architecture notes; confirm current IFAB laws and use correct scale before claiming match realism.",
+  "source": "ARCHITECTURE.md section 6; src/main.ts"
+}
