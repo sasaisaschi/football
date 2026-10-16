@@ -49,3 +49,12 @@ Kein vollständiges Repository-Backup, keine Garantie über alle früheren Chatp
 - [integration-boundaries.json](./integration-boundaries.json) — Systemgrenzen und physikalische Autorität
 
 Diese Dateien vertiefen vorhandene Themen; sie sind nicht automatisch zusätzliche implementierte Features.
+
+## Ergänzung — wiederhergestellte frühere Projektentscheidungen
+
+- [interaction-design.json](./interaction-design.json) — generationenübergreifende Bedienung, Handy-Controller und kollektive Fan-Interaktion
+- [simulation-interfaces.json](./simulation-interfaces.json) — Beobachtung, Entscheidung, Ausführung, Physik, Darstellung und Snapshot/Restore-Ideen
+- [smartphone-hardware-extended.json](./smartphone-hardware-extended.json) — weitere Gerätesensoren, GPU/NPU, Tracking und Geräuscherkennung
+- [production-decisions.json](./production-decisions.json) — verbindliche Nutzeranforderungen gegenüber noch offenen Technologieentscheidungen
+
+Die Inhalte stammen aus früheren Projektgesprächen und sind als rekonstruierte Anforderungen oder Konzepte markiert, nicht als fertige Funktionen.
