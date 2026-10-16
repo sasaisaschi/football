@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import RAPIER from '@dimforge/rapier3d-compat';
+import RAPIER from '@dimforge/rapier3d-simd-compat';
 import './style.css';
 import { createStadium } from './stadium';
 import { loadFootballer, updateFootballer } from './player-visuals';
+import { BALL, applyBallDrag, createBall, placeBall } from './ball';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('App element missing');
@@ -97,9 +98,8 @@ async function start(): Promise<void> {
   world.timestep = 1/60;
   const groundBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0,-.1,0));
   world.createCollider(RAPIER.ColliderDesc.cuboid(24,.1,17).setFriction(.8),groundBody);
-  const ballRadius = .11;
-  const ball = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0,ballRadius+.02,0).setCcdEnabled(true).setLinearDamping(.13).setAngularDamping(.18));
-  world.createCollider(RAPIER.ColliderDesc.ball(ballRadius).setMass(.43).setRestitution(.58).setFriction(.6),ball);
+  const ballRadius = BALL.radius;
+  const ball = createBall(world);
   const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(ballRadius,24,16),new THREE.MeshStandardMaterial({color:'#f5f5ee',roughness:.5}));
   ballMesh.castShadow=true;scene.add(ballMesh);
   type Player = { body:RAPIER.RigidBody; mesh:THREE.Group; color:string; kicks:number; cooldown:number; initial:[number,number]; team:number; number:number; visual?:Awaited<ReturnType<typeof loadFootballer>> };
@@ -160,8 +160,7 @@ async function start(): Promise<void> {
   let lastContactText='Agenten suchen den Ball. Physik bestimmt das Ergebnis.';
   const velocity = new THREE.Vector3();
   function reset(): void {
-    ball.setTranslation({x:0,y:ballRadius+.02,z:0},true);
-    ball.setLinvel({x:0,y:0,z:0},true);ball.setAngvel({x:0,y:0,z:0},true);
+    placeBall(ball,0,0);
     players.forEach(p=>{
       p.body.setTranslation({x:p.initial[0],y:.9,z:p.initial[1]},true);
       p.body.setLinvel({x:0,y:0,z:0},true);
@@ -174,9 +173,7 @@ async function start(): Promise<void> {
   resetButton.addEventListener('click',reset);
 
   function kickoff():void {
-    ball.setTranslation({x:0,y:ballRadius+.02,z:0},true);
-    ball.setLinvel({x:0,y:0,z:0},true);
-    ball.setAngvel({x:0,y:0,z:0},true);
+    placeBall(ball,0,0);
     players.forEach(p=>{
       p.body.setTranslation({x:p.initial[0],y:.9,z:p.initial[1]},true);
       p.body.setLinvel({x:0,y:0,z:0},true);
@@ -253,13 +250,7 @@ async function start(): Promise<void> {
         if(action!=='Dribbling')logEvent(`${p.team===0?'ORANGE':'BLAU'} #${p.number}: ${action}`);
       }
     }
-    const v=ball.linvel(),speed=Math.hypot(v.x,v.y,v.z);
-    // Rapier user forces persist across steps; drag must be recomputed fresh every tick.
-    ball.resetForces(true);
-    if(speed>.05) {
-      const drag=.5*1.225*.25*Math.PI*ballRadius*ballRadius*speed;
-      ball.addForce({x:-drag*v.x,y:-drag*v.y,z:-drag*v.z},true);
-    }
+    applyBallDrag(ball);
     world.step();
     time+=dt;
     const ballNow=ball.translation();
