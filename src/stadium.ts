@@ -63,6 +63,22 @@ export function createStadium(scene: THREE.Scene) {
   if(crowd.instanceColor)crowd.instanceColor.needsUpdate=true;
   crowd.castShadow=false;crowd.receiveShadow=false;scene.add(crowd);
 
+  // Image-based stand panels. The asset can be replaced without touching gameplay.
+  const standTexture=new THREE.TextureLoader().load('/assets/stadium/crowd-stand.svg');
+  standTexture.colorSpace=THREE.SRGBColorSpace;
+  const standMaterial=new THREE.MeshBasicMaterial({map:standTexture,side:THREE.DoubleSide});
+  for(const z of [-18.7,18.7]) {
+    const panel=new THREE.Mesh(new THREE.PlaneGeometry(55,10.8),standMaterial);
+    panel.position.set(0,7.2,z>0?z+7:z-7);
+    panel.rotation.y=z>0?Math.PI:0;
+    scene.add(panel);
+  }
+  for(const x of [-25.7,25.7]) {
+    const panel=new THREE.Mesh(new THREE.PlaneGeometry(42,10.8),standMaterial);
+    panel.position.set(x>0?x+7:x-7,7.2,0);
+    panel.rotation.y=x>0?-Math.PI/2:Math.PI/2;
+    scene.add(panel);
+  }
   // Upper tier, glazed executive boxes and roof fascia.
   for(const sign of [-1,1]) {
     box(0,13.1,sign*37,90,2.6,2.3,concrete);
