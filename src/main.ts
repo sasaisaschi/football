@@ -4,6 +4,8 @@ import './style.css';
 import { createStadium } from './stadium';
 import { loadFootballer, updateFootballer } from './player-visuals';
 import { BALL, applyBallDrag, createBall, placeBall } from './ball';
+import { PITCH, createPitchPhysics, goalSide, outOfPlay } from './pitch';
+import { createPitchVisuals } from './pitch-visuals';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('App element missing');
@@ -31,8 +33,8 @@ async function start(): Promise<void> {
   await RAPIER.init();
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#081322');
-  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 400);
-  camera.position.set(0, 23, 43);
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 600);
+  camera.position.set(0, 28, 72);
   camera.lookAt(0, 0, 0);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -56,55 +58,24 @@ async function start(): Promise<void> {
   const introDuration=16;
   let introTime=0;
   let introFinished=false;
-  const startCamera=new THREE.Vector3(-67,29,76);
-  const endCamera=new THREE.Vector3(0,23,43);
+  const startCamera=new THREE.Vector3(-150,60,160);
+  const endCamera=new THREE.Vector3(0,28,72);
   camera.position.copy(startCamera);camera.lookAt(0,5,0);
   const introSkip=document.createElement('button');introSkip.className='intro-skip';introSkip.textContent='ZUM ANPFIFF →';intro.append(introSkip);
   introSkip.addEventListener('click',()=>{introTime=introDuration;});
-  const stripes=[0x1e7b46,0x23864c];
-  for(let i=0;i<8;i++){
-    const strip=new THREE.Mesh(new THREE.PlaneGeometry(5.25,28),new THREE.MeshStandardMaterial({color:stripes[i%2],roughness:1}));
-    strip.rotation.x=-Math.PI/2;strip.position.set(-18.375+i*5.25,.014,0);strip.receiveShadow=true;scene.add(strip);
-  }
-  const grass = new THREE.Mesh(new THREE.PlaneGeometry(48, 34), new THREE.MeshStandardMaterial({ color: '#18673e', roughness: 1 }));
-  grass.rotation.x = -Math.PI / 2;
-  grass.receiveShadow = true;
-  scene.add(grass);
-  const lineMat = new THREE.LineBasicMaterial({ color: 0xe8fff1 });
-  function line(points: [number, number][], close = false): void {
-    const p = close ? [...points, points[0]] : points;
-    const geometry = new THREE.BufferGeometry().setFromPoints(p.map(([x,z]) => new THREE.Vector3(x, .055, z)));
-    scene.add(new THREE.Line(geometry, lineMat));
-  }
-  line([[-21,-14],[21,-14],[21,14],[-21,14]],true);
-  line([[0,-14],[0,14]]);
-  const circle: [number,number][] = Array.from({length:65},(_,i)=>[4*Math.cos(i*Math.PI/32),4*Math.sin(i*Math.PI/32)]);
-  line(circle);
-  for (const s of [-1,1]) {
-    const goalX = s*21;
-    line([[goalX,-6],[goalX-s*6,-6],[goalX-s*6,6],[goalX,6]]);
-    line([[goalX,-3.2],[goalX-s*2,-3.2],[goalX-s*2,3.2],[goalX,3.2]]);
-    const postMaterial = new THREE.MeshStandardMaterial({color:'#ffffff',metalness:.2,roughness:.4});
-    for(const z of [-2.5,2.5]) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,2,10),postMaterial);
-      post.position.set(goalX,1,z); scene.add(post);
-    }
-    const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,5,10),postMaterial);
-    crossbar.rotation.x = Math.PI/2; crossbar.position.set(goalX,2,0); scene.add(crossbar);
-  }
+  createPitchVisuals(scene);
 
   // Rendering: Y up. Physics: Y up. Football length along X, width along Z.
   const world = new RAPIER.World({x:0,y:-9.81,z:0});
   world.timestep = 1/60;
-  const groundBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0,-.1,0));
-  world.createCollider(RAPIER.ColliderDesc.cuboid(24,.1,17).setFriction(.8),groundBody);
+  createPitchPhysics(world);
   const ballRadius = BALL.radius;
   const ball = createBall(world);
   const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(ballRadius,24,16),new THREE.MeshStandardMaterial({color:'#f5f5ee',roughness:.5}));
   ballMesh.castShadow=true;scene.add(ballMesh);
   type Player = { body:RAPIER.RigidBody; mesh:THREE.Group; color:string; kicks:number; cooldown:number; initial:[number,number]; team:number; number:number; visual?:Awaited<ReturnType<typeof loadFootballer>> };
   const players: Player[] = [];
-  for(const [i,x,z,color] of [[0,-13,-7,'#ff913d'],[1,-10,0,'#ff913d'],[2,-13,7,'#ff913d'],[3,13,-7,'#52caff'],[4,10,0,'#52caff'],[5,13,7,'#52caff']] as const) {
+  for(const [i,x,z,color] of [[0,-30,-17,'#ff913d'],[1,-20,0,'#ff913d'],[2,-30,17,'#ff913d'],[3,30,-17,'#52caff'],[4,20,0,'#52caff'],[5,30,17,'#52caff']] as const) {
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x,.9,z).lockRotations().setLinearDamping(2));
     world.createCollider(RAPIER.ColliderDesc.capsule(.52,.32).setMass(75).setFriction(.9).setRestitution(0),body);
     const group = new THREE.Group();
@@ -196,8 +167,8 @@ async function start(): Promise<void> {
       // Closest agent presses; supporting players hold passing lanes.
       const attack=p.team===0?1:-1;
       const anchor=tacticalMode==='defend' ? (p.team===0?-10:10) : b.x-attack*(3+rank*2);
-      const targetX=rank===0?b.x:Math.max(-19,Math.min(19,anchor));
-      const targetZ=rank===0?b.z:Math.max(-12,Math.min(12,b.z+(p.initial[1]<0?-1:1)*(3+rank)));
+      const targetX=rank===0?b.x:Math.max(-PITCH.halfLength+2,Math.min(PITCH.halfLength-2,anchor));
+      const targetZ=rank===0?b.z:Math.max(-PITCH.halfWidth+2,Math.min(PITCH.halfWidth-2,b.z+(p.initial[1]<0?-1:1)*(3+rank)));
       const tx=targetX-pos.x,tz=targetZ-pos.z, d=Math.hypot(tx,tz);
       const maxSpeed=tacticalMode==='attack'?7.5:5.5, maxAcceleration=10;
       const desiredSpeed=Math.min(maxSpeed,Math.max(0,d-.45)*2.4);
@@ -210,7 +181,7 @@ async function start(): Promise<void> {
       // Possession decision: controlled passes and genuine shots are distinct events.
       if(distance<.82 && b.y<.55 && p.cooldown<=0 && kickoffDelay===0) {
         const direction=p.team===0?1:-1;
-        const goalDistance=21-direction*b.x;
+        const goalDistance=PITCH.halfLength-direction*b.x;
         const defenders=players.filter(q=>q.team!==p.team);
         const pressure=defenders.some(q=>{
           const o=q.body.translation();
@@ -254,13 +225,14 @@ async function start(): Promise<void> {
     world.step();
     time+=dt;
     const ballNow=ball.translation();
-    if(Math.abs(ballNow.x)>=21 && Math.abs(ballNow.z)<2.5 && ballNow.y<2) {
-      if(ballNow.x>0)orange++;else blue++;
+    const scored=goalSide(ballNow);
+    if(scored!==0) {
+      if(scored>0)orange++;else blue++;
       lastContactText=`TOR! Orange ${orange} : ${blue} Blau — Anstoß folgt.`;
       logEvent(`TOR! ${ballNow.x>0?'ORANGE':'BLAU'} · ${orange}:${blue}`);
       goalFlash.classList.add('active');goalFlash.textContent=ballNow.x>0?'ORANGE CITY SCORES!':'BLUE UNITED SCORES!';playGoalHorn();
       kickoff();
-    } else if(Math.abs(ballNow.x)>23.5 || Math.abs(ballNow.z)>16.5) {
+    } else if(outOfPlay(ballNow)) {
       lastContactText='Ausball: neuer Anstoß (Einwurf-Regeln folgen).';
       if(time-lastFeedTime>1){logEvent('Ball im Aus · neuer Anstoß');lastFeedTime=time;}
       kickoff();
@@ -300,7 +272,7 @@ async function start(): Promise<void> {
     const v=ball.linvel();velocity.set(v.x,v.y,v.z);
     clockLabel.textContent=`${String(Math.floor(time/60)).padStart(2,'0')}:${String(Math.floor(time%60)).padStart(2,'0')}`;
     if(goalFlash.classList.contains('active')&&kickoffDelay===0)goalFlash.classList.remove('active');
-    if(crowdGain&&soundEnabled)crowdGain.gain.value=.08+Math.min(.16,Math.abs(bp.x)/21*.16);
+    if(crowdGain&&soundEnabled)crowdGain.gain.value=.08+Math.min(.16,Math.abs(bp.x)/PITCH.halfLength*.16);
     speedLabel.textContent=`BALL ${velocity.length().toFixed(1)} M/S`;
     contactLabel.textContent=`TORSCHÜSSE ${contacts}`;
     scoreLabel.textContent=`${orange} : ${blue}`;
@@ -310,10 +282,10 @@ async function start(): Promise<void> {
       camera.position.copy(startCamera).lerp(endCamera,smooth);
       camera.lookAt(0,5*(1-smooth),0);
     }
-    else if(cameraMode===0){camera.position.lerp(new THREE.Vector3(bp.x*.26,23,43),.025);camera.lookAt(bp.x*.3,0,0);}
+    else if(cameraMode===0){camera.position.lerp(new THREE.Vector3(bp.x*.6,28,72),.03);camera.lookAt(bp.x*.85,0,bp.z*.3);}
     else if(cameraMode===1){camera.position.lerp(new THREE.Vector3(bp.x-12,12,bp.z+17),.04);camera.lookAt(bp.x,0,bp.z);}
-    else{camera.position.lerp(new THREE.Vector3(0,58,.1),.035);camera.lookAt(0,0,0);}
-    stadium.update(time,Math.min(1,Math.abs(bp.x)/21));
+    else{camera.position.lerp(new THREE.Vector3(0,110,.1),.035);camera.lookAt(0,0,0);}
+    stadium.update(time,Math.min(1,Math.abs(bp.x)/PITCH.halfLength));
     renderer.render(scene,camera);
     requestAnimationFrame(frame);
   }
