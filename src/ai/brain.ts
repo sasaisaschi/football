@@ -37,6 +37,8 @@ const BALL_DAMPING = 1.1;
 const COVER_ZONE = 24;
 /** Ball within this distance of an opponent whose team played it last: he has it, I jockey instead of charging in (m); otherwise 1.1 m. */
 const CARRIER_REACH = 1.6;
+/** Within this distance of the carrier a jockeying defender no longer closes in (m). */
+const JOCKEY_CLOSE = 1.5;
 
 /**
  * One autonomous footballer. Decides from its own perception a few times per second: win the ball, play it,
@@ -227,7 +229,10 @@ export class PlayerBrain {
       // longer helps.
       const carrierGap = Math.hypot(ball.pos.x - carrier.x, ball.pos.z - carrier.z);
       const ownGoalDistance = Math.hypot(-ctx.sign * PITCH.halfLength - ball.pos.x, ball.pos.z);
-      const stepIn = (carrierGap > 0.6 && distance < carrierGap + 0.35) || (ownGoalDistance < 26 && distance < 1.9);
+      // Never through the man: with the carrier between me and the ball, a poke or a run at the ball goes through
+      // his legs from behind (measured: most fouls).
+      const blocked = bodyInLine(self, ball.pos, carrier);
+      const stepIn = !blocked && ((carrierGap > 0.6 && distance < carrierGap + 0.35) || (ownGoalDistance < 26 && distance < 1.9));
       if (stepIn && distance <= 2.2 && carrierGap < 1.1) {
         // The ball is still at his feet: a poke, not a pass or a dribble that needs the ball to myself.
         this.intent = null;
@@ -245,7 +250,10 @@ export class PlayerBrain {
         const cv = this.perception.others.get(carrier.id)?.vel ?? { x: 0, z: 0 };
         const hold = { x: carrier.x + (gx / gd) * 1.4 + cv.x * 0.3, z: carrier.z + (gz / gd) * 1.4 + cv.z * 0.3 };
         const gap = Math.hypot(hold.x - self.x, hold.z - self.z);
-        const pace = Math.min(this.body.limits.maxSpeed, Math.hypot(cv.x, cv.z) + 1 + gap * 1.5);
+        const close = Math.hypot(carrier.x - self.x, carrier.z - self.z) < JOCKEY_CLOSE;
+        // At arm's length he matches the carrier's pace instead of closing further: running on into a player who
+        // shields the ball is a foul, not a challenge.
+        const pace = Math.min(this.body.limits.maxSpeed, Math.hypot(cv.x, cv.z) + (close ? 0.5 : 1 + gap * 1.5));
         return { command: { target: hold, speed: pace, face: ball.pos }, effort: 1, swing: null };
       }
     }
@@ -447,6 +455,14 @@ export class PlayerBrain {
     const speed = gap > 10 ? this.body.limits.maxSpeed * 0.92 : gap > 3 ? 5.5 : 3;
     return { target, speed, face: ball.pos };
   }
+}
+
+/** Does a body stand in the way from rom to 	o (closer than the target, within a body and a leg of the line)? */
+function bodyInLine(from: Vec2, to: Vec2, body: Vec2): boolean {
+  const dx = to.x - from.x, dz = to.z - from.z, l = Math.hypot(dx, dz) || 1;
+  const along = ((body.x - from.x) * dx + (body.z - from.z) * dz) / l;
+  if (along <= 0 || along >= l) return false;
+  return Math.abs((body.x - from.x) * dz - (body.z - from.z) * dx) / l < 0.6;
 }
 
 /** Laws 8, 13, 15–17: kick-off halves, 9.15 m (2 m at throw-ins) from the ball at restarts. */

@@ -26,8 +26,15 @@ const RECEIVER_RISK = 0.4;
 const CLOSING_SPEED = 2;
 /** How much safer a lofted pass must look than the ground pass to the same team-mate before it is chosen. */
 const LOFT_MARGIN = 0.3;
+/** Pressure (0…1, see pressureOn) from which holding the ball is an option. */
+const SHIELD_PRESSURE = 0.5;
+/** Chance of keeping the ball with a shielding touch: base plus room away from the opponents, capped. */
+const SHIELD_BASE = 0.35;
+const SHIELD_MAX = 0.75;
+/** What one holding touch costs in expected threat: the defence regroups meanwhile. */
+const SHIELD_TIME_COST = 0.003;
 
-export type OptionKind = 'shot' | 'pass' | 'dribble' | 'clear';
+export type OptionKind = 'shot' | 'pass' | 'dribble' | 'shield' | 'clear';
 /** One evaluated ball action. `value` is expected goal threat gained minus threat conceded on failure. */
 export type EvaluatedOption = {
   kind: OptionKind;
@@ -195,6 +202,9 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     });
   }
 
+  const shield = shieldOption(pic, from, pressure, lossCost);
+  if (shield) out.push(shield);
+
   const away = { x: sign, z: from.z > 0 ? 0.5 : -0.5 };
   const n = Math.hypot(away.x, away.z);
   out.push({
@@ -205,4 +215,40 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     note: 'klären',
   });
   return out.sort((a, b) => b.value - a.value);
+}
+
+/**
+ * Holding the ball under pressure: a short touch away from the nearest opponent with the body between him and
+ * the ball (the execution puts the ball on the far foot), buying time until a team-mate is free for a pass. Not
+ * progress, only keeping the ball where it is worth what it is worth.
+ */
+function shieldOption(pic: Picture, from: Vec2, pressure: number, lossCost: (p: Vec2) => number): EvaluatedOption | null {
+  if (pressure < SHIELD_PRESSURE) return null;
+  let near: Vec2 | null = null, nd = Infinity;
+  for (const o of pic.opponents) {
+    const d = Math.hypot(o.pos.x - from.x, o.pos.z - from.z);
+    if (d < nd) { nd = d; near = o.pos; }
+  }
+  if (!near) return null;
+  const base = Math.atan2(from.z - near.z, from.x - near.x);
+  let best: { dir: Vec2; gap: number } | null = null;
+  for (const turn of [0, -0.6, 0.6]) {
+    const dir = { x: Math.cos(base + turn), z: Math.sin(base + turn) };
+    const ahead = { x: from.x + dir.x * 3, z: from.z + dir.z * 3 };
+    if (Math.abs(ahead.z) > PITCH.halfWidth - 1.5 || Math.abs(ahead.x) > PITCH.halfLength - 1.5) continue;
+    let gap = 6;
+    for (const o of pic.opponents) gap = Math.min(gap, segmentDistance(o.pos, from, ahead).d);
+    if (!best || gap > best.gap) best = { dir, gap };
+  }
+  if (!best) return null;
+  const success = Math.min(SHIELD_MAX, SHIELD_BASE + best.gap / 8) * (0.7 + 0.3 * pic.self.abilities.technique);
+  const run = Math.hypot(pic.vel.x, pic.vel.z);
+  return {
+    kind: 'shield',
+    action: { kind: 'dribble', direction: best.dir, speed: Math.max(1.4, Math.min(2.4, run + 0.3)) },
+    success,
+    // Holding is not free: while the ball is kept, the defence gets back into shape.
+    value: success * threatAt(pic.sign, from) - (1 - success) * lossCost(from) * 1.2 - SHIELD_TIME_COST,
+    note: 'Ball abschirmen',
+  };
 }
