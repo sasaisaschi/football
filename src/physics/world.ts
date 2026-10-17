@@ -1,5 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-simd-compat';
 import { applyBallForces, createBall } from './ball';
+import { BALL_SPEC } from './pitch-geometry';
 import type { Legs } from './legs';
 import { createPitchColliders } from './pitch-colliders';
 
@@ -10,9 +11,12 @@ const MAX_SUBSTEPS = 8;
 /**
  * Rapier's friction contact lets a sphere gain at most ≈ 0.74 rad of spin per step, so at 60 Hz a struck ball
  * could never spin up to rolling above ≈ 5 m/s and skidded far too long. Four substeps (240 Hz) give the
- * textbook transition to rolling at 5/7 of the launch pace for all realistic ground balls.
+ * textbook transition to rolling at 5/7 of the launch pace, and the rolling deceleration also depends on the step
+ * size. They are needed while the ball moves on the turf; in flight or at rest one step per tick is enough.
  */
-const MIN_SUBSTEPS = 4;
+const GROUND_SUBSTEPS = 4;
+/** Ball speed (m/s) below which a ball on the turf is treated as at rest. */
+const AT_REST = 0.2;
 
 export type ContactPart = 'boot' | 'body' | 'hands';
 export type BallContact = { kind: 'ball'; player: number; part: ContactPart };
@@ -25,7 +29,7 @@ type Owner = { player: number; part: ContactPart; body: RAPIER.RigidBody };
 export type Kinematic = { update(dt: number): void; strikeSpeedNow?(): number };
 
 /**
- * The only Rapier world of a match. Fixed 1/60 s ticks of at least four substeps; while any boot is in a fast wind-up or strike the
+ * The only Rapier world of a match. Fixed 1/60 s ticks (four substeps while the ball skids on the turf); while any boot is in a fast wind-up or strike the
  * tick is split into substeps so the boot moves at most 6 cm per substep.
  */
 export class PhysicsWorld {
@@ -64,7 +68,16 @@ export class PhysicsWorld {
   substepsNeeded(): number {
     let fastest = 0;
     for (const l of this.legs) fastest = Math.max(fastest, l.strikeSpeedNow());
-    return Math.min(MAX_SUBSTEPS, Math.max(MIN_SUBSTEPS, Math.ceil((fastest * PHYSICS_DT) / MAX_BOOT_TRAVEL)));
+    const floor = this.ballMovingOnTurf() ? GROUND_SUBSTEPS : 1;
+    return Math.min(MAX_SUBSTEPS, Math.max(floor, Math.ceil((fastest * PHYSICS_DT) / MAX_BOOT_TRAVEL)));
+  }
+
+  /** Ball touching the turf and still moving (skidding or rolling). */
+  ballMovingOnTurf(): boolean {
+    const p = this.ball.translation();
+    if (p.y > BALL_SPEC.radius + 0.03) return false;
+    const v = this.ball.linvel();
+    return Math.hypot(v.x, v.z) > AT_REST;
   }
 
   /** Advances one tick. Body impulses must already be applied for this tick. Returns contacts in order. */
