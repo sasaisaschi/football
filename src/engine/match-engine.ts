@@ -12,7 +12,7 @@ import { createRng, type Rng } from './rng';
 import { createRoster, TEAMS } from './rosters';
 import { chooseTaker, PLACE_DELAY, restartReady, type RestartState } from './restarts';
 import type {
-  BallAction, DecisionMoment, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, RestartKind, TeamId, TeamInstruction, Vec2,
+  BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, RestartKind, TeamId, TeamInstruction, Vec2,
 } from './types';
 
 export type MatchConfig = { seed: number; halfMinutes: number; rosterSeed?: number };
@@ -158,7 +158,7 @@ export class MatchEngine {
     this.brains[player].userIntent = intent;
   }
 
-  resolveMoment(optionId: string, chosenBy: 'user' | 'timeout'): void {
+  resolveMoment(optionId: string, chosenBy: DecisionSource): void {
     const m = this.moment;
     if (!m || this.phase !== 'decision') throw new Error('No decision moment is open');
     const option = m.options.find(o => o.id === optionId);

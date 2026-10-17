@@ -42,7 +42,7 @@ export class MomentDirector {
     if (e.time < this.nextCheck) return null;
     this.nextCheck = e.time + 0.25;
     if (e.time - this.lastMomentAt < this.config.cooldown || this.momentsThisHalf >= this.config.maxPerHalf) return null;
-    const moment = this.attackingMoment(e) ?? this.transitionMoment(e) ?? this.breakawayMoment(e);
+    const moment = this.attackingMoment(e) ?? this.transitionMoment(e) ?? this.breakawayMoment(e) ?? this.boxDefenceMoment(e);
     if (!moment) return null;
     this.lastMomentAt = e.time;
     this.momentsThisHalf++;
@@ -149,6 +149,39 @@ export class MomentDirector {
       },
     ];
     return this.open(e, 'breakaway-defence', 'Gegner läuft allein aufs Tor', `${name(carrier)} ist durch, nur noch ${goalSide.length} Verteidiger dahinter.`, chaser.id, options, 'chase');
+  }
+
+  /**
+   * An opponent has the ball close to the user's penalty area with defenders around him:
+   * press the carrier, block the shooting lane, or let the defence organise itself.
+   */
+  private boxDefenceMoment(e: MatchEngine): DecisionMoment | null {
+    const team = this.config.userTeam;
+    const carrier = this.carrier(e, (1 - team) as TeamId);
+    if (carrier === null) return null;
+    const sign = e.sign(team);
+    const c = e.bodies[carrier].position();
+    const goalX = -sign * PITCH.halfLength;
+    const toGoal = Math.hypot(goalX - c.x, c.z);
+    if (toGoal > 30 || Math.abs(c.z) > 24) return null;
+    const defenders = e.profiles
+      .filter(p => p.team === team && p.role !== 'GK' && !e.referee.sentOff.has(p.id))
+      .map(p => ({ id: p.id, pos: e.bodies[p.id].position() }))
+      .map(d => ({ ...d, dist: Math.hypot(d.pos.x - c.x, d.pos.z - c.z) }))
+      .sort((a, b) => a.dist - b.dist);
+    const nearest = defenders[0];
+    if (!nearest || nearest.dist > 7 || nearest.dist < 1.2) return null;
+    // A block point between carrier and goal centre, 2.5 m from the carrier.
+    const block = { x: c.x + ((goalX - c.x) / toGoal) * 2.5, z: c.z + (-c.z / toGoal) * 2.5 };
+    const name = (id: number) => `${e.profiles[id].name} (${e.profiles[id].number})`;
+    const order = (action: { kind: 'press'; target: number } | { kind: 'recover'; target: { x: number; z: number } }): DecisionOption['effect'] =>
+      ({ type: 'player', player: nearest.id, intent: { type: 'move', action, source: 'user', decidedAt: e.time, until: e.time + 3 } });
+    const options: DecisionOption[] = [
+      { id: 'press', label: 'Zustellen', detail: `${name(nearest.id)} attackiert den Ballführenden`, effect: order({ kind: 'press', target: carrier }), outlook: 'kann den Ball erobern – oder wird überlaufen' },
+      { id: 'block', label: 'Schussbahn blocken', detail: `${name(nearest.id)} stellt sich zwischen Ball und Tor`, effect: order({ kind: 'recover', target: block }), outlook: 'erschwert den Abschluss, lässt Zeit für einen Pass' },
+      { id: 'hold', label: 'Ordnung halten', detail: 'Die Abwehr organisiert sich selbst', effect: { type: 'none' }, outlook: 'keine Vorgabe, die Spieler lesen die Lage selbst' },
+    ];
+    return this.open(e, 'box-defence', 'Gefahr vor dem eigenen Strafraum', `${name(carrier)} hat den Ball ${Math.round(toGoal)} m vor unserem Tor.`, nearest.id, options, 'hold');
   }
 
   /** Player of `team` who currently has the ball at his feet (last toucher, close to a slow ball). */

@@ -3,7 +3,7 @@ import { CrowdAudio } from './audio/crowd-audio';
 import { MomentDirector, DEFAULT_DIRECTOR } from './director/moment-director';
 import { MatchEngine } from './engine/match-engine';
 import { TEAMS } from './engine/rosters';
-import type { MatchEvent, MatchSnapshot, PlayerView, TeamId } from './engine/types';
+import type { DecisionSource, MatchEvent, MatchSnapshot, PlayerView, TeamId } from './engine/types';
 import { PHYSICS_DT } from './physics/world';
 import { createBallView } from './render/ball-view';
 import { CameraDirector } from './render/camera-director';
@@ -64,13 +64,13 @@ export class MatchApp {
     this.hud.setStatus(`${TEAMS[0].name} gegen ${TEAMS[1].name} – du entscheidest für ${TEAMS[options.userTeam].name}.`);
   }
 
-  private resolve(optionId: string, by: 'user' | 'timeout'): void {
+  private resolve(optionId: string, by: DecisionSource): void {
     const m = this.engine.moment;
     if (!m) return;
     const option = m.options.find(o => o.id === optionId)!;
     this.engine.resolveMoment(optionId, by);
     this.pendingOutcome = option.label;
-    this.hud.setStatus(by === 'user' ? `Deine Entscheidung: ${option.label} – jetzt müssen die Spieler es umsetzen.` : `Zeit abgelaufen – die Spieler entscheiden selbst (${option.label}).`);
+    this.hud.setStatus(by === 'user' ? `Deine Entscheidung: ${option.label} – jetzt müssen die Spieler es umsetzen.` : by === 'delegated' ? `Du überlässt es den Spielern (${option.label}).` : `Zeit abgelaufen – die Spieler entscheiden selbst (${option.label}).`);
   }
 
   private onEvent(e: MatchEvent): void {
