@@ -220,6 +220,23 @@ describe('boot / ball contact', () => {
     expect(Math.abs(Math.atan2(r.peak.z, r.peak.x))).toBeLessThan(0.1);
   });
 
+  it('the body is bound to the planned run only until the boot has met the ball, the leg recovers afterwards', () => {
+    const s = scene();
+    s.legs.start(s.legs.plan(s.w.ball, { technique: 'inside', side: 1, dirX: 1, dirZ: 0, elevation: 0, ballSpeed: 10 })!);
+    expect(s.legs.committed()).toBe(true);
+    let touched = false, freedAfterTouch = false, freedBeforeTouch = false;
+    run(s.w, 0.7, () => {
+      s.tick();
+      touched ||= Math.hypot(s.w.ball.linvel().x, s.w.ball.linvel().z) > 1;
+      if (!s.legs.committed() && s.legs.busy()) {
+        if (touched) freedAfterTouch = true; else freedBeforeTouch = true;
+      }
+    });
+    expect(freedBeforeTouch).toBe(false);
+    expect(freedAfterTouch).toBe(true);
+    expect(s.legs.busy()).toBe(false);
+  });
+
   it('an instep strike reaches shot pace and lifts the ball when struck below its centre', () => {
     const r = kick({ technique: 'instep', ballSpeed: 27, elevation: 0.12 });
     expect(r.peak.s).toBeGreaterThan(22);

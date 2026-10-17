@@ -10,6 +10,7 @@ import { firstTouch } from './first-touch';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { Perception, type Truth } from './perception';
 import { DEFENDERS, MIDFIELDERS, keeperShape, offsideLineU, shapeTarget, toTeam } from './shape';
+import { supportSpot } from './support';
 
 /** What the engine tells a brain each tick: things every player can see or knows from the rules. */
 export type BrainContext = {
@@ -34,6 +35,8 @@ export type BrainOutput = { command: BodyCommand; effort: number; swing: { actio
 const BALL_DAMPING = 1.1;
 /** Distance from the own goal within which a second defender covers the ball's line to goal (m). */
 const COVER_ZONE = 24;
+/** Ball within this distance of an opponent whose team played it last: he has it, I jockey instead of charging in (m); otherwise 1.1 m. */
+const CARRIER_REACH = 1.6;
 
 /**
  * One autonomous footballer. Decides from its own perception a few times per second: win the ball, play it,
@@ -121,8 +124,8 @@ export class PlayerBrain {
     const out = this.decide(ctx);
     const order = this.userIntent;
     if (order?.type === 'move' && order.action.kind === 'tactical-foul') return out;
-    // Mid-swing the body is committed to the run the kick was planned for.
-    if (this.legs.busy()) return out;
+    // Until the contact the body is committed to the run the kick was planned for.
+    if (this.legs.committed()) return out;
     return { ...out, command: this.controlledApproach(out.command, ctx) };
   }
 
@@ -155,8 +158,8 @@ export class PlayerBrain {
     this.perception.observe(ctx.truth, self, this.body.heading);
     const believed = this.perception.ballNow(ctx.now);
     const ball = { pos: { x: believed.pos.x, z: believed.pos.z }, vel: { x: believed.vel.x, z: believed.vel.z } };
-    if (this.legs.busy()) {
-      // Mid-swing the body keeps the pace the leg was planned for: the planted foot carries it through the kick.
+    if (this.legs.committed()) {
+      // Up to the contact the body keeps the pace the leg was planned for: the planted foot carries it through the kick.
       const v = this.body.velocity();
       return { command: { target: { x: self.x + v.x * 2, z: self.z + v.z * 2 }, speed: this.body.speed() }, effort: 1, swing: null };
     }
@@ -216,7 +219,8 @@ export class PlayerBrain {
     const self = this.body.position();
     const distance = Math.hypot(ball.pos.x - self.x, ball.pos.z - self.z);
     const intercept = PlayerBrain.interceptTime(self, this.body.limits.maxSpeed, ball);
-    const carrier = this.opponentInControl(ctx, ball);
+    // A receiver whose team played the ball last still controls it a stride ahead of him: jockey, do not charge in.
+    const carrier = this.opponentInControl(ctx, ball, ctx.possession !== null && ctx.possession !== this.profile.team ? CARRIER_REACH : 1.1);
     if (carrier && !ctx.restart) {
       // Jockey: stay goal-side of the carrier at arm's length. Step in when his touch exposes the ball (it is
       // off his foot and about as near to me as to him), or close in front of the own goal where delaying no
@@ -333,10 +337,10 @@ export class PlayerBrain {
   }
 
   /** An opponent who (as far as I can see) has the ball at his feet and is closer to it than I am. */
-  private opponentInControl(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): (Vec2 & { id: number }) | null {
+  private opponentInControl(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }, reach: number): (Vec2 & { id: number }) | null {
     const self = this.body.position();
     const mine = Math.hypot(ball.pos.x - self.x, ball.pos.z - self.z);
-    let carrier: (Vec2 & { id: number }) | null = null, best = 1.1;
+    let carrier: (Vec2 & { id: number }) | null = null, best = reach;
     for (const p of ctx.profiles) {
       if (p.team === this.profile.team) continue;
       const pos = this.perception.playerNow(p.id, ctx.now);
@@ -393,6 +397,19 @@ export class PlayerBrain {
       sign: ctx.sign, ball: ball.pos, inPossession: own, instruction: ctx.instruction,
       offsideLineU: offsideLineU(ctx.sign, opponents.map(o => o.pos)),
     });
+    if (own && !ctx.restart) {
+      const mates: { id: number; pos: Vec2 }[] = [];
+      for (const p of ctx.profiles) {
+        if (p.team !== this.profile.team || p.id === this.profile.id || p.role === 'GK') continue;
+        const pos = this.perception.playerNow(p.id, ctx.now);
+        if (pos) mates.push({ id: p.id, pos });
+      }
+      const spot = supportSpot({
+        self: { id: this.profile.id, pos: self }, sign: ctx.sign, ball: ball.pos, mates, opponents: opponents.map(o => o.pos),
+        offsideLineU: offsideLineU(ctx.sign, opponents.map(o => o.pos)), shape: target,
+      });
+      if (spot) return { target: spot, speed: this.body.limits.maxSpeed * 0.85, face: ball.pos };
+    }
     if (!own && ctx.possession !== null && !ctx.restart && (DEFENDERS.has(role) || MIDFIELDERS.has(role))) {
       // Near the own goal the defender closest to the ball's line to goal (besides whoever goes for the ball)
       // covers that line a few metres in front of the ball: he blocks the shot and the way through.
