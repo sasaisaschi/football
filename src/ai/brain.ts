@@ -5,6 +5,8 @@ import type { BodyCommand, PlayerBody } from '../physics/body';
 import type { Legs } from '../physics/legs';
 import { PITCH, inPenaltyArea } from '../physics/pitch-geometry';
 import { approach, trySwing } from './execution';
+import { tackle, tackleApproach } from './challenge';
+import { firstTouch } from './first-touch';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { Perception, type Truth } from './perception';
 import { DEFENDERS, MIDFIELDERS, keeperShape, offsideLineU, shapeTarget, toTeam } from './shape';
@@ -30,6 +32,8 @@ export type BrainOutput = { command: BodyCommand; effort: number; swing: { actio
 
 /** Effective deceleration (m/s²) a player assumes for a moving ball when guessing where to meet it. */
 const BALL_DAMPING = 1.1;
+/** Distance from the own goal within which a second defender covers the ball's line to goal (m). */
+const COVER_ZONE = 24;
 
 /**
  * One autonomous footballer. Decides from its own perception a few times per second: win the ball, play it,
@@ -214,15 +218,31 @@ export class PlayerBrain {
     const intercept = PlayerBrain.interceptTime(self, this.body.limits.maxSpeed, ball);
     const carrier = this.opponentInControl(ctx, ball);
     if (carrier && !ctx.restart) {
-      // Jockey: stay goal-side of the carrier at arm's length and only step in when the ball runs loose.
-      const looseBall = Math.hypot(ball.pos.x - carrier.x, ball.pos.z - carrier.z) > 0.75;
-      if (!looseBall || distance > 2.2) {
+      // Jockey: stay goal-side of the carrier at arm's length. Step in when his touch exposes the ball (it is
+      // off his foot and about as near to me as to him), or close in front of the own goal where delaying no
+      // longer helps.
+      const carrierGap = Math.hypot(ball.pos.x - carrier.x, ball.pos.z - carrier.z);
+      const ownGoalDistance = Math.hypot(-ctx.sign * PITCH.halfLength - ball.pos.x, ball.pos.z);
+      const stepIn = (carrierGap > 0.6 && distance < carrierGap + 0.35) || (ownGoalDistance < 26 && distance < 1.9);
+      if (stepIn && distance <= 2.2 && carrierGap < 1.1) {
+        // The ball is still at his feet: a poke, not a pass or a dribble that needs the ball to myself.
+        this.intent = null;
+        const pic = this.picture(ctx);
+        const action = tackle(self, ball.pos, carrier, ctx.sign, pic.mates.map(m => m.pos), pic.opponents.filter(o => o.id !== carrier.id).map(o => o.pos));
+        const command = tackleApproach(self, ball.pos, this.body.limits.maxSpeed);
+        const plan = distance < 1.3 && trySwing(this.body, this.legs, ctx.ball, action, { pressure: pressureOn(this.picture(ctx)), profile: this.profile, rng: this.rng });
+        return { command, effort: 1, swing: plan ? { action, source: 'ai' } : null };
+      }
+      if (!stepIn || distance > 2.2) {
         this.intent = null;
         const goalX = -ctx.sign * PITCH.halfLength;
         const gx = goalX - carrier.x, gz = -carrier.z, gd = Math.hypot(gx, gz) || 1;
-        const hold = { x: carrier.x + (gx / gd) * 1.4, z: carrier.z + (gz / gd) * 1.4 };
+        // The spot moves with the carrier: aim a little ahead of it and match his pace plus the gap to close.
+        const cv = this.perception.others.get(carrier.id)?.vel ?? { x: 0, z: 0 };
+        const hold = { x: carrier.x + (gx / gd) * 1.4 + cv.x * 0.3, z: carrier.z + (gz / gd) * 1.4 + cv.z * 0.3 };
         const gap = Math.hypot(hold.x - self.x, hold.z - self.z);
-        return { command: { target: hold, speed: gap > 4 ? this.body.limits.maxSpeed : 2.5 + gap, face: ball.pos }, effort: 1, swing: null };
+        const pace = Math.min(this.body.limits.maxSpeed, Math.hypot(cv.x, cv.z) + 1 + gap * 1.5);
+        return { command: { target: hold, speed: pace, face: ball.pos }, effort: 1, swing: null };
       }
     }
     if (distance > 3.5) {
@@ -237,13 +257,20 @@ export class PlayerBrain {
       this.nextDecision = ctx.now + 0.3;
     }
     const action = this.intent.action;
-    const command = approach(this.body, this.legs, action, ball, intercept.at);
+    const command = approach(this.body, this.legs, action, ball, intercept.at, this.nearestOpponent(ctx, 2.5));
     const ready = !ctx.restart || ctx.restart.ready;
     let swing: BrainOutput['swing'] = null;
     if (ready && distance < 1.5) {
-      const plan = trySwing(this.body, this.legs, ctx.ball, action, { pressure: pressureOn(this.picture(ctx)), profile: this.profile, rng: this.rng });
+      const exec = { pressure: pressureOn(this.picture(ctx)), profile: this.profile, rng: this.rng };
+      let played = action;
+      let plan = trySwing(this.body, this.legs, ctx.ball, action, exec);
+      if (!plan && action.kind === 'control' && action.touch && this.arrivesWithin(ball, 0.45)) {
+        // The touch into space does not fit the ball's arrival: the receiver cushions it instead.
+        played = { kind: 'control' };
+        plan = trySwing(this.body, this.legs, ctx.ball, played, exec);
+      }
       if (plan) {
-        swing = { action, source: this.intent.source };
+        swing = { action: played, source: this.intent.source };
         if (this.intent.source === 'user') this.userIntent = null;
         this.intent = null;
       }
@@ -251,17 +278,71 @@ export class PlayerBrain {
     return { command, effort: 1, swing };
   }
 
+  /** Am I the outfield team-mate nearest to `lane`, leaving out the one nearest to the ball (he goes for it)? */
+  private coversLane(ctx: BrainContext, lane: Vec2, ballPos: Vec2): boolean {
+    const self = this.body.position();
+    const mates = [{ id: this.profile.id, pos: self }];
+    for (const p of ctx.profiles) {
+      if (p.team !== this.profile.team || p.id === this.profile.id || p.role === 'GK') continue;
+      const pos = this.perception.playerNow(p.id, ctx.now);
+      if (pos) mates.push({ id: p.id, pos });
+    }
+    const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
+    const onBall = mates.reduce((a, b) => (dist(b.pos, ballPos) < dist(a.pos, ballPos) ? b : a));
+    if (onBall.id === this.profile.id) return false;
+    return mates.every(m => m.id === this.profile.id || m.id === onBall.id || dist(m.pos, lane) >= dist(self, lane));
+  }
+
+  /**
+   * Does one of us have the ball, as far as I can see: the player nearest to it is a team-mate (or me)? A
+   * touch alone (a block, a poke) does not make the team push out while the ball is still loose.
+   */
+  private teamOnBall(ctx: BrainContext, ball: { pos: Vec2 }): boolean {
+    if (ctx.restart) return true;
+    const self = this.body.position();
+    let mine = Math.hypot(ball.pos.x - self.x, ball.pos.z - self.z), theirs = Infinity;
+    for (const p of ctx.profiles) {
+      if (p.id === this.profile.id) continue;
+      const pos = this.perception.playerNow(p.id, ctx.now);
+      if (!pos) continue;
+      const d = Math.hypot(ball.pos.x - pos.x, ball.pos.z - pos.z);
+      if (p.team === this.profile.team) mine = Math.min(mine, d); else theirs = Math.min(theirs, d);
+    }
+    return mine < theirs;
+  }
+
+  /** Closest opponent I can see within `range`, if any. */
+  private nearestOpponent(ctx: BrainContext, range: number): Vec2 | null {
+    const self = this.body.position();
+    let best: Vec2 | null = null, bd = range;
+    for (const p of ctx.profiles) {
+      if (p.team === this.profile.team) continue;
+      const pos = this.perception.playerNow(p.id, ctx.now);
+      const d = pos ? Math.hypot(pos.x - self.x, pos.z - self.z) : Infinity;
+      if (pos && d < bd) { bd = d; best = pos; }
+    }
+    return best;
+  }
+
+  /** Will the ball reach my body within `seconds` (closing along the line between us)? */
+  private arrivesWithin(ball: { pos: Vec2; vel: Vec2 }, seconds: number): boolean {
+    const self = this.body.position(), v = this.body.velocity();
+    const dx = self.x - ball.pos.x, dz = self.z - ball.pos.z, d = Math.hypot(dx, dz) || 1;
+    const closing = ((ball.vel.x - v.x) * dx + (ball.vel.z - v.z) * dz) / d;
+    return d < 0.9 || (closing > 0.3 && (d - 0.4) / closing < seconds);
+  }
+
   /** An opponent who (as far as I can see) has the ball at his feet and is closer to it than I am. */
-  private opponentInControl(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): Vec2 | null {
+  private opponentInControl(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): (Vec2 & { id: number }) | null {
     const self = this.body.position();
     const mine = Math.hypot(ball.pos.x - self.x, ball.pos.z - self.z);
-    let carrier: Vec2 | null = null, best = 1.1;
+    let carrier: (Vec2 & { id: number }) | null = null, best = 1.1;
     for (const p of ctx.profiles) {
       if (p.team === this.profile.team) continue;
       const pos = this.perception.playerNow(p.id, ctx.now);
       if (!pos) continue;
       const d = Math.hypot(ball.pos.x - pos.x, ball.pos.z - pos.z);
-      if (d < best && d < mine) { best = d; carrier = pos; }
+      if (d < best && d < mine) { best = d; carrier = { ...pos, id: p.id }; }
     }
     return carrier;
   }
@@ -279,10 +360,14 @@ export class PlayerBrain {
       const first = options[0];
       if (!first || !((first.kind === 'pass' && first.success > 0.65) || (first.kind === 'shot' && first.success > 0.15))) {
         this.lastOptions = options;
-        return { kind: 'control' };
+        // A keeper secures the ball with a cushion; a missed touch in front of his goal is too costly.
+        if (this.profile.role === 'GK') return { kind: 'control' };
+        const at = PlayerBrain.interceptTime(self, this.body.limits.maxSpeed, pic.ball).at;
+        return firstTouch(pic, at);
       }
     }
-    if (ctx.restart) options = options.filter(o => o.kind === 'pass' || o.kind === 'clear');
+    // Restarts are played, not carried; a keeper with the ball at his feet distributes it instead of dribbling.
+    if (ctx.restart || this.profile.role === 'GK') options = options.filter(o => o.kind === 'pass' || o.kind === 'clear');
     this.lastOptions = options;
     // Option values are expected-threat differences of a few thousandths in midfield; misjudgement has to be
     // on that scale, or it would swamp the evaluation and turn every choice into a coin toss.
@@ -301,13 +386,23 @@ export class PlayerBrain {
   private offBall(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): BodyCommand {
     const role = this.profile.role;
     const self = this.body.position();
-    const own = ctx.possession === this.profile.team;
+    const own = ctx.possession === this.profile.team && this.teamOnBall(ctx, ball);
     const opponents = ctx.profiles.filter(p => p.team !== this.profile.team).map(p => ({ p, pos: this.perception.playerNow(p.id, ctx.now) })).filter(o => o.pos) as { p: PlayerProfile; pos: Vec2 }[];
     if (role === 'GK') return { target: keeperShape(ctx.sign, ball.pos), speed: 6, face: ball.pos };
     let target = shapeTarget(role, {
       sign: ctx.sign, ball: ball.pos, inPossession: own, instruction: ctx.instruction,
       offsideLineU: offsideLineU(ctx.sign, opponents.map(o => o.pos)),
     });
+    if (!own && ctx.possession !== null && !ctx.restart && (DEFENDERS.has(role) || MIDFIELDERS.has(role))) {
+      // Near the own goal the defender closest to the ball's line to goal (besides whoever goes for the ball)
+      // covers that line a few metres in front of the ball: he blocks the shot and the way through.
+      const goalX = -ctx.sign * PITCH.halfLength;
+      const toGoal = Math.hypot(goalX - ball.pos.x, ball.pos.z) || 1;
+      if (toGoal < COVER_ZONE) {
+        const lane = { x: ball.pos.x + ((goalX - ball.pos.x) / toGoal) * 3, z: ball.pos.z + (-ball.pos.z / toGoal) * 3 };
+        if (this.coversLane(ctx, lane, ball.pos)) return { target: lane, speed: this.body.limits.maxSpeed, face: ball.pos };
+      }
+    }
     if (!own && ctx.possession !== null) {
       // Second player presses when the coach asks for it; defenders mark attackers in their zone goal-side.
       const ballU = toTeam(ctx.sign, ball.pos).u;
@@ -342,8 +437,8 @@ export function keepRestartDistance(target: Vec2, profile: PlayerProfile, ctx: B
   const r = ctx.restart!;
   let { x, z } = target;
   if (r.ownHalfOnly && ctx.sign * x > -0.3) x = -ctx.sign * 0.3;
-  if (r.kind === 'penalty' && profile.id !== r.taker && profile.role !== 'GK') {
-    // Everybody else outside the penalty area (Law 14).
+  if ((r.kind === 'penalty' && profile.id !== r.taker && profile.role !== 'GK') || (r.kind === 'goal-kick' && profile.team !== r.team)) {
+    // Everybody else outside the penalty area (Law 14); opponents at a goal kick (Law 16).
     const edge = PITCH.halfLength - PITCH.penaltyAreaDepth - 1;
     if (Math.sign(r.spot.x) * x > edge && Math.abs(z) < PITCH.penaltyAreaHalfWidth + 1) x = Math.sign(r.spot.x) * edge;
   }

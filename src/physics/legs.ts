@@ -21,6 +21,11 @@ export const BOOT_GRIP = 0.7;
 export const MAX_ELEVATION = 0.45;
 /** Fastest boot speed relative to the hip (elite instep kicks ≈ 20–25 m/s). */
 export const MAX_BOOT_SPEED = 24;
+/**
+ * The standing knee flexes during a kick and lowers the hip by about 10 cm. Without it a 0.53·h leg under a
+ * 0.51·h hip reaches only ≈ 0.5 m forward at ball height, a band of ≈ 10 cm beyond the body clearance.
+ */
+export const KICK_HIP_DROP = 0.1;
 
 export type Technique = 'instep' | 'inside' | 'cushion';
 export type Side = 0 | 1; // 0 = left, 1 = right
@@ -103,9 +108,10 @@ export class Legs {
     return { x: -f.z * s * this.hipOffset, y: BOOT.radius, z: f.x * s * this.hipOffset };
   }
 
+  /** Hip joint while kicking: the standing knee flexes, so the hip sits KICK_HIP_DROP below its standing height. */
   hip(side: Side): Vec3 {
     const r = this.rest(side);
-    return { x: r.x, y: this.hipHeight, z: r.z };
+    return { x: r.x, y: this.hipHeight - KICK_HIP_DROP, z: r.z };
   }
 
   /** Side whose boot is closer to a world point, judged across the facing direction. */
@@ -148,7 +154,12 @@ export class Legs {
       // chosen so that impulse plus the remaining cross motion add up to the wanted velocity.
       const v = meetV(tech.windup + tech.back / 10);
       const s = req.ballSpeed * err.speed;
-      const target = { x: Math.sin(a) * Math.cos(el) * s, y: Math.sin(el) * s, z: Math.cos(a) * Math.cos(el) * s };
+      let target = { x: Math.sin(a) * Math.cos(el) * s, y: Math.sin(el) * s, z: Math.cos(a) * Math.cos(el) * s };
+      if (el === 0 && !airborne) {
+        const rolled = rolledLaunch(ball.angvel(), { x: Math.sin(a), z: Math.cos(a) }, s);
+        if (!rolled) return null;
+        target = { x: rolled.x, y: 0, z: rolled.z };
+      }
       let n = { x: target.x - v.x, y: target.y - v.y, z: target.z - v.z };
       for (let i = 0; i < 4; i++) {
         const nl = Math.hypot(n.x, n.y, n.z) || 1;
@@ -304,6 +315,23 @@ export class Legs {
     boot.body.setNextKinematicTranslation({ x: p.x + rel.x, y: rel.y, z: p.z + rel.z });
     boot.body.setNextKinematicRotation(rotationFromY(axis));
   }
+}
+
+/**
+ * A struck ground ball keeps its spin; turf friction then pulls it towards the line the spin rolls along
+ * until it rolls again: final = launch − 2/7·(launch − w), with w = r·(−ω_z, ω_x) the spin's rolling pace.
+ * The launch velocity of pace `speed` whose rolling direction ends up along `dir`; null if the spin is too
+ * strong to be turned that far with this pace.
+ */
+export function rolledLaunch(spin: Vec3, dir: { x: number; z: number }, speed: number): { x: number; z: number } | null {
+  const wx = -spin.z * BALL_SPEC.radius, wz = spin.x * BALL_SPEC.radius;
+  const dw = dir.x * wx + dir.z * wz;
+  // |7k·dir − 2w| = 5·speed, solved for the larger k (rolling on along dir).
+  const disc = 784 * dw * dw - 196 * (4 * (wx * wx + wz * wz) - 25 * speed * speed);
+  if (disc < 0) return null;
+  const k = (28 * dw + Math.sqrt(disc)) / 98;
+  if (k <= 0) return null;
+  return { x: (7 * k * dir.x - 2 * wx) / 5, z: (7 * k * dir.z - 2 * wz) / 5 };
 }
 
 /** Quaternion turning the capsule's local Y axis onto `axis`. */

@@ -77,8 +77,11 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 | 17.10.2026 | Realismus-Kalibrierung: `npm run check` | `tsc` ohne Fehler, **6 Testdateien / 45 Tests bestanden**, `vite build` erfolgreich |
 | 17.10.2026 | Realismus-Kalibrierung: `npm run test:browser` (gleiche Hardware) | `ok: true`, keine Konsolenfehler/-warnungen, Uhr läuft, **45 FPS** (gemessen, während parallel `npm run sim` lief), Entscheidungsmoment erschienen, eingefroren, Entscheidung protokolliert |
 | 17.10.2026 | Realismus-Kalibrierung: `npm run sim -- --silent=false` (2 × 45 min, Seed 2026) und Mehr-Seed-Probe (6 Seeds × 2 × 10 min) | siehe §6 |
+| 17.10.2026 | Ballverluste: `npm run check` | `tsc` ohne Fehler, **6 Testdateien / 46 Tests bestanden** (neu: Drallkorrektur beim seitlichen Antippen), `vite build` erfolgreich |
+| 17.10.2026 | Ballverluste: `npm run test:browser` | `ok: true`, keine Konsolenfehler/-warnungen, Entscheidungsmoment erschienen, Entscheidung als `user` protokolliert |
+| 17.10.2026 | Ballverluste: `npm run sim -- --silent=false` (2 × 45 min, Seed 2026) und Mehr-Seed-Probe (6 Seeds × 2 × 10 min) | siehe §6 |
 
-**Testinhalte:** Feldmaße/Regel 9/10, Zufall reproduzierbar; Ballaufprall, Rollweg, keine Kraftakkumulation, Magnus-Richtung, Netz/Pfosten/Latte; Beschleunigungsgrenzen, 22 Körper stabil, bitgleiche Wiederholung; Fußkontakt (Nähe kickt nie, Richtung/Tempo, Spannstoß mit Lift, Richtungsabhängigkeit, Fehltreffer mit Drall, Luftloch, Reichweite, Ballannahme); Schiedsrichter (Abseits, Einwurf-Ausnahme, Seitenwechsel, Ecke/Abstoß/Einwurf/Tor/Eigentor, Foul von hinten, Zweikampf ≠ Foul, Notbremse = Rot + Elfmeter, taktisches Foul = Gelb, Gelb-Rot, Mitspieler-Kontakt, Handspiel außerhalb, Rückpass); vollständige Partie ohne ungültige Zustandsübergänge, gleicher Seed = gleiche Partie, kein kollektives Ballverfolgen, Torwart-Ergebnisse variieren, Ballfreigabe innerhalb von 6 s; Director (Moment friert ein, jede angebotene Option wird als echter Schwung ausgeführt, gleiche Lage + andere Entscheidung → anderer Verlauf, gleiche Entscheidung → unterschiedlicher Erfolg, Momente selten und mit Abstand); Quelltext „kein Magnetismus“.
+**Testinhalte:** Feldmaße/Regel 9/10, Zufall reproduzierbar; Ballaufprall, Rollweg, keine Kraftakkumulation, Magnus-Richtung, Netz/Pfosten/Latte; Beschleunigungsgrenzen, 22 Körper stabil, bitgleiche Wiederholung; Fußkontakt (Nähe kickt nie, Richtung/Tempo, Spannstoß mit Lift, Richtungsabhängigkeit, Drallkorrektur beim seitlichen Antippen, Fehltreffer mit Drall, Luftloch, Reichweite, Ballannahme); Schiedsrichter (Abseits, Einwurf-Ausnahme, Seitenwechsel, Ecke/Abstoß/Einwurf/Tor/Eigentor, Foul von hinten, Zweikampf ≠ Foul, Notbremse = Rot + Elfmeter, taktisches Foul = Gelb, Gelb-Rot, Mitspieler-Kontakt, Handspiel außerhalb, Rückpass); vollständige Partie ohne ungültige Zustandsübergänge, gleicher Seed = gleiche Partie, kein kollektives Ballverfolgen, Torwart-Ergebnisse variieren, Ballfreigabe innerhalb von 6 s; Director (Moment friert ein, jede angebotene Option wird als echter Schwung ausgeführt, gleiche Lage + andere Entscheidung → anderer Verlauf, gleiche Entscheidung → unterschiedlicher Erfolg, Momente selten und mit Abstand); Quelltext „kein Magnetismus“.
 
 ## 6. Messwerte
 
@@ -132,9 +135,55 @@ Bewertung: Torschüsse, Einwürfe, Ecken, Abstöße und Passquote liegen deutlic
 
 **Verworfen (gemessen schlechter):** enge Ballführung unter Druck (mehr Ballverluste), Dribbeln in alle Richtungen bzw. Raum ab dem ersten Schritt (27–36 Tore/90), schärfere Pässe mit 5,5 m/s Ankunft (20 Tore/90), Torwart bleibt eher auf der Linie (29 Tore/90).
 
+**Ballverluste – Ursachenanalyse und Korrekturen (Mehr-Seed-Probe, 6 Seeds × 2 × 10 min, hochgerechnet auf 90 min, 17.10.2026):** Die Probe wurde um Verlustkontext (Abstand Ball–Ballführer, Zeit seit seiner letzten Berührung, Art des Ballgewinns), die Ballrichtung 0,15 s nach einer Berührung, Ablehnungsgründe der Schwungplanung und Spielerpositionen bei jedem Schuss erweitert (temporär, nicht eingecheckt). Gemessene Ursachen und Korrekturen:
+
+- **Drall nicht berücksichtigt (Physik-Planung):** Ein rollender Ball behält beim seitlichen Antippen seinen Drall; die Rasenreibung zieht ihn danach in die alte Rollrichtung zurück (Endgeschwindigkeit = Abschuss − 2/7 · (Abschuss − Drall-Rollgeschwindigkeit), Vollkugel). Die Schwungplanung zielte auf die Abschussgeschwindigkeit; Dribbelberührungen wichen 15–40° ab (isolierter Test traf 0°, weil dort nur geradeaus gespielt wurde). Neu: `rolledLaunch()` in `legs.ts`. Gemessen (Seed 1, 5 min, Richtung 0,15 s nach der Berührung): Dribbelberührungen < 5° Abweichung 13 → 56 von ≈ 107, 15–40° 53 → 4; Pässe < 5°: 18 → 33. Test: `physics.test.ts` („rolling ball touched sideways …“).
+- **Beinreichweite:** Hüfte 0,51·h, Bein 0,53·h ergaben in Ballhöhe nur ≈ 0,5 m Reichweite nach vorn, ≈ 10 cm jenseits des Körperabstands. Das Standbein beugt sich beim Schuss: `KICK_HIP_DROP` 0,1 m.
+- **Gerichtete erste Ballmitnahme:** Der Empfänger bewertet seine nächste Aktion am Annahmepunkt und nimmt den Ball in diese Richtung mit (`first-touch.ts`), weg vom nächsten Gegner; er stellt sich dafür 0,5 m neben die Ballbahn (sonst lehnte die Körperabstandsprüfung fast jede Mitnahme ab). Passt die Mitnahme nicht mehr, stoppt er den Ball (Zeitkriterium 0,45 s). Torhüter stoppen immer (mit gerichteter Mitnahme für alle gemessen: 13,5 Eigentore/90, meist Torwart).
+- **Torwart als Torquelle:** Bei den meisten Schüssen stand der Schütze 1–5 m neben dem gegnerischen Torwart, dessen Mannschaft in Ballbesitz-Formation (Stürmer an der Mittellinie): Torwart dribbelte nach dem Abrollen oder nahm Rückpässe unter Druck an. Neu: Torwart passt oder klärt nur; Passbewertung rechnet ein, dass ein bedrängter Empfänger den Ball an seiner Position wieder verliert, und dass Gegner während der Ballreise aufrücken (2 m/s). Verworfen: Torwart spielt unter Druck direkt (Eigentore 16,5/90).
+- **Mannschaftsformation:** Die Formation wechselte bei jeder Berührung (Abwehr, Abpraller) sofort in Ballbesitz-Aufstellung, die Abwehr stand dann 20–50 m vor dem Tor. Neu: aufrücken erst, wenn ein Mitspieler dem Ball am nächsten ist.
+- **Zweikampf:** Es gab keinen Tackling-Versuch; „Hineingehen“ hieß, einen kompletten Pass/Dribbling-Schuss aufzubauen – unmöglich mit dem Gegner am Ball (drei Verteidiger umringten einen Dribbler 7 s). Neu: Aktion `tackle` (Stochern mit der Innenseite, 4 m/s, zur Seite mit mehr Mitspielern, `challenge.ts`). Hineingehen nur, wenn der Ball > 0,6 m vom Führenden weg und mir mindestens so nah ist, oder < 26 m vor dem eigenen Tor. Das Begleittempo beim Stellen richtet sich nach dem Tempo des Ballführers (vorher fest 2,5 m/s + Abstand → Verteidiger fiel zurück).
+- **Absichern:** Liegt der Ball < 24 m vor dem eigenen Tor, stellt sich der Feldspieler, der der Linie Ball–Tor am nächsten ist (außer dem ballnächsten), 3 m vor den Ball in diese Linie.
+- **Abschirmen und Ballführung:** Unter Druck wird der Ball kürzer vorgelegt (Laufgeschwindigkeit + 0,4 m/s) und auf den gegnerabgewandten Fuß, der Körper bleibt dazwischen (zusammen gemessen: Wechsel 1607 → 1546, Tore 16,5 → 12,8/90; enge Ballführung allein war früher verworfen).
+- **Durch den Ball laufen:** Wer auf die andere Seite des Balls musste, lief geradewegs hindurch und schob ihn mit dem Körper weiter (u. a. Eigentore durch Körperkontakte in Richtung eigenes Tor). Neu: Weg um den Ball herum.
+- **Entscheidungsmodell kalibriert (gemessen):** Flache Pässe mit vorhergesagt 0,3–0,6 kamen zu 80 % an (Genauigkeits- und Raumterm angepasst, jetzt 0,5–1,0 → 0,83–0,96). Dribblings waren überschätzt (vorhergesagt 0,8–0,9 → 61 % nach 1,5 s noch im Besitz; jetzt 0,3/0,5/0,6 → 0,42/0,65/0,65). Verlustkosten enthalten jetzt auch die eigene Bedrohung, die mit dem Ball verloren geht.
+- **Elfmeter (4 in der alten vollen Partie):** Probe mit Seed 2026, 2 × 45 min (identisch mit `npm run sim`): alle 4 Elfmeter durch Verteidiger (LB 2×, LCB, RCB) gegen ST/RW – „hineingehen“ ab 0,75 m Ballabstand mit Anlauf in Schussvorbereitungs-Tempo (Abstand/0,4 s) in den Angreifer. Mit Tackling-Annäherung (2 + 2 · Abstand m/s) und neuer Hineingeh-Regel: 0.
+- **Regel 16:** Beim Abstoß stehen Gegner außerhalb des Strafraums.
+
+| pro 90 min (6 Seeds) | vorher | nachher | realer Richtwert |
+| --- | --- | --- | --- |
+| Tore (davon Eigentore) | 9,0 (2,3) | 7,5 (0,8) | ~2,7 |
+| Ballbesitzwechsel (Berührungsfolge) | 1330 | 1449 | ~250 |
+| davon nach Dribbling / Ballannahme / Pass / Tackling | 651 / 422 / 199 / – | 476 / 370 / 347 / 167 | – |
+| Torschüsse / aufs Tor | 48 / 24 | 17 / 8 | ~25 / ~9 |
+| Pässe / Passquote | 563 / 66 % | 842 / 63 % | ~900 / 75–85 % |
+| Dribbelberührungen / Tacklings | 1066 / – | 665 / 295 | – |
+| Fouls / Elfmeter | 35 / 0,8 | 31 / 0 | ~22 / ~0,3 |
+| Einwürfe / Ecken / Abstöße | 95 / 28 / 34 | 176 / 21 / 23 | ~45 / ~10 / ~18 |
+
+Zwischenstände (gleiche Probe): nur gerichtete Mitnahme 33 Tore/90 (13,5 Eigentore), nur Drallkorrektur 18 Tore/90 und 1466 Wechsel – genauere Berührungen allein machten das Spiel ohne bessere Verteidigung torreicher.
+
+**Volle Partie nach den Korrekturen (`npm run sim`, Seed 2026):** Spieldauer 2 × 45 min, `npm run sim -- --silent=false`.
+
+| Messwert | vorher (17.10.2026, nach Realismus-Kalibrierung) | nachher | realer Richtwert |
+| --- | --- | --- | --- |
+| Ergebnis | 8 : 1 | 3 : 10 (davon 3 Eigentore) | ~1,5 : 1,2 |
+| Torschüsse (Team A / B) | 21 / 11 | 9 / 13 | ~13 / 12 |
+| Pässe / Passquote | 368 / 67 % | 785 / 64 % | ~900 / ~80 % |
+| Ballbesitz | 51 % / 49 % | 48 % / 52 % | – |
+| Ball im Spiel | 51 % | 79 % | ~60 % |
+| Fouls / Gelb / Rot / Elfmeter | 18 / 3 / 0 / 4 | 26 / 2 / 0 / 0 | ~22 / ~4 / ~0,1 / ~0,3 |
+| Abseits / Ecken / Einwürfe / Abstöße | 6 / 23 / 83 / 10 | 4 / 21 / 151 / 27 | ~4 / ~10 / ~45 / ~18 |
+| Gefangene Bälle Torwart | 2 | 1 | mehrere |
+| Rechenzeit | 963 s (2,97 ms/Tick) | 1083 s (3,34 ms/Tick) | – |
+
+Die 13 Tore dieses Seeds (Ereignisfolgen aus der identischen Probe): 3 Eigentore durch Abpraller vom Körper (nach Parade, Flanke, Klärung), die übrigen fast alle Schüsse aus 7–15 m kurz nach einem Ballgewinn in Tornähe; Torhüter halten solche Schüsse selten.
+
+Bewertung: Elfmeter (4 → 0), Torschüsse, Pässe und Fouls liegen näher am Ziel, Tore pro 90 in der Probe leicht niedriger, aber weiter deutlich über 2–4. Die Ballbesitzwechsel sind **nicht** gesunken (1330 → 1449): Verluste nach Dribbling und Annahme gingen zurück, dafür kamen Tacklings (vorher gab es keine) und mehr Pässe hinzu; ein gescheitertes Stochern zählt in der Berührungsfolge als zwei Wechsel. Passquote 63 % (Ziel 75–85 %): kurze Pässe bis 10 m kommen zu 80 % an, hohe Bälle nur zu ≈ 47 % – sie entstehen vor allem, wenn der Passgeber schon bedrängt ist, und bei Standards (Einwürfe werden mit dem Fuß gespielt; 176 Einwürfe/90, meist nach Abprallern vom Körper).
+
 ## 7. Bekannte Grenzen / offene Punkte
 
-- **Spielqualität noch nicht realistisch:** Tore (~9 pro Partie), Elfmeter und Ballbesitzwechsel deutlich zu hoch, zu wenige Pässe (siehe §6). Ursachen (gemessen): Ballverluste zwischen Dribbelkontakten und nach gestoppter Annahme (0,7–1,2 s bis zur nächsten Aktion); es fehlt eine gerichtete erste Ballmitnahme.
+- **Spielqualität noch nicht realistisch:** Tore (Probe 7,5/90, volle Partie Seed 2026: 13) und Ballbesitzwechsel (≈ 1450/90) deutlich zu hoch, Passquote 63–64 % zu niedrig, zu viele Einwürfe (siehe §6). Gemessen: Torhüter halten Schüsse aus 7–15 m selten, Abpraller vom Körper führen zu Eigentoren, gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
 - Der Körper ist eine aufrechte Kapsel (r = 0,27 m); prallt der Ball dagegen, gibt es keine Dämpfung wie bei Brust/Oberschenkel.
 - Physik läuft mit ≥ 240 Hz (Rapier-Drallgrenze bei 60 Hz); ≈ 50 % mehr Rechenzeit pro Tick.
 - Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
@@ -157,11 +206,11 @@ Bewertung: Torschüsse, Einwürfe, Ecken, Abstöße und Passquote liegen deutlic
 5. **Erlebnis** – Stadion mit Shader-Zuschauern, IK-Figuren, TV-Regie inkl. taktischer Entscheidungskamera, Ton, Startbildschirm, HUD, Entscheidungspanel, Zeitraffer, Browser-Prüfskript.
 6. **Kalibrierung** – Bremsen vor Körpern, aktive Ballannahme, Passziele innerhalb des Feldes, Schussauswahl, Foul-Schwellen (gemessen über 3 Seeds).
 7. **Realismus-Kalibrierung** – Schussmechanik (Freiraum Körper/Ball, Vorhalten, Schuhspitze, Stoßzahl), Ball rollt (240 Hz), Spieler-Ballmodell mit Rutschphase, Entscheidungsrauschen auf Werteskala, xG, Direktspiel, Hechtsprung mit kippendem Oberkörper (gemessen über 6 Seeds und volle Partie).
+8. **Ballverluste** – Drallkorrektur der Schwungplanung, Standbeinbeugung, gerichtete erste Ballmitnahme, Abschirmen, Tackling, Begleittempo beim Stellen, Absichern vor dem Tor, Formation erst bei Ballkontrolle, Weg um den Ball, kalibrierte Pass-/Dribbelbewertung, Torwart verteilt nur, Regel 16 (gemessen über 6 Seeds und volle Partie).
 
 ## 9. Nächste Schritte
 
-1. Spielqualität: Ballverluste senken – gerichtete erste Ballmitnahme (Annahme in die nächste Spielrichtung), Abschirmen beim Dribbeln, Zweikampfverhalten der Verteidiger; Ziel ~250 Ballbesitzwechsel, ~900 Pässe, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
-2. Elfmeterhäufigkeit (4 in der vollen Partie) untersuchen.
+1. Spielqualität: Torwartparaden bei Schüssen aus kurzer Distanz (Reaktion, Stellungsspiel), Abpraller vom Körper dämpfen (Brust/Oberschenkel), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.

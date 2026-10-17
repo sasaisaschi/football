@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { createRoster } from '../engine/rosters';
 import { BALL_PHYSICS, applyBallForces, dragCoefficient } from './ball';
 import { PlayerBody } from './body';
-import { Legs, NO_ERROR, type StrikeError, type StrikeRequest } from './legs';
+import { Legs, NO_ERROR, rolledLaunch, type StrikeError, type StrikeRequest } from './legs';
 import { BALL_SPEC, PITCH, goalCrossed } from './pitch-geometry';
 import { PhysicsWorld } from './world';
 
@@ -56,6 +56,24 @@ describe('ball physics', () => {
     // less (≈ 35 m for perfect grip). Measured ≈ 29 m; turf values for an 8 m/s pass are 20–40 m.
     expect(travelled).toBeGreaterThan(24);
     expect(travelled).toBeLessThan(35);
+  });
+
+  it('a rolling ball touched sideways rolls on where the spin-aware launch aims, the naive launch drifts', () => {
+    // An ideal touch: the launch velocity is set, the spin of the rolling ball is kept (as after a boot contact).
+    const rollAfter = (launch: { x: number; z: number }) => {
+      const w = new PhysicsWorld();
+      w.ball.setLinvel({ x: launch.x, y: 0, z: launch.z }, true);
+      w.ball.setAngvel({ x: 0, y: 0, z: -3 / BALL_SPEC.radius }, true);
+      run(w, 0.6);
+      const v = w.ball.linvel();
+      return (Math.atan2(v.z, v.x) * 180) / Math.PI;
+    };
+    const dir = { x: Math.cos(0.6), z: Math.sin(0.6) };
+    const aimed = rolledLaunch({ x: 0, y: 0, z: -3 / BALL_SPEC.radius }, dir, 4)!;
+    expect(Math.hypot(aimed.x, aimed.z)).toBeCloseTo(4, 5);
+    expect(Math.abs(rollAfter(aimed) - (0.6 * 180) / Math.PI)).toBeLessThan(2);
+    // Without the correction the spin pulls the ball back towards its old line (here ≈ 8° short).
+    expect((0.6 * 180) / Math.PI - rollAfter({ x: dir.x * 4, z: dir.z * 4 })).toBeGreaterThan(6);
   });
 
   it('drag falls through the drag crisis and forces never accumulate between ticks', () => {
