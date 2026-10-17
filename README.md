@@ -22,9 +22,10 @@ npm run dev            # open the printed URL, choose a match length, kick off
 npm run check          # typecheck + unit/integration tests + production build
 npm run test:browser   # real browser run (local Chrome/Edge, headless) with screenshots in browser-check-output/
 npm run sim            # full 2 x 45 min autonomous match with statistics (several minutes)
+npm run probe          # several seeds in parallel (default 1-6, 2 x 10 min), statistics per 90 min; --seeds 7-12 --minutes 10 --parallel 4
 ```
 
-Keys during a match: `1`–`4` choose an option at a decision moment, `M` toggles sound.
+Keys during a match: `1`–`4` choose an option at a decision moment, `0` lets the players decide, `M` toggles sound.
 Development URL parameters: `?seed=123`, `?half=5`, `?cooldown=20`, `?autostart=1`.
 
 Technical state, measurements and limitations: see [PROJECT_REPORT.md](./PROJECT_REPORT.md).
