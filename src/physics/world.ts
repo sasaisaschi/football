@@ -7,6 +7,12 @@ export const PHYSICS_DT = 1 / 60;
 /** Largest boot travel per (sub)step. Rapier's CCD does not sweep kinematic bodies, so fast strikes need substeps. */
 const MAX_BOOT_TRAVEL = 0.06;
 const MAX_SUBSTEPS = 8;
+/**
+ * Rapier's friction contact lets a sphere gain at most ≈ 0.74 rad of spin per step, so at 60 Hz a struck ball
+ * could never spin up to rolling above ≈ 5 m/s and skidded far too long. Four substeps (240 Hz) give the
+ * textbook transition to rolling at 5/7 of the launch pace for all realistic ground balls.
+ */
+const MIN_SUBSTEPS = 4;
 
 export type ContactPart = 'boot' | 'body' | 'hands';
 export type BallContact = { kind: 'ball'; player: number; part: ContactPart };
@@ -19,7 +25,7 @@ type Owner = { player: number; part: ContactPart; body: RAPIER.RigidBody };
 export type Kinematic = { update(dt: number): void; strikeSpeedNow?(): number };
 
 /**
- * The only Rapier world of a match. Fixed 1/60 s ticks; while any boot is in a fast wind-up or strike the
+ * The only Rapier world of a match. Fixed 1/60 s ticks of at least four substeps; while any boot is in a fast wind-up or strike the
  * tick is split into substeps so the boot moves at most 6 cm per substep.
  */
 export class PhysicsWorld {
@@ -58,7 +64,7 @@ export class PhysicsWorld {
   substepsNeeded(): number {
     let fastest = 0;
     for (const l of this.legs) fastest = Math.max(fastest, l.strikeSpeedNow());
-    return Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil((fastest * PHYSICS_DT) / MAX_BOOT_TRAVEL)));
+    return Math.min(MAX_SUBSTEPS, Math.max(MIN_SUBSTEPS, Math.ceil((fastest * PHYSICS_DT) / MAX_BOOT_TRAVEL)));
   }
 
   /** Advances one tick. Body impulses must already be applied for this tick. Returns contacts in order. */

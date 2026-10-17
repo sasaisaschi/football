@@ -65,9 +65,13 @@ export class KeeperSkill {
       const point: Vec3 = { x: self.x, y: crossing.y, z: crossing.z };
       if (ctx.now - this.shotSeenAt >= reaction) {
         this.hands.reachFor(point);
-        const lateral = Math.abs(crossing.z - self.z);
-        if (!this.dived && lateral > 0.9 && crossing.t < 0.7) {
-          this.hands.dive({ x: self.x, z: crossing.z }, ctx.now, this.brain.profile.abilities.reflexes);
+        // Dive when the ball will pass outside what the arms reach standing up (low balls beside him too).
+        const sidestep = Math.min(0.8, body.limits.maxSpeed * 0.25 * crossing.t);
+        const standing: Vec3 = { x: point.x, y: point.y, z: self.z + Math.sign(crossing.z - self.z) * Math.max(0, Math.abs(crossing.z - self.z) - sidestep) };
+        // A ball at the body is blocked by it; only a ball passing beside him needs a dive, along the line.
+        const beside = crossing.z - self.z;
+        if (!this.dived && crossing.t < 0.7 && Math.abs(beside) > body.radius && !this.hands.withinReach(standing)) {
+          this.hands.dive({ x: self.x, z: self.z + Math.sign(beside) }, ctx.now, this.brain.profile.abilities.reflexes);
           this.dived = true;
         }
       }
@@ -99,7 +103,9 @@ export class KeeperSkill {
     for (const p of ctx.truth.players) {
       if (p.id === this.brain.profile.id) continue;
       const seen = this.brain.perception.playerNow(p.id, ctx.now);
-      if (seen && Math.hypot(ball.x - seen.x, ball.z - seen.z) / 8.5 < mine - 0.2) return false;
+      // A keeper comes for a loose ball in his area even when an opponent is slightly quicker to it: with
+      // hands and a big body he wins close races (measured: fewer chances and goals than waiting on the line).
+      if (seen && Math.hypot(ball.x - seen.x, ball.z - seen.z) / 8.5 < mine - 0.4) return false;
     }
     return true;
   }

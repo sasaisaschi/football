@@ -117,6 +117,8 @@ export class PlayerBrain {
     const out = this.decide(ctx);
     const order = this.userIntent;
     if (order?.type === 'move' && order.action.kind === 'tactical-foul') return out;
+    // Mid-swing the body is committed to the run the kick was planned for.
+    if (this.legs.busy()) return out;
     return { ...out, command: this.controlledApproach(out.command, ctx) };
   }
 
@@ -150,8 +152,9 @@ export class PlayerBrain {
     const believed = this.perception.ballNow(ctx.now);
     const ball = { pos: { x: believed.pos.x, z: believed.pos.z }, vel: { x: believed.vel.x, z: believed.vel.z } };
     if (this.legs.busy()) {
+      // Mid-swing the body keeps the pace the leg was planned for: the planted foot carries it through the kick.
       const v = this.body.velocity();
-      return { command: { target: { x: self.x + v.x * 0.4, z: self.z + v.z * 0.4 }, speed: this.body.speed() * 0.85 }, effort: 0.5, swing: null };
+      return { command: { target: { x: self.x + v.x * 2, z: self.z + v.z * 2 }, speed: this.body.speed() }, effort: 1, swing: null };
     }
     const order = this.userIntent;
     if (order?.type === 'move') {
@@ -269,16 +272,26 @@ export class PlayerBrain {
     const speed = Math.hypot(pic.ball.vel.x, pic.ball.vel.z);
     const self = this.body.position();
     const relDir = (pic.ball.vel.x * (self.x - pic.ball.pos.x) + pic.ball.vel.z * (self.z - pic.ball.pos.z));
-    if (!ctx.restart && speed > 7 && relDir > 0) return { kind: 'control' };
     let options = evaluateOptions(pic);
+    // A ball played towards me is first brought under control, unless a safe first-time pass or a real
+    // chance is on: a first-time kick has to meet the ball before it reaches the body.
+    if (!ctx.restart && speed > 2.5 && relDir > 0) {
+      const first = options[0];
+      if (!first || !((first.kind === 'pass' && first.success > 0.65) || (first.kind === 'shot' && first.success > 0.15))) {
+        this.lastOptions = options;
+        return { kind: 'control' };
+      }
+    }
     if (ctx.restart) options = options.filter(o => o.kind === 'pass' || o.kind === 'clear');
     this.lastOptions = options;
-    const noise = 0.03 * (1.2 - this.profile.abilities.vision);
+    // Option values are expected-threat differences of a few thousandths in midfield; misjudgement has to be
+    // on that scale, or it would swamp the evaluation and turn every choice into a coin toss.
+    const noise = 0.004 * (1.2 - this.profile.abilities.vision);
     let best = options[0], bestScore = -Infinity;
     for (const o of options) {
       // The coach's risk setting trades safety for threat: bold teams value forward threat, cautious ones possession.
       const forward = o.kind === 'shot' || (o.kind === 'pass' && 'aim' in o.action && ctx.sign * (o.action.aim.x - pic.ball.pos.x) > 8) || o.kind === 'dribble';
-      const riskBonus = (ctx.instruction.risk - 0.5) * (forward ? 0.04 : -0.02);
+      const riskBonus = (ctx.instruction.risk - 0.5) * (forward ? 0.01 : -0.005);
       const score = o.value + riskBonus + this.rng.gauss() * noise;
       if (score > bestScore) { bestScore = score; best = o; }
     }

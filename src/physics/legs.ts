@@ -3,16 +3,20 @@ import type { Vec3 } from '../engine/types';
 import type { PlayerBody } from './body';
 import { BALL_SPEC } from './pitch-geometry';
 import { GROUPS } from './groups';
+import { BALL_PHYSICS } from './ball';
 
 /**
  * Two kinematic boots per player. A boot only moves along a planned, bounded leg swing; Rapier resolves the
  * actual boot/ball contact. If the ball is not where the boot arrives, nothing happens (an air shot).
  *
  * Known approximation: a kinematic boot has unbounded mass, so the ball leaves at ≈ (1 + e)·boot speed
- * (e ≈ 0.45 measured in Rapier) instead of the ≈ 1.2–1.35 of a real foot with finite effective mass.
+ * (e = 0.575, Rapier's average of boot and ball restitution) instead of the ≈ 1.2–1.35 of a real foot with finite effective mass.
  */
 export const BOOT = { radius: 0.05, halfLength: 0.1, restitution: 0.5, friction: 0.7 } as const;
-export const BOOT_RESTITUTION = 0.45;
+/** Effective boot/ball restitution: Rapier averages the two coefficients (0.5 and the ball's 0.65). */
+export const BOOT_RESTITUTION = (BOOT.restitution + BALL_PHYSICS.restitution) / 2;
+/** Share of the ball's slip across the boot that the contact removes (measured in Rapier: ≈ 0.55–0.85, pace-dependent). */
+export const BOOT_GRIP = 0.7;
 /** Highest launch angle reachable by striking under the ball centre without the boot entering the turf. */
 export const MAX_ELEVATION = 0.45;
 /** Fastest boot speed relative to the hip (elite instep kicks ≈ 20–25 m/s). */
@@ -125,6 +129,9 @@ export class Legs {
     const bodyP = this.owner.body.translation(), bodyV = this.owner.body.linvel();
     const ballP = ball.translation(), ballV = ball.linvel();
     
+    // Ball velocity the boot will meet (gravity acts on a ball in the air during the wind-up).
+    const airborne = ballP.y > BALL_SPEC.radius + 0.02;
+    const meetV = (t: number): Vec3 => ({ x: ballV.x, y: ballV.y - (airborne ? BALL_PHYSICS.gravity * t : 0), z: ballV.z });
     let direction: Vec3, normal: Vec3, worldBootSpeed: number;
     if (req.technique === 'cushion') {
       const h = Math.hypot(ballV.x, ballV.z);
@@ -136,15 +143,47 @@ export class Legs {
     } else {
       const a = Math.atan2(req.dirX, req.dirZ) + err.angle;
       const el = Math.min(Math.max(0, req.elevation), MAX_ELEVATION);
-      // The boot travels level; lift comes only from striking below the ball centre.
-      direction = { x: Math.sin(a), y: 0, z: Math.cos(a) };
-      normal = { x: Math.sin(a) * Math.cos(el), y: Math.sin(el), z: Math.cos(a) * Math.cos(el) };
-      const incoming = ballV.x * normal.x + ballV.y * normal.y + ballV.z * normal.z;
-      worldBootSpeed = (req.ballSpeed * err.speed + BOOT_RESTITUTION * incoming) / ((1 + BOOT_RESTITUTION) * Math.cos(el));
+      // A contact pushes along its normal; across it the ball keeps its own motion except for what the grip of
+      // the boot takes off. So the player meets a moving ball off-line (the intuitive "aim off"): the normal is
+      // chosen so that impulse plus the remaining cross motion add up to the wanted velocity.
+      const v = meetV(tech.windup + tech.back / 10);
+      const s = req.ballSpeed * err.speed;
+      const target = { x: Math.sin(a) * Math.cos(el) * s, y: Math.sin(el) * s, z: Math.cos(a) * Math.cos(el) * s };
+      let n = { x: target.x - v.x, y: target.y - v.y, z: target.z - v.z };
+      for (let i = 0; i < 4; i++) {
+        const nl = Math.hypot(n.x, n.y, n.z) || 1;
+        const along = (v.x * n.x + v.y * n.y + v.z * n.z) / nl;
+        const keep = 1 - BOOT_GRIP;
+        n = {
+          x: target.x - keep * (v.x - (along * n.x) / nl),
+          y: target.y - keep * (v.y - (along * n.y) / nl),
+          z: target.z - keep * (v.z - (along * n.z) / nl),
+        };
+      }
+      const wh = Math.hypot(n.x, n.z);
+      if (wh < 0.3) return null;
+      // Lift comes only from striking below the ball centre, so the normal's elevation is bounded.
+      const nel = Math.min(MAX_ELEVATION, Math.max(0, Math.atan2(n.y, wh)));
+      direction = { x: n.x / wh, y: 0, z: n.z / wh };
+      normal = { x: direction.x * Math.cos(nel), y: Math.sin(nel), z: direction.z * Math.cos(nel) };
+      const incoming = v.x * normal.x + v.y * normal.y + v.z * normal.z;
+      const impulse = target.x * normal.x + target.y * normal.y + target.z * normal.z - incoming;
+      // The boot travels level: its normal speed is the horizontal speed times cos(elevation).
+      worldBootSpeed = (impulse / (1 + BOOT_RESTITUTION) + incoming) / Math.cos(nel);
     }
-    const bodyAlong = bodyV.x * direction.x + bodyV.z * direction.z;
-    const strikeSpeed = Math.min(MAX_BOOT_SPEED, Math.max(0.6, worldBootSpeed - bodyAlong));
+    // In the body's frame the boot has to supply what the running body does not already carry. A cushion
+    // simply gives with the ball along its line.
+    const swingX = direction.x * worldBootSpeed - bodyV.x, swingZ = direction.z * worldBootSpeed - bodyV.z;
+    const cushion = req.technique === 'cushion';
+    const swingLen = cushion ? swingX * direction.x + swingZ * direction.z : Math.hypot(swingX, swingZ);
+    if (!cushion && (swingLen < 0.3 || swingX * direction.x + swingZ * direction.z <= 0)) return null;
+    const path: Vec3 = cushion ? direction : { x: swingX / swingLen, y: 0, z: swingZ / swingLen };
+    // The boot meets the ball along its velocity relative to the ball; it is held along that line so the
+    // striking surface, not the side of the boot, arrives first.
+    const mx = direction.x * worldBootSpeed - ballV.x, mz = direction.z * worldBootSpeed - ballV.z, ml = Math.hypot(mx, mz);
+    const meet: Vec3 = cushion || ml < 0.3 ? direction : { x: mx / ml, y: 0, z: mz / ml };
     // More pace than a leg can produce is capped: the swing still happens, the ball is simply slower.
+    const strikeSpeed = Math.min(MAX_BOOT_SPEED, Math.max(0.6, swingLen));
 
     const reach = BOOT.radius + BALL_SPEC.radius;
     const contactTime = tech.windup + tech.back / strikeSpeed + err.timing;
@@ -155,14 +194,26 @@ export class Legs {
     };
     const lateral = { x: normal.z, y: 0, z: -normal.x };
     const ln = Math.hypot(lateral.x, lateral.z) || 1;
+    // An instep strikes with the front of the boot, which leads the capsule centre by its half length.
     let contact = add(relBall, normal, -reach);
+    if (req.technique === 'instep') contact = add(contact, meet, -BOOT.halfLength);
     contact = add(contact, { x: lateral.x / ln, y: 0, z: lateral.z / ln }, err.lateral);
     contact.y = Math.max(BOOT.radius * 0.7, contact.y + err.vertical);
 
-    const windupEnd = add(contact, direction, -tech.back);
-    const strikeEnd = add(contact, direction, 0.25);
-    const followEnd = add(strikeEnd, direction, tech.follow * 0.5);
+    const windupEnd = add(contact, path, -tech.back);
+    const strikeEnd = add(contact, path, 0.25);
+    const followEnd = add(strikeEnd, path, tech.follow * 0.5);
     followEnd.y += 0.15;
+
+    // The own body must not run into the ball before the boot gets there (it would deflect it first).
+    const rx = ballP.x - bodyP.x, rz = ballP.z - bodyP.z;
+    const vx = ballV.x - bodyV.x, vz = ballV.z - bodyV.z;
+    const tMin = Math.max(0, Math.min(contactTime, -(rx * vx + rz * vz) / (vx * vx + vz * vz || 1)));
+    // Margin covers the rolling deceleration (≈ 0.7 m/s²) the straight-line estimate ignores.
+    // Near the turf the capsule's rounded bottom leaves a little more room than its full radius.
+    const touching = this.owner.radius + BALL_SPEC.radius, below = Math.max(0, this.owner.radius - ballP.y);
+    const margin = 0.03 + 0.35 * contactTime * contactTime;
+    if (Math.hypot(rx + vx * tMin, rz + vz * tMin) < Math.sqrt(touching * touching - below * below) + margin) return null;
 
     const hip = this.hip(req.side);
     if (len(sub(contact, hip)) > this.legLength) return null;
@@ -171,12 +222,9 @@ export class Legs {
     const f = this.owner.facing();
     if (contact.x * f.x + contact.z * f.z < -0.1) return null;
 
-    const h = Math.hypot(direction.x, direction.z) || 1;
-    const axis = req.technique === 'instep'
-      ? { x: direction.x / h, y: 0, z: direction.z / h }
-      : { x: direction.z / h, y: 0, z: -direction.x / h };
+    const axis = req.technique === 'instep' ? meet : { x: direction.z, y: 0, z: -direction.x };
     return {
-      technique: req.technique, side: req.side, windupEnd, contact, strikeEnd, followEnd, direction,
+      technique: req.technique, side: req.side, windupEnd, contact, strikeEnd, followEnd, direction: path,
       windupTime: tech.windup + Math.max(0, err.timing), strikeSpeed, followTime: tech.followTime, recoverTime: tech.recover, axis,
     };
   }
