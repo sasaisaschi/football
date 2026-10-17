@@ -17,6 +17,8 @@ export function techniqueFor(action: BallAction): Technique {
 }
 
 const FACING_TOLERANCE: Record<Technique, number> = { instep: 0.6, inside: 1.1, cushion: Math.PI };
+/** Body centre to ball centre when setting up a kick: body radius + ball radius + room for the swing. */
+const STRIKE_STANDOFF = 0.55;
 
 /** Horizontal direction and launch elevation an action asks for, seen from the ball. */
 export function actionVector(action: BallAction, ball: Vec2): { dir: Vec2; elevation: number; speed: number } {
@@ -44,19 +46,22 @@ export function actionVector(action: BallAction, ball: Vec2): { dir: Vec2; eleva
 /** Where the body should be and face to strike the ball with the chosen foot. */
 export function approach(body: PlayerBody, legs: Legs, action: BallAction, ball: { pos: Vec2; vel: Vec2 }, intercept: Vec2): BodyCommand {
   const p = body.position();
-  const distance = Math.hypot(ball.pos.x - p.x, ball.pos.z - p.z);
   if (action.kind === 'control') {
     return { target: intercept, speed: body.limits.maxSpeed * 0.85, face: ball.pos };
   }
-  const lead = Math.min(0.35, distance / 8);
-  const bx = ball.pos.x + ball.vel.x * lead, bz = ball.pos.z + ball.vel.z * lead;
+  // Aim for the striking spot a moment ahead and arrive there in that time: the run matches the ball's pace
+  // instead of braking onto a point the ball has already left (or running into it).
+  const horizon = 0.4;
+  const bx = ball.pos.x + ball.vel.x * horizon, bz = ball.pos.z + ball.vel.z * horizon;
   const { dir } = actionVector(action, ball.pos);
   const side = legs.sideTowards(bx, bz) === 1 ? 1 : -1;
-  // Right of the kick direction is (−dir.z, dir.x); the ball should end up in front of the kicking boot.
+  // Right of the kick direction is (−dir.z, dir.x); the ball should end up in front of the kicking boot,
+  // a stride ahead of the body so the leg can swing through without the body touching the ball first.
   const rx = -dir.z, rz = dir.x;
+  const spot = { x: bx - dir.x * STRIKE_STANDOFF - rx * side * 0.11, z: bz - dir.z * STRIKE_STANDOFF - rz * side * 0.11 };
   return {
-    target: { x: bx - dir.x * 0.42 - rx * side * 0.11, z: bz - dir.z * 0.42 - rz * side * 0.11 },
-    speed: Math.min(body.limits.maxSpeed, 1.4 + distance * 2.3),
+    target: spot,
+    speed: Math.min(body.limits.maxSpeed, Math.hypot(spot.x - p.x, spot.z - p.z) / horizon),
     face: { x: p.x + dir.x * 5, z: p.z + dir.z * 5 },
   };
 }

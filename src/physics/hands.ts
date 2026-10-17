@@ -11,6 +11,9 @@ import { GROUPS } from './groups';
  */
 export const HANDS = { radius: 0.15, maxSpeed: 9, armReach: 0.78, restitution: 0.25, friction: 1 } as const;
 
+/** Dive kinematics: the torso falls sideways about the feet; afterwards the keeper has to get up again. */
+const DIVE = { maxTilt: 1.4, fallTime: 0.3, lowestShoulder: 0.3, recover: 1.4 } as const;
+
 export class KeeperHands {
   readonly body: RAPIER.RigidBody;
   readonly collider: RAPIER.Collider;
@@ -21,6 +24,9 @@ export class KeeperHands {
   heldSince = 0;
   diveUntil = 0;
   recoverUntil = 0;
+  /** Time since the current dive started (−1 when standing) and its horizontal direction. */
+  private diveTime = -1;
+  private diveDir = { x: 0, z: 0 };
 
   constructor(private readonly world: RAPIER.World, private readonly keeper: PlayerBody) {
     this.rel = this.restRel();
@@ -40,6 +46,18 @@ export class KeeperHands {
 
   shoulderHeight(): number {
     return this.keeper.height * 0.82;
+  }
+
+  /**
+   * Shoulder relative to the keeper's ground point. In a dive the body falls sideways about the feet, so the
+   * shoulder swings out and down (up to ~80° in 0.3 s) and the arms reach low balls beside him.
+   */
+  shoulder(): Vec3 {
+    const h = this.shoulderHeight();
+    if (this.diveTime < 0) return { x: 0, y: h, z: 0 };
+    const tilt = Math.min(DIVE.maxTilt, (this.diveTime / DIVE.fallTime) * DIVE.maxTilt);
+    const out = h * Math.sin(tilt);
+    return { x: this.diveDir.x * out, y: Math.max(DIVE.lowestShoulder, h * Math.cos(tilt)), z: this.diveDir.z * out };
   }
 
   restRel(): Vec3 {
@@ -64,11 +82,18 @@ export class KeeperHands {
   reachFor(world: Vec3): void {
     const p = this.keeper.body.translation();
     const rel = { x: world.x - p.x, y: world.y, z: world.z - p.z };
-    const shoulder = { x: 0, y: this.shoulderHeight(), z: 0 };
+    const shoulder = this.shoulder();
     const dx = rel.x - shoulder.x, dy = rel.y - shoulder.y, dz = rel.z - shoulder.z;
     const d = Math.hypot(dx, dy, dz);
     const k = d > HANDS.armReach + 0.25 ? (HANDS.armReach + 0.25) / d : 1;
     this.target = { x: shoulder.x + dx * k, y: Math.max(HANDS.radius, shoulder.y + dy * k), z: shoulder.z + dz * k };
+  }
+
+  /** Can the hands get to a world point from the current posture (without diving)? */
+  withinReach(world: Vec3): boolean {
+    const p = this.keeper.body.translation();
+    const sh = this.shoulder();
+    return Math.hypot(world.x - p.x - sh.x, world.y - sh.y, world.z - p.z - sh.z) <= HANDS.armReach + 0.25 - HANDS.radius;
   }
 
   /** True once the hands have reached their current target (within `tolerance` metres). */
@@ -89,7 +114,9 @@ export class KeeperHands {
     const v = this.keeper.body.linvel();
     this.keeper.body.setLinvel({ x: v.x * 0.3 + (dx / d) * speed, y: v.y, z: v.z * 0.3 + (dz / d) * speed }, true);
     this.diveUntil = now + 0.55;
-    this.recoverUntil = now + 1.4;
+    this.recoverUntil = now + DIVE.recover;
+    this.diveDir = { x: dx / d, z: dz / d };
+    this.diveTime = 0;
   }
 
   /** Catch: attach the ball to the hands with a spherical joint (the ball can still spin, it cannot leave). */
@@ -119,6 +146,7 @@ export class KeeperHands {
 
   /** Moves the hands towards their target at limited speed. Call before every physics (sub)step. */
   update(dt: number): void {
+    if (this.diveTime >= 0) this.diveTime = this.diveTime + dt < DIVE.recover ? this.diveTime + dt : -1;
     const step = HANDS.maxSpeed * dt;
     const d = { x: this.target.x - this.rel.x, y: this.target.y - this.rel.y, z: this.target.z - this.rel.z };
     const n = Math.hypot(d.x, d.y, d.z);

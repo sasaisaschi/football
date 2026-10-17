@@ -1,6 +1,6 @@
 # THE 12TH MAN – Technical Report & Development Guide
 
-**Stand:** 17.10.2026 · Branch `claude/12th-man-rebuild` (vom bereinigten `main` nach PR #3, ohne übernommenen Altcode).
+**Stand:** 17.10.2026 · Rebuild aus PR #4 (gemergt), Realismus-Kalibrierung auf Branch `claude/confident-mendeleev-0eee62`.
 **Rolle:** verbindliche Source of Truth für Architektur, tatsächlichen Stand, Versionen, Tests, Messwerte und nächste Schritte.
 **Kennzeichnung:** **Implementiert** = Code vorhanden · **Getestet** = durch tatsächlich ausgeführte Tests belegt · **Gemessen** = Zahl aus einem tatsächlichen Lauf · **Geplant** = nicht vorhanden · **Nicht geprüft** = vorhanden, ohne Nachweis.
 
@@ -74,12 +74,32 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 | 17.10.2026 | `npm run check` | `tsc` ohne Fehler, **6 Testdateien / 45 Tests bestanden** (1 Datei übersprungen: Langsimulation, nur über `npm run sim`), `vite build` erfolgreich |
 | 17.10.2026 | `npm run test:browser` (Chrome 1600 × 900, ANGLE/D3D11, Intel Iris Xe) | `ok: true`, keine Konsolenfehler/-warnungen, Uhr läuft, **50–55 FPS**, echter Entscheidungsmoment erschienen, Simulation währenddessen eingefroren, Klick als `user`-Entscheidung protokolliert, Teamanweisung angewendet |
 | 17.10.2026 | `npm run sim` (2 × 45 min, Seed 2026) | siehe §6 |
+| 17.10.2026 | Realismus-Kalibrierung: `npm run check` | `tsc` ohne Fehler, **6 Testdateien / 45 Tests bestanden**, `vite build` erfolgreich |
+| 17.10.2026 | Realismus-Kalibrierung: `npm run test:browser` (gleiche Hardware) | `ok: true`, keine Konsolenfehler/-warnungen, Uhr läuft, **45 FPS** (gemessen, während parallel `npm run sim` lief), Entscheidungsmoment erschienen, eingefroren, Entscheidung protokolliert |
+| 17.10.2026 | Realismus-Kalibrierung: `npm run sim -- --silent=false` (2 × 45 min, Seed 2026) und Mehr-Seed-Probe (6 Seeds × 2 × 10 min) | siehe §6 |
 
 **Testinhalte:** Feldmaße/Regel 9/10, Zufall reproduzierbar; Ballaufprall, Rollweg, keine Kraftakkumulation, Magnus-Richtung, Netz/Pfosten/Latte; Beschleunigungsgrenzen, 22 Körper stabil, bitgleiche Wiederholung; Fußkontakt (Nähe kickt nie, Richtung/Tempo, Spannstoß mit Lift, Richtungsabhängigkeit, Fehltreffer mit Drall, Luftloch, Reichweite, Ballannahme); Schiedsrichter (Abseits, Einwurf-Ausnahme, Seitenwechsel, Ecke/Abstoß/Einwurf/Tor/Eigentor, Foul von hinten, Zweikampf ≠ Foul, Notbremse = Rot + Elfmeter, taktisches Foul = Gelb, Gelb-Rot, Mitspieler-Kontakt, Handspiel außerhalb, Rückpass); vollständige Partie ohne ungültige Zustandsübergänge, gleicher Seed = gleiche Partie, kein kollektives Ballverfolgen, Torwart-Ergebnisse variieren, Ballfreigabe innerhalb von 6 s; Director (Moment friert ein, jede angebotene Option wird als echter Schwung ausgeführt, gleiche Lage + andere Entscheidung → anderer Verlauf, gleiche Entscheidung → unterschiedlicher Erfolg, Momente selten und mit Abstand); Quelltext „kein Magnetismus“.
 
 ## 6. Messwerte
 
-**Fußkontakt:** Rapier-CCD überstreicht kinematische Körper nicht; ohne Teilschritte springt ein 18-m/s-Schuh in den Ball. Daher Teilschritte während Ausholen/Schlag (≤ 6 cm pro Teilschritt). Kinematischer Schuh ⇒ Ball ≈ 1,45 × Schuhgeschwindigkeit (real eher 1,2–1,35).
+**Fußkontakt:** Rapier-CCD überstreicht kinematische Körper nicht; ohne Teilschritte springt ein 18-m/s-Schuh in den Ball. Daher Teilschritte während Ausholen/Schlag (≤ 6 cm pro Teilschritt). Kinematischer Schuh ⇒ Ball ≈ (1 + e) × Schuhgeschwindigkeit mit e = 0,575 (Rapier mittelt Schuh 0,5 und Ball 0,65; real eher 1,2–1,35).
+
+**Ball rollt erst ab 240 Hz korrekt (gemessen):** Bei 60 Hz nimmt eine Kugel über den Reibkontakt pro Schritt höchstens ≈ 0,74 rad Drall auf (≈ 44,6 rad/s). Ein flach gespielter Ball (ohne Drall) rutschte dadurch, bis er unter ≈ 5 m/s fiel (12,9 → 4,75 m/s nach 1 s). Reines Rapier bei 240 Hz liefert den Lehrbuchübergang ins Rollen bei 5/7 der Abspielgeschwindigkeit (12,9 → 9,19 m/s). Die Physik läuft daher immer mit ≥ 4 Teilschritten (Kosten: 2,97 statt 1,95 ms pro Tick im Node-Test). Der Rolltest erwartet jetzt 24–35 m statt 15–25 m aus 8 m/s: Ein rollender Ball nimmt seinen Drall durch den Kontakt mit und wird von den Mittelpunktskräften weniger gebremst (gemessen ≈ 29 m; die alte Spanne passte nur wegen der Drallgrenze).
+
+**Schussmechanik (gemessen, isolierter Test ohne Motorrauschen):** Vor der Korrektur traf bei laufendem Spieler oft zuerst der eigene Körper den Ball (Abstand Körper–Ball 0,42 m bei 0,38 m Berührabstand) → 10–60° Richtungsfehler. Danach: alle ausführbaren Stöße ≤ 6,5° Richtung und ≤ 3 % Tempo bei 4 m/s Lauf. Im Spiel (inkl. Motorrauschen, Median): Pässe 25° → 6–11°, Schüsse 26–35° → 4–10°.
+
+**Realismus-Kalibrierung – Mehr-Seed-Probe** (temporärer Ereignis-Probe-Test, 2 × 10 min je Seed, hochgerechnet auf 90 min):
+
+| pro 90 min | vorher (Seeds 1–3) | nachher (Seeds 1–3) | nachher (Seeds 4–6) | realer Richtwert |
+| --- | --- | --- | --- | --- |
+| Tore | 13,5 | 12,0 | 6,0 | ~2,7 |
+| Torschüsse / davon aufs Tor | 59 / 12 | 48 / 26 | 48 / 23 | ~25 / ~9 |
+| Pässe / Passquote | 896 / 48 % | 527 / 67 % | 600 / 65 % | ~900 / 75–85 % |
+| Einwürfe / Ecken / Abstöße | 170 / 30 / 56 | 84 / 18 / 27 | 107 / 38 / 41 | ~45 / ~10 / ~18 |
+| Fouls | 39 | 38 | 33 | ~22 |
+| Gefangene Bälle Torwart | 2 | 5 | 5 | mehrere |
+
+Die Kurzspiel-Probe zählt höhere Foulraten als die volle Partie (auch vor der Kalibrierung: 39 vs. 26).
 
 **Kalibrierung Spielgeschehen** (Mittel aus 3 Seeds, je 2 × 5 min, hochgerechnet auf 90 min):
 
@@ -92,24 +112,31 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 
 Behobene Ursachen: Torwart nahm Rückpässe nicht mit dem Fuß an (Eigentore), Torwart konnte einen gefangenen Ball nie loslassen (Armreichweite) und wurde dann minutenlang „angeschossen“, Spieler sprinteten ungebremst in Gegner, Torwartwahrnehmung wurde nicht aktualisiert, Hechtsprung wurde sofort abgebremst, Schuhe fuhren beim Start über den Anstoßpunkt.
 
-**Volle Partie (`npm run sim`, 2 × 45 min, Seed 2026, 17.10.2026, nach allen Korrekturen):** Partie läuft fehlerfrei bis Abpfiff; 632 s Rechenzeit (1,95 ms pro Physikschritt im Node-Test, parallel zu anderen Läufen).
+**Volle Partie (`npm run sim`, 2 × 45 min, Seed 2026, 17.10.2026):** läuft fehlerfrei bis Abpfiff. Vitest 5 zeigt die Statistik nur mit `npm run sim -- --silent=false`.
 
-| Messwert | Ergebnis | realer Richtwert |
-| --- | --- | --- |
-| Ergebnis | 1 : 8 | ~1,5 : 1,2 |
-| Torschüsse | 59 / 26 | ~13 / 12 |
-| Pässe / Passquote (nächster Kontakt durch Mitspieler) | 915 / 47 % | ~900 / ~80 % |
-| Ballbesitz | 48 % / 52 % | – |
-| Ball im Spiel | 79 % | ~60 % |
-| Fouls / Gelb / Rot / Elfmeter | 26 / 2 / 0 / 1 | ~22 / ~4 / ~0,1 / ~0,3 |
-| Abseits / Ecken / Einwürfe / Abstöße | 6 / 38 / 159 / 75 | ~4 / ~10 / ~45 / ~18 |
-| Gefangene Bälle Torwart | 2 | mehrere |
+| Messwert | vor Kalibrierung | nach Kalibrierung | realer Richtwert |
+| --- | --- | --- | --- |
+| Ergebnis | 1 : 8 | 8 : 1 | ~1,5 : 1,2 |
+| Torschüsse | 59 / 26 | 21 / 11 | ~13 / 12 |
+| Pässe / Passquote (nächster Kontakt durch Mitspieler) | 915 / 47 % | 368 / 67 % | ~900 / ~80 % |
+| Ballbesitz | 48 % / 52 % | 51 % / 49 % | – |
+| Ball im Spiel | 79 % | 51 % | ~60 % |
+| Fouls / Gelb / Rot / Elfmeter | 26 / 2 / 0 / 1 | 18 / 3 / 0 / 4 | ~22 / ~4 / ~0,1 / ~0,3 |
+| Abseits / Ecken / Einwürfe / Abstöße | 6 / 38 / 159 / 75 | 6 / 23 / 83 / 10 | ~4 / ~10 / ~45 / ~18 |
+| Gefangene Bälle Torwart | 2 | 2 | mehrere |
+| Rechenzeit | 632 s (1,95 ms/Tick) | 963 s (2,97 ms/Tick) | – |
 
-Bewertung: Foulrate realistisch; Torschüsse, Tore, Ausbälle und Passquote sind deutlich unrealistisch. Die frühere 2 × 10-Minuten-Messung zeigte 75 % Passquote, die volle Partie 47 % – die Kennzahl schwankt stark zwischen Seeds und Spielständen und braucht eine Messreihe über mehrere Seeds.
+Bewertung: Torschüsse, Einwürfe, Ecken, Abstöße und Passquote liegen deutlich näher am Richtwert; Tore (9 pro Partie) und Elfmeter (4) nicht, Fouls (18) leicht unter dem Zielbereich 20–30. Zu wenige Pässe (368), weil viel gedribbelt wird. Ursache des Rests (gemessen in der Probe): ≈ 1400 Ballbesitzwechsel pro 90 min (real ~250), vor allem Ballverluste zwischen Dribbelkontakten und nach gestoppter Ballannahme; daraus entstehen Chancen aus Nahdistanz (Tore fast nur aus 4–13 m).
+
+**Behobene Ursachen (Realismus-Kalibrierung):** eigener Körper traf den Ball vor dem Schuh, Körper bremste mitten im Schwung; Beinplan hielt für Ball- und Körperbewegung nicht vor (Kontakt stößt nur entlang der Normalen), Spannstoß rechnete mit Schuhmitte statt Spitze; 60-Hz-Drallgrenze und Spieler-Ballmodell ohne Rutschphase; Entscheidungsrauschen (σ 0,015–0,03) war größer als die Wertunterschiede der Optionen (meist < 0,02) → Wahl fast zufällig; xG auf Distanz ≈ doppelt zu hoch; hohe Bälle zu optimistisch bewertet (gemessen ~50 % behalten); jeder zulaufende Ball wurde gestoppt, auch wenn ein sicherer Direktpass möglich war; Hechtsprung mit fester Schulterhöhe (flache Bälle neben dem Torwart unerreichbar) und Sprung in Zufallsrichtung bei Bällen auf den Körper; Torwart kommt jetzt auch bei knappen Wettläufen (bis 0,4 s Rückstand) zum losen Ball (6 Seeds: 14,3 → 9,0 Tore/90).
+
+**Verworfen (gemessen schlechter):** enge Ballführung unter Druck (mehr Ballverluste), Dribbeln in alle Richtungen bzw. Raum ab dem ersten Schritt (27–36 Tore/90), schärfere Pässe mit 5,5 m/s Ankunft (20 Tore/90), Torwart bleibt eher auf der Linie (29 Tore/90).
 
 ## 7. Bekannte Grenzen / offene Punkte
 
-- **Spielqualität noch nicht realistisch:** zu viele Schüsse, Tore und Ausbälle, Fouls ≈ doppelt so häufig wie real (siehe §6). Ursachen liegen v. a. in Passgenauigkeit bei hohem Tempo, Ballannahme unter Druck und Schussauswahl.
+- **Spielqualität noch nicht realistisch:** Tore (~9 pro Partie), Elfmeter und Ballbesitzwechsel deutlich zu hoch, zu wenige Pässe (siehe §6). Ursachen (gemessen): Ballverluste zwischen Dribbelkontakten und nach gestoppter Annahme (0,7–1,2 s bis zur nächsten Aktion); es fehlt eine gerichtete erste Ballmitnahme.
+- Der Körper ist eine aufrechte Kapsel (r = 0,27 m); prallt der Ball dagegen, gibt es keine Dämpfung wie bei Brust/Oberschenkel.
+- Physik läuft mit ≥ 240 Hz (Rapier-Drallgrenze bei 60 Hz); ≈ 50 % mehr Rechenzeit pro Tick.
 - Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
 - Einwurf wird mit dem Fuß ausgeführt; Abseits nutzt Körpermittelpunkte und nur „spielt den Ball“ als Beteiligung; absichtliches Spiel und Abpraller werden nicht unterschieden.
 - Fouls nur aus Körperkontakten; Schuh-gegen-Bein-Kontakte (Grätschen) gibt es nicht.
@@ -129,10 +156,12 @@ Bewertung: Foulrate realistisch; Torschüsse, Tore, Ausbälle und Passquote sind
 4. **Der zwölfte Mann** – Director vor der Spielerentscheidung, Optionen aus der Optionsbewertung des Spielers selbst, Bewegungs- und Teamanweisungen des Benutzers.
 5. **Erlebnis** – Stadion mit Shader-Zuschauern, IK-Figuren, TV-Regie inkl. taktischer Entscheidungskamera, Ton, Startbildschirm, HUD, Entscheidungspanel, Zeitraffer, Browser-Prüfskript.
 6. **Kalibrierung** – Bremsen vor Körpern, aktive Ballannahme, Passziele innerhalb des Feldes, Schussauswahl, Foul-Schwellen (gemessen über 3 Seeds).
+7. **Realismus-Kalibrierung** – Schussmechanik (Freiraum Körper/Ball, Vorhalten, Schuhspitze, Stoßzahl), Ball rollt (240 Hz), Spieler-Ballmodell mit Rutschphase, Entscheidungsrauschen auf Werteskala, xG, Direktspiel, Hechtsprung mit kippendem Oberkörper (gemessen über 6 Seeds und volle Partie).
 
 ## 9. Nächste Schritte
 
-1. Spielqualität: Passgenauigkeit/Annahme unter Druck, Schussauswahl und Torwart-Positionierung verbessern, bis Schüsse/Tore/Ausbälle im realen Bereich liegen (Messung über `npm run sim` mit mehreren Seeds).
+1. Spielqualität: Ballverluste senken – gerichtete erste Ballmitnahme (Annahme in die nächste Spielrichtung), Abschirmen beim Dribbeln, Zweikampfverhalten der Verteidiger; Ziel ~250 Ballbesitzwechsel, ~900 Pässe, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
+2. Elfmeterhäufigkeit (4 in der vollen Partie) untersuchen.
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.

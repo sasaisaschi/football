@@ -18,6 +18,9 @@ export type Picture = {
   offsideLineU: number;
 };
 
+/** Pace a ground pass should still have on arrival: firm enough not to give defenders time (m/s). */
+const PASS_ARRIVAL = 3.5;
+
 export type OptionKind = 'shot' | 'pass' | 'dribble' | 'clear';
 /** One evaluated ball action. `value` is expected goal threat gained minus threat conceded on failure. */
 export type EvaluatedOption = {
@@ -71,7 +74,8 @@ export function shotXg(pic: Picture, from: Vec2, aim: Vec2): number {
     if (o.profile.role === 'GK') continue;
     if (segmentDistance(o.pos, from, aim).d < 0.8) blockers++;
   }
-  const base = Math.min(0.75, 0.02 + 0.95 * Math.pow(angle / 1.3, 1.25) * Math.exp(-dist / 28));
+  // Calibrated to common open-play xG values: ≈ 0.26 at 11 m, 0.12 at 16 m, 0.065 at 20 m, 0.03 at 25 m (central).
+  const base = Math.min(0.75, 1.1 * angle * Math.exp(-dist / 11));
   return base * Math.pow(0.55, blockers) * (1 - 0.35 * pressureOn(pic)) * (0.75 + 0.5 * pic.self.abilities.shooting);
 }
 
@@ -124,10 +128,11 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     const u = toTeam(sign, target).u;
     if (u > pic.offsideLineU - 0.01 && u > toTeam(sign, from).u) continue; // receiver would be offside
     const td = Math.hypot(target.x - from.x, target.z - from.z);
-    const ground = groundPassSpeed(td, 3.5);
+    const ground = groundPassSpeed(td, PASS_ARRIVAL);
     const groundSafe = laneSafety(pic, from, target, ground, false, 0);
     const loftSpeed = loftedPassSpeed(td, Math.min(MAX_ELEVATION, 0.42));
-    const loftSafe = td > 16 ? laneSafety(pic, from, target, loftSpeed, true, loftedTime(loftSpeed, 0.42)) * 0.8 : 0;
+    // A dropping ball is much harder to bring down than a rolling one (measured: about half are kept).
+    const loftSafe = td > 16 ? laneSafety(pic, from, target, loftSpeed, true, loftedTime(loftSpeed, 0.42)) * 0.5 : 0;
     const lofted = loftSafe > groundSafe;
     const accuracy = Math.exp(-td / (35 + 45 * pic.self.abilities.passing)) * (1 - 0.25 * pressure);
     let space = 9;

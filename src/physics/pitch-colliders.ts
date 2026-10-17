@@ -2,6 +2,9 @@ import RAPIER from '@dimforge/rapier3d-simd-compat';
 import { GROUPS } from './groups';
 import { PITCH } from './pitch-geometry';
 
+/** Turf friction and restitution (the ball's own coefficients are averaged with these by Rapier). */
+export const TURF = { friction: 0.8, restitution: 0.55 } as const;
+
 export type BoardLayout = { x: number; z: number; height: number };
 /** Advertising boards around the run-off: the ball stops there physically instead of rolling forever. */
 export const BOARDS: BoardLayout = { x: PITCH.halfLength + PITCH.runOff - 0.5, z: PITCH.halfWidth + PITCH.runOff - 1, height: 0.9 };
@@ -13,8 +16,8 @@ export function createPitchColliders(world: RAPIER.World): void {
   add(
     RAPIER.ColliderDesc.cuboid(PITCH.halfLength + PITCH.runOff + 3, 0.5, PITCH.halfWidth + PITCH.runOff + 3)
       .setTranslation(0, -0.5, 0)
-      .setFriction(0.8)
-      .setRestitution(0.55),
+      .setFriction(TURF.friction)
+      .setRestitution(TURF.restitution),
   );
   for (const side of [-1, 1]) {
     const r = PITCH.postRadius;
