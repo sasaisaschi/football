@@ -26,6 +26,8 @@ export const MAX_BOOT_SPEED = 24;
  * 0.51·h hip reaches only ≈ 0.5 m forward at ball height, a band of ≈ 10 cm beyond the body clearance.
  */
 export const KICK_HIP_DROP = 0.1;
+/** Boot travel past the planned contact point after which the swing no longer needs the planned body pace (m). */
+const CONTACT_MARGIN = 0.1;
 
 export type Technique = 'instep' | 'inside' | 'cushion';
 export type Side = 0 | 1; // 0 = left, 1 = right
@@ -124,6 +126,18 @@ export class Legs {
 
   busy(): boolean {
     return this.swing !== null;
+  }
+
+  /**
+   * Is the body still bound to the run the swing was planned for? Only until the boot has passed the contact
+   * point: the plan assumes the body's pace up to the contact, afterwards the player steers freely again while the
+   * leg swings through and recovers (no new swing until it has).
+   */
+  committed(): boolean {
+    const s = this.swing;
+    if (!s) return false;
+    if (s.phase === 'windup') return true;
+    return s.phase === 'strike' && s.t * s.plan.strikeSpeed < len(sub(s.plan.contact, s.plan.windupEnd)) + CONTACT_MARGIN;
   }
 
   /**
