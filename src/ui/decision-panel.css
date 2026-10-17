@@ -1,0 +1,16 @@
+.decision { position: absolute; inset: 0; display: grid; place-items: end center; padding-bottom: 9vh; background: linear-gradient(180deg, transparent 40%, rgba(6, 11, 22, 0.75)); font-family: var(--font-ui); animation: decision-in var(--transition); }
+.decision[hidden] { display: none; }
+@keyframes decision-in { from { opacity: 0; transform: translateY(12px); } }
+.decision-card { width: min(980px, 94vw); background: var(--c-panel); border: 1px solid var(--c-line); border-top: 4px solid var(--c-accent); border-radius: var(--radius-lg); padding: var(--space-5); box-shadow: var(--shadow-panel), var(--shadow-glow); }
+.decision-kicker { font-size: var(--fs-xs); letter-spacing: var(--tracking); color: var(--c-accent); font-weight: 800; }
+.decision h2 { margin: var(--space-2) 0 var(--space-1); font-size: var(--fs-xl); font-family: var(--font-score); }
+.decision p { margin: 0 0 var(--space-4); color: var(--c-text-muted); font-size: var(--fs-md); }
+.decision-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); }
+.decision-option { display: grid; grid-template-columns: auto 1fr; column-gap: var(--space-3); row-gap: var(--space-1); text-align: left; padding: var(--space-4); background: var(--c-panel-raised); color: var(--c-text); border: 1px solid var(--c-line); border-radius: var(--radius-md); cursor: pointer; font: inherit; transition: border-color var(--transition), transform var(--transition); }
+.decision-option:hover, .decision-option:focus-visible { border-color: var(--c-accent); transform: translateY(-2px); outline: none; }
+.decision-key { grid-row: 1 / span 3; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-sm); background: var(--c-accent); color: var(--c-night); font-weight: 900; }
+.decision-label { font-weight: 800; font-size: var(--fs-md); }
+.decision-detail { color: var(--c-text-muted); font-size: var(--fs-sm); }
+.decision-outlook { color: var(--c-warn); font-size: var(--fs-xs); }
+.decision-timer { margin-top: var(--space-4); height: 4px; background: var(--c-line); border-radius: var(--radius-sm); overflow: hidden; }
+.decision-timer span { display: block; height: 100%; background: var(--c-accent); width: 100%; }

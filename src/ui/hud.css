@@ -1,0 +1,20 @@
+.hud { position: absolute; inset: 0; pointer-events: none; font-family: var(--font-ui); }
+.hud-bug { position: absolute; top: var(--space-4); left: var(--space-4); display: flex; align-items: stretch; background: var(--c-panel); border-radius: var(--radius-sm); overflow: hidden; box-shadow: var(--shadow-panel); font-family: var(--font-score); letter-spacing: var(--tracking); }
+.hud-bug > span { padding: var(--space-2) var(--space-3); display: flex; align-items: center; font-size: var(--fs-md); font-weight: 800; }
+.hud-bug > .hud-live { background: var(--c-live); font-size: var(--fs-xs); }
+.hud-home { border-left: 4px solid var(--c-home); }
+.hud-away { border-right: 4px solid var(--c-away); }
+.hud-bug > .hud-score { background: var(--c-text); color: var(--c-night); font-size: var(--fs-lg); min-width: 84px; justify-content: center; }
+.hud-clock { color: var(--c-text-muted); font-variant-numeric: tabular-nums; }
+.hud-speed { position: absolute; top: 64px; left: var(--space-4); padding: var(--space-1) var(--space-3); background: var(--c-panel-raised); border-left: 3px solid var(--c-warn); font-size: var(--fs-xs); letter-spacing: var(--tracking); font-weight: 700; }
+.hud-speed[hidden] { display: none; }
+.hud-ticker { position: absolute; right: var(--space-4); top: var(--space-4); width: min(360px, 40vw); display: flex; flex-direction: column; gap: var(--space-1); }
+.hud-ticker > div { background: var(--c-panel); opacity: 0.92; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--c-accent); font-size: var(--fs-sm); border-radius: var(--radius-sm); }
+.hud-ticker > div:not(:first-child) { opacity: 0.65; }
+.hud-ticker b { color: var(--c-text-muted); font-variant-numeric: tabular-nums; margin-right: var(--space-2); }
+.hud-status { position: absolute; left: 50%; bottom: var(--space-4); transform: translateX(-50%); padding: var(--space-2) var(--space-4); background: var(--c-panel); opacity: 0.9; border-radius: var(--radius-md); font-size: var(--fs-sm); color: var(--c-text-muted); white-space: nowrap; }
+.hud-status:empty { display: none; }
+@media (max-width: 720px) {
+  .hud-ticker { top: auto; bottom: 56px; right: var(--space-2); width: 70vw; }
+  .hud-status { white-space: normal; width: 92vw; text-align: center; }
+}

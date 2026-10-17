@@ -1,0 +1,15 @@
+.start { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 30%, rgba(255, 138, 42, 0.18), transparent 60%), rgba(6, 11, 22, 0.82); font-family: var(--font-ui); z-index: 10; }
+.start-card { width: min(640px, 92vw); text-align: center; padding: var(--space-5); }
+.start-kicker { font-size: var(--fs-xs); letter-spacing: 0.3em; color: var(--c-accent); font-weight: 800; }
+.start h1 { font-family: var(--font-score); font-size: var(--fs-hero); margin: var(--space-2) 0; letter-spacing: 0.04em; }
+.start-fixture { display: flex; justify-content: center; align-items: center; gap: var(--space-3); font-weight: 800; font-size: var(--fs-lg); flex-wrap: wrap; }
+.start-fixture .home { color: var(--c-home); }
+.start-fixture .away { color: var(--c-away); }
+.start-fixture .vs { color: var(--c-text-muted); font-size: var(--fs-sm); }
+.start p { color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.5; margin: var(--space-4) auto; max-width: 520px; }
+.start-lengths { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; margin-bottom: var(--space-4); }
+.start-lengths button { background: var(--c-panel-raised); color: var(--c-text); border: 1px solid var(--c-line); border-radius: var(--radius-md); padding: var(--space-2) var(--space-4); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.start-lengths button.selected { border-color: var(--c-accent); color: var(--c-accent); }
+.start-go { background: var(--c-accent); color: var(--c-night); border: 0; border-radius: var(--radius-md); padding: var(--space-3) var(--space-5); font: inherit; font-weight: 900; font-size: var(--fs-lg); letter-spacing: var(--tracking); cursor: pointer; box-shadow: var(--shadow-glow); }
+.start-go:hover { background: var(--c-accent-strong); }
+.start small { display: block; margin-top: var(--space-3); color: var(--c-text-muted); font-size: var(--fs-xs); }

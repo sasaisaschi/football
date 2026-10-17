@@ -1,0 +1,14 @@
+@import './styles/design_variables.css';
+
+* { box-sizing: border-box; }
+html, body, #app { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--c-night); color: var(--c-text); font-family: var(--font-ui); }
+#app { position: relative; }
+#app > canvas { display: block; width: 100%; height: 100%; }
+.overlay { position: absolute; inset: 0; pointer-events: none; }
+.overlay > * { pointer-events: auto; }
+.overlay > .hud { pointer-events: none; }
+.fulltime { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(6, 11, 22, 0.7); }
+.fulltime-card { text-align: center; background: var(--c-panel); border-top: 4px solid var(--c-accent); border-radius: var(--radius-lg); padding: var(--space-5); box-shadow: var(--shadow-panel); min-width: min(420px, 90vw); }
+.fulltime-card h2 { margin: 0; letter-spacing: 0.3em; font-size: var(--fs-md); color: var(--c-accent); }
+.fulltime-score { font-family: var(--font-score); font-size: var(--fs-xl); font-weight: 900; margin: var(--space-4) 0; }
+.fulltime-card button { background: var(--c-accent); color: var(--c-night); border: 0; border-radius: var(--radius-md); padding: var(--space-3) var(--space-5); font: inherit; font-weight: 900; cursor: pointer; }
