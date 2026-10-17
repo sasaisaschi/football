@@ -213,6 +213,37 @@ Bewertung: Die Probe liegt mit 3,0 Toren/90 im Zielbereich 2–4, bei einem Raus
   - **„KI entscheiden lassen“** (Button und Taste `0`): wählt die Option, die die Spieler ohnehin gewählt hätten, und wird als `delegated` protokolliert (neben `user` und `timeout`).
 - **Leistungsfehler aus PR #5–#7 behoben:** Ein Physikschritt kostete 2,72 ms statt 1,49 ms; im Browser sank die Bildrate auf 36 FPS. Ursachen: (1) vier Physik-Teilschritte in *jedem* Tick, (2) die neue Rutsch-/Roll-Vorhersage des Balls wurde pro Optionsbewertung zehntausendfach neu integriert. Korrektur: vier Teilschritte nur, solange der Ball auf dem Rasen läuft (Flug/Ruhe: einer); Bodenball-Profile je Abschussgeschwindigkeit (0,05-m/s-Stufen) werden einmal berechnet und danach nur durchsucht. Gemessen: 2,02 ms pro Schritt, Optionswahl 0,65 → 0,02 ms pro Tick, **Browser 47 FPS** (Intel Iris Xe, 1600 × 900). Alle Tests unverändert grün.
 
+### Ballbesitzwechsel – Messwerkzeug und Ursachenanalyse (17.10.2026)
+
+**Neu im Repo:** `npm run probe` (`scripts/probe.mjs`) startet mehrere Seeds parallel (Standard 1–6, 2 × 10 min) und rechnet auf 90 min hoch; die Auswertung steckt in `engine/match-stats.ts` (getestet) und wird auch von `npm run sim` genutzt. Ballbesitzwechsel zählen entlang der Berührungsfolge (Unterbrechungen setzen zurück); zusätzlich: Art der letzten Berührung des Verlierers (Schwungart, Körper, Hände), „Ping-Pong“ (Rückgewinn < 1 s) und mittlere Besitzdauer. Die Mehr-Seed-Probe früherer Abschnitte war nicht eingecheckt; Werte daraus sind mit diesen nicht exakt vergleichbar.
+
+**Ausgangswerte `main` (pro 90 min):**
+
+| Messwert | Seeds 1–6 | Seeds 7–12 | real |
+| --- | --- | --- | --- |
+| Ballbesitzwechsel / davon Ping-Pong | 1603 / 479 | 1490 / 434 | ~250 Ballbesitzphasen (nicht dieselbe Zählweise) |
+| Pässe / Passquote | 849 / 57 % | 842 / 59 % | ~900 / 75–85 % |
+| Tore / Fouls / Einwürfe | 8,3 / 29 / 133 | 6,0 / 26 / 146 | ~2,7 / ~22 / ~45 |
+
+**Ursachen (temporäre Einzelanalysen pro Schwung und pro Takt, 3 Seeds, nicht eingecheckt):**
+- Fast jeder Verlust folgt auf einen *gewollten* Schwung des Verlierers (Abpraller ohne Schwung kaum). Nach einer eigenen Dribbelberührung gewinnt in 52–74 % der Fälle der Gegner den Ball (auch mit 3–5 m Abstand zum nächsten Gegner), nach einer Ballannahme in 35–50 %; der Dribbler berührt den Ball im Mittel nur alle 1,5 s.
+- Mechanik: Nach dem Treffpunkt blieb der Körper bis zum Ende des ganzen Schwungs (bis ≈ 1 s bei weichen Berührungen) an das geplante Lauftempo gebunden; leichte Berührungen holten so weit aus wie Pässe (Schuh 0,5–1 m/s über 0,32 m).
+- Entscheidung: Ist nach der eigenen Berührung ein Gegner dem Ball kurz näher, hält der Dribbler ihn für den Ballführer und geht ins Stellen über (bremst, überlässt ihm den Ball).
+- Pässe: 49 % der Pässe kommen unter Druck (Gegner < 1,5 m), ≈ 45 % sind hohe Bälle (davon ≈ 50 % verloren); bei 64 % war die beste Passoption mit < 0,4 Erfolg bewertet. Es fehlen nahe, freie Anspielstationen.
+
+**Gemessen und verworfen** (Seeds 1–6, gegengeprüft auf 7–12 gegen `main`):
+
+| Variante | Wechsel | Passquote | Fouls | Bewertung |
+| --- | --- | --- | --- | --- |
+| Körper ab Treffpunkt frei steuerbar | 1490 → 1416 | 59 → 57 % | 26 → 40 | Verluste nach Annahme −28 %, aber deutlich mehr Fouls |
+| + Stellen nur gegen den Gegner, der zuletzt am Ball war | 1466 | 50 % | 29 | Verluste wandern vom Dribbling zum Pass |
+| + kurze Ausholbewegung bei weichen Berührungen | 1454 | 49 % | 33 | kein Effekt auf Wechsel |
+| + Ballführer bremst erst kurz vor Körpern | 1260 (1–6) | 56 % | 45 | weniger Wechsel nur durch mehr Unterbrechungen |
+| Engere Ballführung im freien Raum | 1502 (1–6) | 55 % | 26 | schlechter |
+| Ballbesitzwert 0,015 in den Verlustkosten | 1426 (1–6) | 49 % | 29 | ohne Anpassung beim Klären: 512 Einwürfe/90 |
+
+Bewertung: Keine Variante senkt die Wechsel außerhalb des Rauschens (≈ ±5 %) ohne an anderer Stelle (Passquote, Fouls) schlechter zu werden; deshalb ist keine davon übernommen. Die Mechanikbefunde bleiben richtig, wirken aber erst, wenn der Ballführer unter Druck eine sichere Alternative hat.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität noch nicht realistisch:** Tore nach Torwartkorrektur in der Probe 3,0/90 (Rauschen ±4), Ballbesitzwechsel (≈ 1450/90) deutlich zu hoch, Passquote 63–67 % zu niedrig, zu viele Einwürfe (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
@@ -243,7 +274,7 @@ Bewertung: Die Probe liegt mit 3,0 Toren/90 im Zielbereich 2–4, bei einem Raus
 
 ## 9. Nächste Schritte
 
-1. Spielqualität: Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
+1. Spielqualität – zuerst **Anspielstationen**: Mitspieler bieten sich dem Ballführer in freien Passwegen (8–15 m) an, damit er unter Druck einen sicheren kurzen Pass hat; danach die verworfenen Mechanikkorrekturen (§6, Ballbesitzwechsel) erneut messen, Fouls beim freien Steuern nach dem Treffpunkt begrenzen. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
