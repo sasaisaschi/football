@@ -205,6 +205,8 @@ Schusslabor Basis: 74 % Paraden (Mitte 81 %, Seite 75 %, Ecke 63 %). Der Torwart
 
 Bewertung: Die Probe liegt mit 3,0 Toren/90 im Zielbereich 2–4, bei einem Rauschen von ±4/90 ist das aber **kein gesicherter Nachweis**. Zwei der drei verbliebenen „Eigentore“ sind Torwartberührungen nach einem Schuss (Hände/Körper, danach ins Tor). Auch in v4b stand der Torwart bei 2 von 3 Schusstoren noch 8–14 m vor der Linie: Die Stellung ist besser, aber nicht gelöst (vermutlich spielt er bei eigenem Ballbesitz im Strafraum als Feldspieler mit und wird überrascht – nicht gemessen). Die Ballbesitzwechsel und die Passquote wurden hier nicht bearbeitet.
 
+**Volle Partie (`npm run sim -- --silent=false`, Seed 2026, 2 × 45 min):** Ergebnis 3 : 10 → **5 : 2**; Torschüsse 9 / 13 → 13 / 8; Pässe 785 / 64 % → 837 / 65 %; Ball im Spiel 79 % → 84 %; Fouls 26 → 17, Gelb 2, Elfmeter 0; Abseits / Ecken / Einwürfe / Abstöße 4 / 24 / 159 / 26; gefangene Bälle Torwart 1 → 2; Rechenzeit 1157 s (3,57 ms/Tick). 7 Tore in einer Partie liegen weiter über dem Ziel 2–4.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität noch nicht realistisch:** Tore nach Torwartkorrektur in der Probe 3,0/90 (Rauschen ±4), Ballbesitzwechsel (≈ 1450/90) deutlich zu hoch, Passquote 63–67 % zu niedrig, zu viele Einwürfe (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
