@@ -5,14 +5,14 @@ import { PlayerBody } from '../physics/body';
 import { KeeperHands } from '../physics/hands';
 import { Legs } from '../physics/legs';
 import { PITCH, attackSign, BALL_SPEC } from '../physics/pitch-geometry';
-import { PHYSICS_DT, PhysicsWorld, type Contact } from '../physics/world';
+import { PHYSICS_DT, PhysicsWorld, type Contact, type ContactPart } from '../physics/world';
 import { Referee, penaltySpot, restartDistance, type Decision, type PlayerState } from '../rules/referee';
 import { SLOTS, toWorld } from '../ai/shape';
 import { createRng, type Rng } from './rng';
 import { createRoster, TEAMS } from './rosters';
 import { chooseTaker, PLACE_DELAY, restartReady, type RestartState } from './restarts';
 import type {
-  DecisionMoment, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, RestartKind, TeamId, TeamInstruction, Vec2,
+  BallAction, DecisionMoment, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, RestartKind, TeamId, TeamInstruction, Vec2,
 } from './types';
 
 export type MatchConfig = { seed: number; halfMinutes: number; rosterSeed?: number };
@@ -50,6 +50,8 @@ export class MatchEngine {
   private listeners: ((e: MatchEvent) => void)[] = [];
   private eventId = 0;
   private heldBy: number | null = null;
+  /** Each player's latest swing, to tell a deliberate kick from a block or deflection (Law 12 back-pass). */
+  private readonly lastSwing = new Map<number, { kind: BallAction['kind']; time: number }>();
 
   constructor(readonly config: MatchConfig) {
     this.rng = createRng(config.seed);
@@ -187,7 +189,10 @@ export class MatchEngine {
       const out = this.think(p, truth);
       const body = this.bodies[p.id];
       body.drive(out.command, PHYSICS_DT, out.effort);
-      if (out.swing) this.emit({ type: 'swing', player: p.id, action: out.swing.action.kind, source: out.swing.source });
+      if (out.swing) {
+        this.lastSwing.set(p.id, { kind: out.swing.action.kind, time: this.time });
+        this.emit({ type: 'swing', player: p.id, action: out.swing.action.kind, source: out.swing.source });
+      }
       const move = this.brains[p.id].userIntent;
       states.set(p.id, { pos: body.position(), vel: body.velocity(), heading: body.heading, hasTacticalFoulIntent: move?.type === 'move' && move.action.kind === 'tactical-foul' });
     }
@@ -234,7 +239,13 @@ export class MatchEngine {
   /** Law 12: a keeper may not handle a ball deliberately kicked to him by a team-mate. */
   private isBackPass(team: TeamId): boolean {
     const t = this.referee.lastTouch;
-    return !!t && t.team === team && t.part === 'boot' && this.profiles[t.player].role !== 'GK';
+    return !!t && t.team === team && t.part === 'boot' && !!t.deliberate && this.profiles[t.player].role !== 'GK';
+  }
+
+  /** A boot touch within a pass, dribble or first-touch swing is played on purpose; a block, poke or miscued clearance is not. */
+  private deliberate(player: number, part: ContactPart): boolean {
+    const s = this.lastSwing.get(player);
+    return part === 'boot' && !!s && this.time - s.time < 0.7 && (s.kind === 'pass' || s.kind === 'dribble' || s.kind === 'control');
   }
 
   private advanceRestart(): void {
@@ -263,7 +274,7 @@ export class MatchEngine {
         const ballSpeed = Math.hypot(v.x, v.y, v.z);
         this.emit({ type: 'touch', player: c.player, part: c.part, ballSpeed, position: b });
         const keeper = c.part === 'hands' ? this.keepers.get(c.player) : undefined;
-        const decisions = this.referee.onBallContact({ player: c.player, team: this.profiles[c.player].team, part: c.part, time: this.time, position: b }, this.half, positions);
+        const decisions = this.referee.onBallContact({ player: c.player, team: this.profiles[c.player].team, part: c.part, time: this.time, position: b, deliberate: this.deliberate(c.player, c.part) }, this.half, positions);
         if (keeper && decisions.length === 0 && this.heldBy === null) {
           const h = keeper.hands.body.linvel();
           if (keeper.catchable(Math.hypot(v.x - h.x, v.y - h.y, v.z - h.z))) {

@@ -107,7 +107,10 @@ describe('Law 12 – fouls and misconduct', () => {
     ref.pendingRestart = null;
     const gk = id(1, 'GK');
     expect(ref.onBallContact(touch(gk, 30, 0, 'hands'), 1, positions())[0]).toMatchObject({ type: 'restart', reason: 'handball', team: 0 });
-    ref.lastTouch = touch(id(1, 'RCB'), 45, 0, 'boot');
+    ref.lastTouch = { ...touch(id(1, 'RCB'), 45, 0, 'boot'), deliberate: true };
     expect(ref.onBallContact(touch(gk, 50, 0, 'hands', 2), 1, positions())[0]).toMatchObject({ type: 'restart', reason: 'back-pass', team: 0 });
+    // A shot blocked by a defender's boot is no back-pass: the keeper may catch the deflection.
+    ref.lastTouch = touch(id(1, 'RCB'), 45, 0, 'boot');
+    expect(ref.onBallContact(touch(gk, 50, 0, 'hands', 3), 1, positions())).toEqual([]);
   });
 });

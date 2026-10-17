@@ -11,7 +11,8 @@ import { PITCH, attackSign, ballOut, goalCrossed, inPenaltyArea } from '../physi
  * contacts (closing speed, who challenged, whether the ball was played first).
  */
 
-export type Touch = { player: number; team: TeamId; part: 'boot' | 'body' | 'hands'; time: number; position: Vec3 };
+/** `deliberate`: the boot played the ball on purpose (a pass, dribble or first touch), not a block, deflection or poke. */
+export type Touch = { player: number; team: TeamId; part: 'boot' | 'body' | 'hands'; time: number; position: Vec3; deliberate?: boolean };
 export type Decision =
   | { type: 'goal'; team: TeamId; scorer: number | null; ownGoal: boolean }
   | { type: 'restart'; kind: RestartKind; team: TeamId; spot: Vec2; reason: 'out' | 'offside' | 'foul' | 'handball' | 'back-pass' }
@@ -52,7 +53,8 @@ export class Referee {
         return out;
       }
       const last = this.lastTouch;
-      if (last && last.team === touch.team && last.player !== touch.player && last.part === 'boot') {
+      // Law 12: only a ball deliberately kicked to him by a team-mate; blocks and deflections may be handled.
+      if (last && last.team === touch.team && last.player !== touch.player && last.part === 'boot' && last.deliberate) {
         out.push({ type: 'restart', kind: 'free-kick', team: (1 - touch.team) as TeamId, spot: { x: touch.position.x, z: touch.position.z }, reason: 'back-pass' });
         return out;
       }
