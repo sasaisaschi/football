@@ -94,7 +94,10 @@ export class KeeperSkill {
     // A ball he may not handle (back-pass) or his team's ball close by: he plays it with his feet.
     if (dBall < 12 && inPenaltyArea(ballPos.x, ballPos.z, goalSide) && (ctx.possession === this.brain.profile.team || !this.hands.active())) return normal();
     const spot = keeperShape(ctx.sign, ballPos);
-    return { command: { target: spot, speed: 6, face: { x: ballPos.x, z: ballPos.z } }, effort: 1, swing: null };
+    // Adjusting his angle he shuffles; caught far off his line he sprints back to it.
+    const off = Math.hypot(spot.x - self.x, spot.z - self.z);
+    const speed = off > 2 ? body.limits.maxSpeed : 6;
+    return { command: { target: spot, speed, face: { x: ballPos.x, z: ballPos.z } }, effort: 1, swing: null };
   }
 
   private firstToBall(ctx: BrainContext, ball: Vec2): boolean {
@@ -103,9 +106,9 @@ export class KeeperSkill {
     for (const p of ctx.truth.players) {
       if (p.id === this.brain.profile.id) continue;
       const seen = this.brain.perception.playerNow(p.id, ctx.now);
-      // A keeper comes for a loose ball in his area even when an opponent is slightly quicker to it: with
-      // hands and a big body he wins close races (measured: fewer chances and goals than waiting on the line).
-      if (seen && Math.hypot(ball.x - seen.x, ball.z - seen.z) / 8.5 < mine - 0.4) return false;
+      // He leaves his line only for a ball he reaches first: chasing races he loses left him 13-15 m out when
+      // the opponent shot (measured with the former 0.4 s head start for the keeper).
+      if (seen && Math.hypot(ball.x - seen.x, ball.z - seen.z) / 8.5 < mine) return false;
     }
     return true;
   }

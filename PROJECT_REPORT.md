@@ -181,13 +181,37 @@ Die 13 Tore dieses Seeds (Ereignisfolgen aus der identischen Probe): 3 Eigentore
 
 Bewertung: Elfmeter (4 → 0), Torschüsse, Pässe und Fouls liegen näher am Ziel, Tore pro 90 in der Probe leicht niedriger, aber weiter deutlich über 2–4. Die Ballbesitzwechsel sind **nicht** gesunken (1330 → 1449): Verluste nach Dribbling und Annahme gingen zurück, dafür kamen Tacklings (vorher gab es keine) und mehr Pässe hinzu; ein gescheitertes Stochern zählt in der Berührungsfolge als zwei Wechsel. Passquote 63 % (Ziel 75–85 %): kurze Pässe bis 10 m kommen zu 80 % an, hohe Bälle nur zu ≈ 47 % – sie entstehen vor allem, wenn der Passgeber schon bedrängt ist, und bei Standards (Einwürfe werden mit dem Fuß gespielt; 176 Einwürfe/90, meist nach Abprallern vom Körper).
 
+### Torwart und Rückpassregel (17.10.2026)
+
+Messung: Probe 6 Seeds × 2 × 10 min (Seeds 1–6, pro 90 min hochgerechnet) und ein Schusslabor (240 gerade Schüsse aus 7–15 m auf zufällige Punkte im Tor, 20–28 m/s, Torwart auf seiner Grundposition; beides temporär, nicht im Repo). Tore sind verrauscht (±4/90), deshalb zusätzlich Schüsse, Paraden und Torwartposition beim Schuss.
+
+- **Rückpassregel zu streng (Regel 12):** Jede Schuhberührung eines Mitspielers nahm dem Torwart die Hände – auch ein geblockter Schuss, ein Abfälschen oder ein verunglücktes Stochern. Danach konnte er den Ball nicht fangen oder abwehren. Regel 12 verbietet nur den *absichtlich* zugespielten Ball. Neu: `Touch.deliberate` – absichtlich ist eine Schuhberührung innerhalb von 0,7 s nach einem Pass-, Dribbel- oder Annahmeschwung; Block, Abpraller, Stochern und Klärung nicht. Gilt für die Hände des Torwarts (`isBackPass`) und den Schiedsrichter (indirekter Freistoß). Test: `referee.test.ts`.
+- **Torwart weit vor dem Tor:** Bei 3 von 7 Schusstoren (Basis) stand der Torwart beim Schuss 6–14 m vor der Linie. Er lief auch dann zu einem freien Ball im Strafraum, wenn ein Gegner 0,4 s früher dort war, verlor das Laufduell und der Gegner schoss aufs leere Tor. Neu: Er verlässt die Linie nur für einen Ball, den er zuerst erreicht. Liegt er > 2 m neben seiner Position, sprintet er zurück (vorher fest 6 m/s; allein gemessen ohne Effekt, v2).
+
+| pro 90 min (6 Seeds) | Basis | + Körperdämpfung + Rückpass (v1) | + Zurücksprinten (v2) | + nur als Erster raus, mit Körperdämpfung (v4a) | **übernommen: ohne Körperdämpfung (v4b)** | real |
+| --- | --- | --- | --- | --- | --- | --- |
+| Tore (davon Eigentore) | 7,5 (0,8) | 7,5 (2,3) | 7,5 (0,8) | 5,3 (1,5) | **3,0 (2,3)** | ~2,7 |
+| Torschüsse / aufs Tor | 17 / 8 | 19 / 9 | 22 / 13 | 20 / 13 | **14 / 9** | ~25 / ~9 |
+| Torwart berührt Schuss / Fänge | 2,3 / 3 | 5,3 / 5 | 6,8 / 5 | 9 / 7 | **8,3 / 5** | – |
+| Torwart beim Schusstor > 5 m vor der Linie | 3 von 7 | 0 von 5 | 3 von 8 | 0 von 5 | 2 von 3 | – |
+| Pässe / Passquote | 842 / 63 % | 882 / 63 % | 819 / 66 % | 883 / 63 % | **866 / 67 %** | ~900 / 75–85 % |
+| Fouls | 31 | 28 | 25 | 23 | **20** | ~22 |
+
+Verworfen (gemessen):
+- **Körperdämpfung** (Ball–Körper-Stoßzahl 0,375 → 0,2, Kombinationsregel `Min`): Schusslabor 178 → 172 Paraden von 240; Eigentore durch Abpraller vom Körper wurden nicht weniger (Basis 0,8, v1 2,3, v4a 1,5 pro 90). Ein weicherer Körper lenkt Schüsse weniger weit ab, sie rutschen eher ins Tor. Der Körper hat außerdem Reibung 0 (nötig, damit die Kapsel nicht über den Rasen schleift), deshalb behält ein streifender Ball seine Tangentialgeschwindigkeit; das bleibt offen.
+- **Hände vor dem Körper** (Fangpunkt 0,45 m vor der Körpermitte statt in der Körperebene): mehr Fänge (97 → 123), aber weniger Paraden (178 → 169 von 240), mehr Tore bei Schüssen auf den Torwart (17 → 23).
+
+Schusslabor Basis: 74 % Paraden (Mitte 81 %, Seite 75 %, Ecke 63 %). Der Torwart hält also saubere Schüsse von seiner Grundposition aus; die Tore entstanden im Spiel vor allem durch seine Stellung.
+
+Bewertung: Die Probe liegt mit 3,0 Toren/90 im Zielbereich 2–4, bei einem Rauschen von ±4/90 ist das aber **kein gesicherter Nachweis**. Zwei der drei verbliebenen „Eigentore“ sind Torwartberührungen nach einem Schuss (Hände/Körper, danach ins Tor). Auch in v4b stand der Torwart bei 2 von 3 Schusstoren noch 8–14 m vor der Linie: Die Stellung ist besser, aber nicht gelöst (vermutlich spielt er bei eigenem Ballbesitz im Strafraum als Feldspieler mit und wird überrascht – nicht gemessen). Die Ballbesitzwechsel und die Passquote wurden hier nicht bearbeitet.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
-- **Spielqualität noch nicht realistisch:** Tore (Probe 7,5/90, volle Partie Seed 2026: 13) und Ballbesitzwechsel (≈ 1450/90) deutlich zu hoch, Passquote 63–64 % zu niedrig, zu viele Einwürfe (siehe §6). Gemessen: Torhüter halten Schüsse aus 7–15 m selten, Abpraller vom Körper führen zu Eigentoren, gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
-- Der Körper ist eine aufrechte Kapsel (r = 0,27 m); prallt der Ball dagegen, gibt es keine Dämpfung wie bei Brust/Oberschenkel.
+- **Spielqualität noch nicht realistisch:** Tore nach Torwartkorrektur in der Probe 3,0/90 (Rauschen ±4), Ballbesitzwechsel (≈ 1450/90) deutlich zu hoch, Passquote 63–67 % zu niedrig, zu viele Einwürfe (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
+- Der Körper ist eine aufrechte Kapsel (r = 0,27 m, Reibung 0); eine niedrigere Stoßzahl wurde gemessen und verworfen (§6). Ein streifender Ball behält seine Geschwindigkeit; der Torwart kippt beim Hechtsprung nicht mit dem ganzen Körper, nur die Hände reichen weiter.
 - Physik läuft mit ≥ 240 Hz (Rapier-Drallgrenze bei 60 Hz); ≈ 50 % mehr Rechenzeit pro Tick.
 - Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
-- Einwurf wird mit dem Fuß ausgeführt; Abseits nutzt Körpermittelpunkte und nur „spielt den Ball“ als Beteiligung; absichtliches Spiel und Abpraller werden nicht unterschieden.
+- Einwurf wird mit dem Fuß ausgeführt; Abseits nutzt Körpermittelpunkte und nur „spielt den Ball“ als Beteiligung; beim Abseits werden absichtliches Spiel und Abpraller nicht unterschieden (bei der Rückpassregel schon).
 - Fouls nur aus Körperkontakten; Schuh-gegen-Bein-Kontakte (Grätschen) gibt es nicht.
 - Der laufende Spielrhythmus der Beine ist rein visuell (ruhende Schuh-Kollider bleiben unter der Hüfte); Kick-Beine folgen exakt der Physik.
 - Ballparameter sind Literaturwerte, keine eigene Messreihe.
@@ -207,10 +231,11 @@ Bewertung: Elfmeter (4 → 0), Torschüsse, Pässe und Fouls liegen näher am Zi
 6. **Kalibrierung** – Bremsen vor Körpern, aktive Ballannahme, Passziele innerhalb des Feldes, Schussauswahl, Foul-Schwellen (gemessen über 3 Seeds).
 7. **Realismus-Kalibrierung** – Schussmechanik (Freiraum Körper/Ball, Vorhalten, Schuhspitze, Stoßzahl), Ball rollt (240 Hz), Spieler-Ballmodell mit Rutschphase, Entscheidungsrauschen auf Werteskala, xG, Direktspiel, Hechtsprung mit kippendem Oberkörper (gemessen über 6 Seeds und volle Partie).
 8. **Ballverluste** – Drallkorrektur der Schwungplanung, Standbeinbeugung, gerichtete erste Ballmitnahme, Abschirmen, Tackling, Begleittempo beim Stellen, Absichern vor dem Tor, Formation erst bei Ballkontrolle, Weg um den Ball, kalibrierte Pass-/Dribbelbewertung, Torwart verteilt nur, Regel 16 (gemessen über 6 Seeds und volle Partie).
+9. **Torwart** – Rückpassregel nur bei absichtlichem Zuspiel, Torwart verlässt die Linie nur als Erster am Ball, sprintet zurück; Körperdämpfung und Hände vor dem Körper gemessen und verworfen (6 Seeds, Schusslabor).
 
 ## 9. Nächste Schritte
 
-1. Spielqualität: Torwartparaden bei Schüssen aus kurzer Distanz (Reaktion, Stellungsspiel), Abpraller vom Körper dämpfen (Brust/Oberschenkel), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
+1. Spielqualität: Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
