@@ -24,6 +24,8 @@ const PASS_ARRIVAL = 3.5;
 const RECEIVER_RISK = 0.4;
 /** How fast an opponent effectively closes on a receiver while the pass is on its way (m/s). */
 const CLOSING_SPEED = 2;
+/** How much safer a lofted pass must look than the ground pass to the same team-mate before it is chosen. */
+const LOFT_MARGIN = 0.3;
 
 export type OptionKind = 'shot' | 'pass' | 'dribble' | 'clear';
 /** One evaluated ball action. `value` is expected goal threat gained minus threat conceded on failure. */
@@ -138,7 +140,9 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     const loftSpeed = loftedPassSpeed(td, Math.min(MAX_ELEVATION, 0.42));
     // A dropping ball is much harder to bring down than a rolling one (measured: about half are kept).
     const loftSafe = td > 16 ? laneSafety(pic, from, target, loftSpeed, true, loftedTime(loftSpeed, 0.42)) * 0.5 : 0;
-    const lofted = loftSafe > groundSafe;
+    // A rolling pass is preferred unless the ball over the top is clearly safer: chosen on any margin, long balls made up 41 %
+    // of all passes and only 47 % of them reached a team-mate (17 % went straight out of play).
+    const lofted = loftSafe > groundSafe + LOFT_MARGIN;
     // Calibrated against measured completion (6 seeds): with accurate strikes the receiver keeps most balls
     // even with a marker two metres away; distance and pressure still cost accuracy.
     const accuracy = Math.exp(-td / (60 + 60 * pic.self.abilities.passing)) * (1 - 0.15 * pressure);
