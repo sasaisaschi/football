@@ -23,7 +23,7 @@ export function commentaryFor(e: MatchEvent, engine: MatchEngine): string | null
     case 'out': return `${RESTART[e.restart]} für ${team(e.team)}.`;
     case 'half-time': return 'Halbzeit.';
     case 'full-time': return `Abpfiff! Endstand ${engine.score[0]}:${engine.score[1]}.`;
-    case 'decision': return e.chosenBy === 'timeout' ? 'Keine Vorgabe – die Spieler entscheiden selbst.' : 'Die Entscheidung ist gefallen – jetzt müssen die Spieler sie umsetzen.';
+    case 'decision': return e.chosenBy === 'timeout' ? 'Keine Vorgabe – die Spieler entscheiden selbst.' : e.chosenBy === 'delegated' ? 'Der Trainer überlässt es den Spielern.' : 'Die Entscheidung ist gefallen – jetzt müssen die Spieler sie umsetzen.';
     default: return null;
   }
 }

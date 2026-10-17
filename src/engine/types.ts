@@ -109,12 +109,14 @@ export type MatchEvent = MatchEventBase &
     | { type: 'half-time' }
     | { type: 'full-time' }
     | { type: 'moment'; momentId: number; team: TeamId; kind: MomentKind }
-    | { type: 'decision'; momentId: number; optionId: string; chosenBy: 'user' | 'timeout' }
+    | { type: 'decision'; momentId: number; optionId: string; chosenBy: DecisionSource }
     | { type: 'instruction'; team: TeamId; instruction: TeamInstruction; source: IntentSource }
   );
 export type MatchEventType = MatchEvent['type'];
 
-export type MomentKind = 'finish-or-pass' | 'take-on' | 'counter-attack' | 'counter-press' | 'breakaway-defence';
+export type MomentKind = 'finish-or-pass' | 'take-on' | 'counter-attack' | 'counter-press' | 'breakaway-defence' | 'box-defence';
+/** Who settled a decision: the user picking an option, the user handing it to the players, or the countdown. */
+export type DecisionSource = 'user' | 'delegated' | 'timeout';
 
 /** One executable alternative offered to the user. Executability is verified before it is offered. */
 export type DecisionOption = {

@@ -1,9 +1,9 @@
 import './decision-panel.css';
-import type { DecisionMoment } from '../engine/types';
+import type { DecisionMoment, DecisionSource } from '../engine/types';
 
 /**
  * The twelfth man's moment: situation, executable options with an honest outlook, a countdown.
- * Keys 1–4 choose. If time runs out, the players do what they would have done anyway.
+ * Keys 1–4 choose, 0 hands the moment to the players. If time runs out, the players do what they would have done anyway.
  */
 export class DecisionPanel {
   readonly el = document.createElement('div');
@@ -14,15 +14,17 @@ export class DecisionPanel {
   private readonly situation: HTMLElement;
   private readonly options: HTMLElement;
 
-  constructor(private readonly resolve: (optionId: string, by: 'user' | 'timeout') => void) {
+  constructor(private readonly resolve: (optionId: string, by: DecisionSource) => void) {
     this.el.className = 'decision';
     this.el.hidden = true;
-    this.el.innerHTML = '<div class="decision-card"><div class="decision-kicker">DEIN MOMENT &middot; DER ZWÖLFTE MANN</div><h2 data-title></h2><p data-situation></p><div class="decision-options" data-options></div><div class="decision-timer"><span data-bar></span></div></div>';
+    this.el.innerHTML = '<div class="decision-card"><div class="decision-kicker">DEIN MOMENT &middot; DER ZWÖLFTE MANN</div><h2 data-title></h2><p data-situation></p><div class="decision-options" data-options></div><button class="decision-delegate" data-delegate type="button">KI entscheiden lassen <kbd>0</kbd></button><div class="decision-timer"><span data-bar></span></div></div>';
     this.bar = this.el.querySelector('[data-bar]')!;
     this.title = this.el.querySelector('[data-title]')!;
     this.situation = this.el.querySelector('[data-situation]')!;
     this.options = this.el.querySelector('[data-options]')!;
+    this.el.querySelector('[data-delegate]')!.addEventListener('click', () => this.delegate());
     window.addEventListener('keydown', ev => {
+      if (this.moment && ev.key === '0') { this.delegate(); return; }
       const i = Number(ev.key) - 1;
       if (this.moment && Number.isInteger(i) && i >= 0 && i < this.moment.options.length) this.choose(this.moment.options[i].id, 'user');
     });
@@ -57,7 +59,12 @@ export class DecisionPanel {
     if (left <= 0) this.choose(this.moment.defaultOptionId, 'timeout');
   }
 
-  private choose(id: string, by: 'user' | 'timeout'): void {
+  /** The user hands the moment back to the players: they do what they would have done anyway. */
+  private delegate(): void {
+    if (this.moment) this.choose(this.moment.defaultOptionId, 'delegated');
+  }
+
+  private choose(id: string, by: DecisionSource): void {
     if (!this.moment) return;
     this.moment = null;
     this.el.hidden = true;

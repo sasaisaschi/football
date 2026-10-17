@@ -14,3 +14,6 @@
 .decision-outlook { color: var(--c-warn); font-size: var(--fs-xs); }
 .decision-timer { margin-top: var(--space-4); height: 4px; background: var(--c-line); border-radius: var(--radius-sm); overflow: hidden; }
 .decision-timer span { display: block; height: 100%; background: var(--c-accent); width: 100%; }
+.decision-delegate { margin-top: var(--space-3); background: transparent; color: var(--c-text-muted); border: 1px solid var(--c-line); border-radius: var(--radius-md); padding: var(--space-2) var(--space-4); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.decision-delegate:hover, .decision-delegate:focus-visible { color: var(--c-text); border-color: var(--c-accent); outline: none; }
+.decision-delegate kbd { margin-left: var(--space-2); font-family: inherit; color: var(--c-accent); }

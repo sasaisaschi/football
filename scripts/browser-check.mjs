@@ -35,7 +35,7 @@ const fail = msg => { report.errors.push(msg); };
 const vite = spawn(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), '--port', String(port), '--strictPort'], { cwd: root, stdio: 'pipe' });
 let viteReady = false;
 vite.stdout.on('data', d => { if (String(d).includes('Local')) viteReady = true; });
-for (let i = 0; i < 100 && !viteReady; i++) await sleep(200);
+for (let i = 0; i < 300 && !viteReady; i++) await sleep(200); // first start may pre-bundle dependencies
 if (!viteReady) { console.error('Vite dev server did not start'); vite.kill(); process.exit(2); }
 
 const gl = process.env.CHECK_SOFTWARE_GL ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : ['--use-angle=d3d11', '--ignore-gpu-blocklist', '--enable-gpu'];

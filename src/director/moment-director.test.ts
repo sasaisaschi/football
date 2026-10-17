@@ -108,4 +108,36 @@ describe('decisive moment director', () => {
     expect(times.length).toBeLessThanOrEqual(6);
     for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(60 - 0.5);
   }, 300_000);
+
+  it('danger in front of our box: pressing is carried out by the defender, delegating is recorded as such', () => {
+    const setup = () => {
+      const e = new MatchEngine({ seed: 9, halfMinutes: 45 });
+      const carrier = role(e, 1, 'ST');
+      const defender = role(e, 0, 'RCB');
+      // Team 0 defends the goal at -X in the first half.
+      stageScenario(e, { [carrier]: { x: -31, z: 2 }, [defender]: { x: -35, z: 1 }, [role(e, 0, 'GK')]: { x: -51, z: 0 } }, { x: -30.6, y: 0.11, z: 2 });
+      e.bodies[carrier].heading = -Math.PI / 2;
+      e.referee.lastTouch = { player: carrier, team: 1, part: 'boot', time: e.time, position: e.ballPos() };
+      e.director = new MomentDirector({ userTeam: 0, cooldown: 0, maxPerHalf: 99, timeoutSeconds: 12 }).attach();
+      runFor(e, 0.5);
+      const moment = e.moment;
+      e.director = null;
+      return { e, moment, carrier, defender };
+    };
+    const { e, moment, carrier, defender } = setup();
+    expect(moment?.kind).toBe('box-defence');
+    expect(moment!.focusPlayer).toBe(defender);
+    expect(moment!.options.map(o => o.id)).toEqual(['press', 'block', 'hold']);
+    const gap = () => Math.hypot(e.bodies[defender].position().x - e.bodies[carrier].position().x, e.bodies[defender].position().z - e.bodies[carrier].position().z);
+    const before = gap();
+    e.resolveMoment('press', 'user');
+    runFor(e, 0.6);
+    expect(gap()).toBeLessThan(before - 1);
+
+    const second = setup();
+    second.e.resolveMoment(second.moment!.defaultOptionId, 'delegated');
+    const decision = second.e.events.find(ev => ev.type === 'decision');
+    expect(decision).toMatchObject({ optionId: 'hold', chosenBy: 'delegated' });
+  });
 });
+
