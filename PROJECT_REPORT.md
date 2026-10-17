@@ -293,9 +293,37 @@ Verworfen: A (weniger Einwürfe, aber mehr Wechsel und Fouls – umkämpfte Bäl
 
 Bewertung: Kleiner, aber in allen Messwerten gleichgerichteter Gewinn (Passquote +2 Punkte, Wechsel −2 %, Einwürfe −5 %); die Tore liegen in dieser Probe erstmals im Zielbereich, bei ±2–3 Rauschen aber nicht gesichert. Passquote (59 %) und Einwürfe (162) bleiben deutlich vom Ziel entfernt. Der nächste Hebel ist die Entscheidung unter Druck (49 % der Pässe werden mit einem Gegner < 1,5 m gespielt): Abschirmen/Ballhalten, bis eine Anspielstation frei ist.
 
+### Ballhalten und Abschirmen unter Druck (17.10.2026)
+
+- **Neue Option „Ball abschirmen“** (`shield` in `options.ts`): Bei starkem Druck (`pressureOn` ≥ 0,5, Gegner ≲ 2,4 m) eine kurze Berührung vom nächsten Gegner weg (geradeaus oder ±0,6 rad, je nach freiem Raum), 1,4–2,4 m/s. Die Ausführung legt den Ball auf den gegnerabgewandten Fuß (bestehende Abschirmlogik in `execution.ts`). Bewertet als Halten des Ballwerts an Ort und Stelle; jede Abschirmberührung kostet 0,003 xT (die Abwehr ordnet sich in der Zwischenzeit). Wird eine Anspielstation frei, ist der Pass mehr wert. Tests: `options.test.ts`.
+- **Verteidiger stellt mit Abstand:** Näher als 1,5 m am Ballführer läuft er nur noch mit dessen Tempo + 0,5 m/s mit, statt weiter heranzurücken.
+- **Kein Stochern durch den Gegner:** Steht der Ballführer zwischen Verteidiger und Ball, geht der Verteidiger nicht hinein. Gemessen: 41 von 49 Fouls kamen von hinten, meist von Verteidigern, die durch den Ballführer zum Ball wollten.
+
+Kalibrierung (6 Seeds): Bei vorhergesagten 50–60 % blieb der Ball nach einer Abschirmberührung in 94 % der entschiedenen Fälle bei der Mannschaft. Ohne Zeitkosten wurde fast nur noch abgeschirmt (8 Schüsse/90).
+
+12 Seeds (1–12, 2 × 10 min, pro 90 min):
+
+| Variante | Wechsel | Passquote | Schüsse | Fouls | Einwürfe | Tore |
+| --- | --- | --- | --- | --- | --- | --- |
+| Ausgang (Stand nach #12) | 1276 | 59 % | 15 | 32 | 162 | 2,6 |
+| Abschirmen ab Druck 0,3, ohne Zeitkosten | 821 | 65 % | 8 | 42 | 129 | 1,9 |
+| Druck 0,5, Zeitkosten 0,003 (V1) | 1112 | 62 % | 14 | 42 | 158 | 2,6 |
+| Druck 0,3, Zeitkosten 0,006 | 1289 | 59 % | 14 | 37 | 147 | 4,5 |
+| Druck 0,5, Zeitkosten 0,0015 | 1041 | 63 % | 15 | 44 | 132 | 6,8 |
+| V1 + Stellen mit Abstand (V4) | 1091 | 60 % | 16 | 39 | 156 | 4,1 |
+| **übernommen: V4 + kein Stochern durch den Gegner** | **1031 (−19 %)** | **61 %** | **15** | **34** | 150 | 3,4 |
+| … + Verteidiger läuft um den Ballführer herum | 1112 | 61 % | 5 | 29 | 155 | 2,3 |
+| V4 + nur Herumlaufen | 1150 | 60 % | 12 | 32 | 143 | 5,3 |
+
+Verworfen: Herumlaufen um den Ballführer. Zusammen mit der Stochern-Regel fielen die Schüsse auf 5/90, weil Torchancen bisher vor allem aus Ballgewinnen entstehen.
+
+Bewertung: Ballbesitzwechsel −19 %, Passquote +2 Punkte, Einwürfe −7 %, Schüsse unverändert; Fouls leicht über dem Ausgang (34 statt 32, Rauschen ±4). Gegenüber `main` vor diesem Abschnitt (#9) jetzt 1546 → 1031 Wechsel und 58 → 61 % Passquote. Weiter offen: Passquote (Ziel 75–85 %), Einwürfe (150, Ziel ~45), Torschüsse (15, Ziel ~25). Chancen entstehen noch kaum aus aufgebautem Angriffsspiel (Läufe in die Tiefe, Flanken, Abschluss nach Kombination).
+
+**Volle Partie (`npm run sim -- --silent=false`, Seed 2026, 2 × 45 min):** Ergebnis 1 : 2 → **0 : 5** (1 Eigentor); Torschüsse 10 / 3 → 6 / 8; Pässe 1002 / 59 % → 974 / 61 %; Ballbesitzwechsel 1331 → 1097 (Ping-Pong 407 → 302, mittlere Besitzdauer 2,8 → 3,3 s); Fouls 30 → 41 (Gelb 3, Elfmeter 1); Abseits / Ecken / Einwürfe / Abstöße 9 / 13 / 143 / 18; Rechenzeit 427 s (1,32 ms/Tick). Die Fouls dieser einzelnen Partie liegen über der 12-Seed-Probe (34). 5 Tore aus 14 Schüssen sind Rauschen einer einzelnen Partie, aber ein Grund, die Abschluss- und Torwartbilanz weiter zu beobachten.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
-- **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1300/90 (Berührungsfolge, davon ≈ 400 Ping-Pong), Passquote 59 % zu niedrig, Einwürfe ≈ 160/90 zu viele, Tore 2,6/90 in der 12-Seed-Probe (Rauschen ±2–3, siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
+- **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1030/90 (Berührungsfolge), Passquote 61 % zu niedrig, Einwürfe ≈ 150/90 zu viele, Torschüsse ≈ 15/90 zu wenige (Chancen fast nur nach Ballgewinnen), Fouls ≈ 34/90 (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
 - Der Körper ist eine aufrechte Kapsel (r = 0,27 m, Reibung 0); eine niedrigere Stoßzahl wurde gemessen und verworfen (§6). Ein streifender Ball behält seine Geschwindigkeit; der Torwart kippt beim Hechtsprung nicht mit dem ganzen Körper, nur die Hände reichen weiter.
 - Physik läuft mit ≥ 240 Hz (Rapier-Drallgrenze bei 60 Hz); ≈ 50 % mehr Rechenzeit pro Tick.
 - Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
@@ -320,11 +348,11 @@ Bewertung: Kleiner, aber in allen Messwerten gleichgerichteter Gewinn (Passquote
 7. **Realismus-Kalibrierung** – Schussmechanik (Freiraum Körper/Ball, Vorhalten, Schuhspitze, Stoßzahl), Ball rollt (240 Hz), Spieler-Ballmodell mit Rutschphase, Entscheidungsrauschen auf Werteskala, xG, Direktspiel, Hechtsprung mit kippendem Oberkörper (gemessen über 6 Seeds und volle Partie).
 8. **Ballverluste** – Drallkorrektur der Schwungplanung, Standbeinbeugung, gerichtete erste Ballmitnahme, Abschirmen, Tackling, Begleittempo beim Stellen, Absichern vor dem Tor, Formation erst bei Ballkontrolle, Weg um den Ball, kalibrierte Pass-/Dribbelbewertung, Torwart verteilt nur, Regel 16 (gemessen über 6 Seeds und volle Partie).
 9. **Torwart** – Rückpassregel nur bei absichtlichem Zuspiel, Torwart verlässt die Linie nur als Erster am Ball, sprintet zurück; Körperdämpfung und Hände vor dem Körper gemessen und verworfen (6 Seeds, Schusslabor).
-10. **Ballbesitz** – Messwerkzeug `npm run probe`, Ursachenanalyse der Ballverluste, Anspielstationen, Körper ab dem Treffpunkt frei, Ballführer-Reichweite für Verteidiger, flacher Pass bevorzugt (gemessen über 12 Seeds).
+10. **Ballbesitz** – Messwerkzeug `npm run probe`, Ursachenanalyse der Ballverluste, Anspielstationen, Körper ab dem Treffpunkt frei, Ballführer-Reichweite für Verteidiger, flacher Pass bevorzugt, Ballhalten/Abschirmen unter Druck, Verteidiger stellt mit Abstand und stochert nicht durch den Gegner (gemessen über 12 Seeds).
 
 ## 9. Nächste Schritte
 
-1. Spielqualität: Passquote (59 %) – Ballhalten/Abschirmen unter Druck bis eine Anspielstation frei ist, Ballannahme hoher Bälle; Einwürfe (160/90, Ziel ~45: Pässe, Klärungen und Abpraller ins Aus); Ping-Pong-Berührungen. Messung mit `npm run probe -- --seeds 1-12`. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
+1. Spielqualität: Angriffsspiel im letzten Drittel (Läufe in die Tiefe, Flanken, Abschluss nach Kombination) für mehr Torschüsse aus Ballbesitz; Passquote (61 %), Ballannahme hoher Bälle; Einwürfe (150/90, Ziel ~45: Pässe, Klärungen und Abpraller ins Aus); Ping-Pong-Berührungen. Messung mit `npm run probe -- --seeds 1-12`. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
