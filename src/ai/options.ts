@@ -20,6 +20,10 @@ export type Picture = {
 
 /** Pace a ground pass should still have on arrival: firm enough not to give defenders time (m/s). */
 const PASS_ARRIVAL = 3.5;
+/** Chance that a receiver with an opponent at his heels loses the ball again (scaled by how close he is). */
+const RECEIVER_RISK = 0.4;
+/** How fast an opponent effectively closes on a receiver while the pass is on its way (m/s). */
+const CLOSING_SPEED = 2;
 
 export type OptionKind = 'shot' | 'pass' | 'dribble' | 'clear';
 /** One evaluated ball action. `value` is expected goal threat gained minus threat conceded on failure. */
@@ -98,7 +102,8 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
   const out: EvaluatedOption[] = [];
   const from = { x: pic.ball.pos.x, z: pic.ball.pos.z };
   const sign = pic.sign;
-  const lossCost = (p: Vec2) => threatAt((-sign) as 1 | -1, p) * 0.8;
+  // Losing the ball hands the opponents their threat from that spot and gives up the threat we had there.
+  const lossCost = (p: Vec2) => threatAt((-sign) as 1 | -1, p) * 0.8 + threatAt(sign, p);
   const pressure = pressureOn(pic);
 
   // Shot at the corner the keeper covers least.
@@ -134,11 +139,17 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     // A dropping ball is much harder to bring down than a rolling one (measured: about half are kept).
     const loftSafe = td > 16 ? laneSafety(pic, from, target, loftSpeed, true, loftedTime(loftSpeed, 0.42)) * 0.5 : 0;
     const lofted = loftSafe > groundSafe;
-    const accuracy = Math.exp(-td / (35 + 45 * pic.self.abilities.passing)) * (1 - 0.25 * pressure);
+    // Calibrated against measured completion (6 seeds): with accurate strikes the receiver keeps most balls
+    // even with a marker two metres away; distance and pressure still cost accuracy.
+    const accuracy = Math.exp(-td / (60 + 60 * pic.self.abilities.passing)) * (1 - 0.15 * pressure);
     let space = 9;
     for (const o of pic.opponents) space = Math.min(space, Math.hypot(o.pos.x - target.x, o.pos.z - target.z));
-    const success = (lofted ? loftSafe : groundSafe) * accuracy * (0.55 + 0.45 * Math.min(1, space / 5));
-    const value = success * threatAt(sign, target) - (1 - success) * lossCost(from);
+    const success = (lofted ? loftSafe : groundSafe) * accuracy * (0.75 + 0.25 * Math.min(1, space / 4));
+    // Arriving is not keeping: a receiver closed down by an opponent may lose it again, where he stands. The
+    // opponents keep running while the ball travels, so a slow ball arrives with less room around him.
+    const travel = Math.min(4, lofted ? loftedTime(loftSpeed, 0.42) : rollTime(ground, td));
+    const keep = 1 - RECEIVER_RISK * Math.max(0, 1 - (space - CLOSING_SPEED * travel) / 5);
+    const value = success * (keep * threatAt(sign, target) - (1 - keep) * lossCost(target)) - (1 - success) * lossCost(from);
     out.push({
       kind: 'pass',
       target: m.id,
@@ -165,11 +176,15 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     const ahead = { x: from.x + best.dir.x * 6, z: from.z + best.dir.z * 6 };
     let gap = 9;
     for (const o of pic.opponents) gap = Math.min(gap, segmentDistance(o.pos, from, ahead).d);
-    const success = Math.min(0.92, 0.25 + gap / 6) * (0.7 + 0.3 * pic.self.abilities.technique);
+    // Calibrated against measured outcomes (6 seeds): share of carries still in the team's possession 1.5 s
+    // after the touch rises from ≈ 0.3 with an opponent in the way to ≈ 0.6 in open space.
+    const success = Math.min(0.72, 0.22 + gap / 9) * (0.7 + 0.3 * pic.self.abilities.technique);
     const run = Math.hypot(pic.vel.x, pic.vel.z);
+    // With an opponent close the ball is kept within a stride; in space it is pushed ahead to run onto.
+    const speed = pressure > 0.4 ? Math.max(2.2, Math.min(4.5, run + 0.4)) : Math.max(3, Math.min(6, run + 1.3));
     out.push({
       kind: 'dribble',
-      action: { kind: 'dribble', direction: best.dir, speed: Math.max(3, Math.min(6, run + 1.3)) },
+      action: { kind: 'dribble', direction: best.dir, speed },
       success,
       value: success * threatAt(sign, ahead) - (1 - success) * lossCost(from) * 1.2,
       note: 'Ball am Fuß',

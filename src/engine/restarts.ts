@@ -47,7 +47,8 @@ export function restartReady(r: RestartState, profiles: PlayerProfile[], positio
     const q = positions.get(p.id)!;
     if (r.kind === 'kickoff' && signOf(p.team) * q.x > 0.5 && p.id !== r.taker) return false;
     if (p.team !== r.team && Math.hypot(q.x - r.spot.x, q.z - r.spot.z) < min) return false;
-    if (r.kind === 'penalty' && p.id !== r.taker && p.role !== 'GK') {
+    // Law 14: everybody but taker and keeper outside the area; Law 16: opponents outside it at a goal kick.
+    if ((r.kind === 'penalty' && p.id !== r.taker && p.role !== 'GK') || (r.kind === 'goal-kick' && p.team !== r.team)) {
       const inArea = Math.abs(q.z) < PITCH.penaltyAreaHalfWidth && Math.sign(r.spot.x) * q.x > PITCH.halfLength - PITCH.penaltyAreaDepth;
       if (inArea) return false;
     }
