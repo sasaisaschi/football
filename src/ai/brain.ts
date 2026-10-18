@@ -1,5 +1,5 @@
 import type RAPIER from '@dimforge/rapier3d-simd-compat';
-import type { BallAction, PlayerIntent, PlayerProfile, RestartKind, TeamInstruction, Vec2 } from '../engine/types';
+import type { BallAction, PlayerIntent, PlayerProfile, RestartKind, TeamInstruction, Vec2, Vec3 } from '../engine/types';
 import type { Rng } from '../engine/rng';
 import type { BodyCommand, PlayerBody } from '../physics/body';
 import type { Legs } from '../physics/legs';
@@ -8,6 +8,7 @@ import { approach, trySwing } from './execution';
 import { blockLane, bodyInLine, carrierHasBall, jockey, pressCarrier } from './box-orders';
 import { tackle, tackleApproach } from './challenge';
 import { firstTouch } from './first-touch';
+import { aerialIntercept } from './aerial';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { offBallCommand } from './off-ball';
 import { Perception, type Truth } from './perception';
@@ -81,7 +82,12 @@ export class PlayerBrain {
   }
 
   /** Estimated time for a player at p with top speed v to reach the (believed) moving ball. */
-  static interceptTime(p: Vec2, vmax: number, ball: { pos: Vec2; vel: Vec2 }): { t: number; at: Vec2 } {
+  static interceptTime(p: Vec2, vmax: number, ball: { pos: Vec2 | Vec3; vel: Vec2 | Vec3 }): { t: number; at: Vec2 } {
+    // A ball in the air is met where it first comes down to a playable height, not along its shadow on the turf.
+    if ('y' in ball.pos && 'y' in ball.vel) {
+      const aerial = aerialIntercept(p, vmax, ball.pos, ball.vel);
+      if (aerial) return aerial;
+    }
     const speed = Math.max(0.01, Math.hypot(ball.vel.x, ball.vel.z));
     const stop = speed / BALL_DAMPING;
     for (let t = 0; t <= 4; t += 0.1) {
@@ -160,7 +166,8 @@ export class PlayerBrain {
     const self = this.body.position();
     this.perception.observe(ctx.truth, self, this.body.heading);
     const believed = this.perception.ballNow(ctx.now);
-    const ball = { pos: { x: believed.pos.x, z: believed.pos.z }, vel: { x: believed.vel.x, z: believed.vel.z } };
+    // Kept in 3D: whether the ball is in the air decides where it can be met.
+    const ball = { pos: { ...believed.pos }, vel: { ...believed.vel } };
     if (this.legs.committed()) {
       // Up to the contact the body keeps the pace the leg was planned for: the planted foot carries it through the kick.
       const v = this.body.velocity();
