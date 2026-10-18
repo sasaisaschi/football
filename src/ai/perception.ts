@@ -3,10 +3,10 @@ import type { Rng } from '../engine/rng';
 
 /** What one player believes about another, or about the ball, at the time he last looked. */
 export type Sighting = { pos: Vec2; vel: Vec2; seenAt: number };
-export type BallSighting = { pos: Vec3; vel: Vec3; seenAt: number };
+export type BallSighting = { pos: Vec3; vel: Vec3; spin: Vec3; seenAt: number };
 
 export type TruthPlayer = { id: number; pos: Vec2; vel: Vec2 };
-export type Truth = { now: number; ball: { pos: Vec3; vel: Vec3 }; players: TruthPlayer[] };
+export type Truth = { now: number; ball: { pos: Vec3; vel: Vec3; spin: Vec3 }; players: TruthPlayer[] };
 
 /**
  * Limited perception. A player refreshes his picture a few times per second, but only what lies inside his
@@ -14,7 +14,7 @@ export type Truth = { now: number; ball: { pos: Vec3; vel: Vec3 }; players: Trut
  * distance and poorer vision. Decisions are made from this picture, never from the true state.
  */
 export class Perception {
-  ball: BallSighting = { pos: { x: 0, y: 0.11, z: 0 }, vel: { x: 0, y: 0, z: 0 }, seenAt: -1 };
+  ball: BallSighting = { pos: { x: 0, y: 0.11, z: 0 }, vel: { x: 0, y: 0, z: 0 }, spin: { x: 0, y: 0, z: 0 }, seenAt: -1 };
   readonly others = new Map<number, Sighting>();
   private nextLook = 0;
   private nextShoulderCheck = 0;
@@ -53,6 +53,8 @@ export class Perception {
       this.ball = {
         pos: { x: b.pos.x + this.rng.gauss() * e, y: b.pos.y, z: b.pos.z + this.rng.gauss() * e },
         vel: { x: b.vel.x * (1 + this.rng.gauss() * 0.05), y: b.vel.y, z: b.vel.z * (1 + this.rng.gauss() * 0.05) },
+        // The curve of a spinning ball in flight is read from its path; the spin itself is taken as seen.
+        spin: { ...b.spin },
         seenAt: truth.now,
       };
     }
@@ -75,7 +77,7 @@ export class Perception {
     const y = pos.y + vel.y * age - 4.9 * age * age;
     // In the air gravity changes the vertical pace too; the old pace would put a dropping ball far too high.
     const airborne = y > 0.11;
-    return { pos: { x: pos.x + vel.x * age, y: Math.max(0.11, y), z: pos.z + vel.z * age }, vel: airborne ? { ...vel, y: vel.y - 9.81 * age } : vel, seenAt: this.ball.seenAt };
+    return { pos: { x: pos.x + vel.x * age, y: Math.max(0.11, y), z: pos.z + vel.z * age }, vel: airborne ? { ...vel, y: vel.y - 9.81 * age } : vel, spin: this.ball.spin, seenAt: this.ball.seenAt };
   }
 
   /** Believed current position of another player (extrapolated for at most one second). */
@@ -88,7 +90,7 @@ export class Perception {
 
   /** Synchronises the whole picture at kick-off or a restart, when everybody sees the set-up. */
   reset(truth: Truth): void {
-    this.ball = { pos: { ...truth.ball.pos }, vel: { ...truth.ball.vel }, seenAt: truth.now };
+    this.ball = { pos: { ...truth.ball.pos }, vel: { ...truth.ball.vel }, spin: { ...truth.ball.spin }, seenAt: truth.now };
     for (const p of truth.players) if (p.id !== this.self.id) this.others.set(p.id, { pos: { ...p.pos }, vel: { ...p.vel }, seenAt: truth.now });
   }
 }

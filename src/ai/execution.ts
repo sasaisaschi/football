@@ -13,6 +13,7 @@ export function techniqueFor(action: BallAction): Technique {
     case 'shot': case 'clear': return 'instep';
     case 'pass': return action.lofted || action.speed > 18 ? 'instep' : 'inside';
     case 'dribble': case 'tackle': return 'inside';
+    case 'header': throw new Error('A header is played with the head, not with a boot technique');
   }
 }
 
@@ -46,6 +47,10 @@ export function actionVector(action: BallAction, ball: Vec2): { dir: Vec2; eleva
     case 'dribble': case 'tackle': return { dir: action.direction, elevation: 0, speed: action.speed };
     case 'clear': return { dir: action.direction, elevation: MAX_ELEVATION, speed: action.speed };
     case 'control': return action.touch ? { dir: action.touch.direction, elevation: 0, speed: action.touch.speed } : { dir: { x: 0, z: 0 }, elevation: 0, speed: 0 };
+    case 'header': {
+      const v = action.velocity, h = Math.hypot(v.x, v.z) || 1;
+      return { dir: { x: v.x / h, z: v.z / h }, elevation: Math.atan2(v.y, h), speed: Math.hypot(v.x, v.y, v.z) };
+    }
   }
 }
 

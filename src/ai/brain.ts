@@ -3,12 +3,14 @@ import type { BallAction, PlayerIntent, PlayerProfile, RestartKind, TeamInstruct
 import type { Rng } from '../engine/rng';
 import type { BodyCommand, PlayerBody } from '../physics/body';
 import type { Legs } from '../physics/legs';
+import type { Head } from '../physics/head';
 import { PITCH, inPenaltyArea } from '../physics/pitch-geometry';
 import { approach, trySwing } from './execution';
 import { blockLane, bodyInLine, carrierHasBall, jockey, pressCarrier } from './box-orders';
 import { tackle, tackleApproach } from './challenge';
 import { firstTouch } from './first-touch';
-import { aerialIntercept } from './aerial';
+import { aerialIntercept, headerIntercept, isAirborne } from './aerial';
+import { chooseHeader, CONTESTED } from './heading';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { offBallCommand } from './off-ball';
 import { Perception, type Truth } from './perception';
@@ -37,6 +39,8 @@ export type BrainOutput = { command: BodyCommand; effort: number; swing: { actio
 const BALL_DAMPING = 1.1;
 /** Ball within this distance of an opponent whose team played it last: he has it, I jockey instead of charging in (m); otherwise 1.1 m. */
 const CARRIER_REACH = 1.6;
+/** How far beyond the meeting point on the ball's line a header is set up (m). */
+const HEADER_SET = 0.35;
 /** Within this distance of the carrier a jockeying defender no longer closes in (m). */
 const JOCKEY_CLOSE = 1.5;
 /** Sideways distance from the carrier at which a recovering defender runs alongside him (m). */
@@ -54,7 +58,7 @@ export class PlayerBrain {
   private nextDecision = 0;
   lastOptions: EvaluatedOption[] = [];
 
-  constructor(readonly profile: PlayerProfile, readonly body: PlayerBody, readonly legs: Legs, private readonly rng: Rng) {
+  constructor(readonly profile: PlayerProfile, readonly body: PlayerBody, readonly legs: Legs, private readonly rng: Rng, readonly head: Head) {
     this.perception = new Perception(profile, rng);
   }
 
@@ -82,10 +86,10 @@ export class PlayerBrain {
   }
 
   /** Estimated time for a player at p with top speed v to reach the (believed) moving ball. */
-  static interceptTime(p: Vec2, vmax: number, ball: { pos: Vec2 | Vec3; vel: Vec2 | Vec3 }): { t: number; at: Vec2 } {
+  static interceptTime(p: Vec2, vmax: number, ball: { pos: Vec2 | Vec3; vel: Vec2 | Vec3; spin?: Vec3 }): { t: number; at: Vec2 } {
     // A ball in the air is met where it first comes down to a playable height, not along its shadow on the turf.
     if ('y' in ball.pos && 'y' in ball.vel) {
-      const aerial = aerialIntercept(p, vmax, ball.pos, ball.vel);
+      const aerial = aerialIntercept(p, vmax, ball.pos, ball.vel, ball.spin);
       if (aerial) return aerial;
     }
     const speed = Math.max(0.01, Math.hypot(ball.vel.x, ball.vel.z));
@@ -134,7 +138,7 @@ export class PlayerBrain {
     const order = this.userIntent;
     if (order?.type === 'move' && order.action.kind === 'tactical-foul') return out;
     // Until the contact the body is committed to the run the kick was planned for.
-    if (this.legs.committed()) return out;
+    if (this.legs.committed() || this.head.committed()) return out;
     return { ...out, command: this.controlledApproach(out.command, ctx) };
   }
 
@@ -167,9 +171,11 @@ export class PlayerBrain {
     this.perception.observe(ctx.truth, self, this.body.heading);
     const believed = this.perception.ballNow(ctx.now);
     // Kept in 3D: whether the ball is in the air decides where it can be met.
-    const ball = { pos: { ...believed.pos }, vel: { ...believed.vel } };
-    if (this.legs.committed()) {
-      // Up to the contact the body keeps the pace the leg was planned for: the planted foot carries it through the kick.
+    const ball = { pos: { ...believed.pos }, vel: { ...believed.vel }, spin: { ...believed.spin } };
+    const aim = this.head.aim();
+    if (aim) this.head.refine(ctx.ball, aim);
+    if (this.legs.committed() || this.head.committed()) {
+      // Up to the contact the body keeps the pace the leg (or the header) was planned for.
       const v = this.body.velocity();
       return { command: { target: { x: self.x + v.x * 2, z: self.z + v.z * 2 }, speed: this.body.speed() }, effort: 1, swing: null };
     }
@@ -180,7 +186,7 @@ export class PlayerBrain {
       this.userIntent = null;
     }
     this.committedToBall = ctx.ballHeldBy === null && this.believesBallIsMine(ctx, ball);
-    if (this.committedToBall) return this.playBall(ctx, ball);
+    if (this.committedToBall) return this.playAerial(ctx, ball) ?? this.playBall(ctx, ball);
     this.intent = null;
     return { command: this.steerAround(offBallCommand(this, ctx, ball), ctx), effort: 1, swing: null };
   }
@@ -209,6 +215,38 @@ export class PlayerBrain {
       case 'hold-shape':
         return { command: this.steerAround(offBallCommand(this, ctx, ball), ctx), effort: 1, swing: null };
     }
+  }
+
+  /**
+   * A ball in the air that I am going for: head it if the opponents played it, if it is contested or if I am in
+   * their area; otherwise (my team's ball, nobody near) let it come down and take it with the foot. Null: not a
+   * header, play on as usual.
+   */
+  private playAerial(ctx: BrainContext, ball: { pos: Vec3; vel: Vec3; spin: Vec3 }): BrainOutput | null {
+    if (this.profile.role === 'GK' || ctx.restart || !isAirborne(ball.pos, ball.vel)) return null;
+    const self = this.body.position();
+    const ownBall = ctx.possession === this.profile.team;
+    const pic = this.picture(ctx);
+    const contested = pic.opponents.some(o => Math.hypot(o.pos.x - self.x, o.pos.z - self.z) < CONTESTED);
+    const goalX = ctx.sign * PITCH.halfLength;
+    const atGoal = Math.hypot(goalX - self.x, self.z) < 16;
+    if (ownBall && !contested && !atGoal) return null;
+    const forehead = this.body.height - 0.12;
+    const meet = headerIntercept(self, this.body.limits.maxSpeed, ball.pos, ball.vel, forehead, ball.spin);
+    if (!meet) return null;
+    if (!this.head.busy()) {
+      const choice = chooseHeader(pic, ownBall, forehead);
+      const plan = this.head.plan(ctx.ball, choice.velocity);
+      if (plan) {
+        this.head.start(plan, choice.velocity);
+        this.intent = null;
+        return { command: { target: self, speed: this.body.speed(), face: ball.pos }, effort: 1, swing: { action: { kind: 'header', velocity: choice.velocity }, source: 'ai' } };
+      }
+    }
+    // Stand just beyond the point on the ball's line, facing it, so it meets the forehead in front of the body.
+    const h = Math.hypot(ball.vel.x, ball.vel.z) || 1;
+    const stand = { x: meet.at.x + (ball.vel.x / h) * HEADER_SET, z: meet.at.z + (ball.vel.z / h) * HEADER_SET };
+    return { command: { target: stand, speed: this.body.limits.maxSpeed, face: ball.pos }, effort: 1, swing: null };
   }
 
   /** Off the ball, players run around each other instead of through each other. */

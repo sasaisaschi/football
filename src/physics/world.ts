@@ -18,7 +18,7 @@ const GROUND_SUBSTEPS = 4;
 /** Ball speed (m/s) below which a ball on the turf is treated as at rest. */
 const AT_REST = 0.2;
 
-export type ContactPart = 'boot' | 'body' | 'hands';
+export type ContactPart = 'boot' | 'head' | 'body' | 'hands';
 export type BallContact = { kind: 'ball'; player: number; part: ContactPart };
 export type BodyContact = { kind: 'bodies'; a: number; b: number; closingSpeed: number };
 export type Contact = BallContact | BodyContact;
@@ -67,7 +67,7 @@ export class PhysicsWorld {
 
   substepsNeeded(): number {
     let fastest = 0;
-    for (const l of this.legs) fastest = Math.max(fastest, l.strikeSpeedNow());
+    for (const k of this.kinematics) if (k.strikeSpeedNow) fastest = Math.max(fastest, k.strikeSpeedNow());
     const floor = this.ballMovingOnTurf() ? GROUND_SUBSTEPS : 1;
     return Math.min(MAX_SUBSTEPS, Math.max(floor, Math.ceil((fastest * PHYSICS_DT) / MAX_BOOT_TRAVEL)));
   }

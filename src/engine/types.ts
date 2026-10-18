@@ -73,7 +73,9 @@ export type BallAction =
   /** A defender's poke at a ball still at an opponent's feet. */
   | { kind: 'tackle'; direction: Vec2; speed: number }
   /** Without `touch` the ball is cushioned dead; with it, taken into a direction (directional first touch). */
-  | { kind: 'control'; touch?: { direction: Vec2; speed: number } };
+  | { kind: 'control'; touch?: { direction: Vec2; speed: number } }
+  /** A header that sends the ball off with this velocity (clearance, lay-off, header at goal, or down to the feet). */
+  | { kind: 'header'; velocity: Vec3 };
 
 /** Off-ball behaviour a player commits to for a while. */
 export type MovementAction =
@@ -99,7 +101,7 @@ export type MatchEvent = MatchEventBase &
   (
     | { type: 'kickoff'; team: TeamId; half: 1 | 2 }
     | { type: 'swing'; player: number; action: BallAction['kind']; source: IntentSource }
-    | { type: 'touch'; player: number; part: 'boot' | 'body' | 'hands'; ballSpeed: number; position: Vec3 }
+    | { type: 'touch'; player: number; part: 'boot' | 'head' | 'body' | 'hands'; ballSpeed: number; position: Vec3 }
     | { type: 'catch'; player: number; position: Vec3 }
     | { type: 'release'; player: number }
     | { type: 'player-contact'; a: number; b: number; closingSpeed: number }

@@ -1,6 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-simd-compat';
 import { BALL_SPEC } from './pitch-geometry';
 import { GROUPS } from './groups';
+import type { Vec3 } from '../engine/types';
 
 /**
  * Ball model. Rapier integrates the rigid body and resolves every contact; this module only adds the
@@ -63,29 +64,41 @@ export function applyBallForces(ball: RAPIER.RigidBody): void {
   const v = ball.linvel();
   const speed = Math.hypot(v.x, v.y, v.z);
   if (speed < 1e-3) return;
-  const q = 0.5 * BALL_PHYSICS.airDensity * AREA * speed;
-  let fx = -q * dragCoefficient(speed) * v.x;
-  let fy = -q * dragCoefficient(speed) * v.y;
-  let fz = -q * dragCoefficient(speed) * v.z;
-  if (isRolling(ball)) {
+  const rolling = isRolling(ball);
+  const a = airAcceleration(v, rolling ? ZERO : ball.angvel());
+  let fx = a.x * BALL_SPEC.mass, fy = a.y * BALL_SPEC.mass, fz = a.z * BALL_SPEC.mass;
+  if (rolling) {
     const horizontal = Math.hypot(v.x, v.z);
     if (horizontal > 0.02) {
       const f = BALL_PHYSICS.rollingResistance * BALL_SPEC.mass * BALL_PHYSICS.gravity;
       fx -= (f * v.x) / horizontal;
       fz -= (f * v.z) / horizontal;
     }
-  } else {
-    const w = ball.angvel();
-    const spin = Math.hypot(w.x, w.y, w.z);
-    if (spin > 0.5) {
-      const s = (BALL_SPEC.radius * spin) / speed;
-      const cl = 1 / (2 + 1 / s);
-      // Direction ω̂ × v̂, magnitude ½ρA·C_L·v².
-      const k = (q * speed * cl) / (spin * speed);
-      fx += k * (w.y * v.z - w.z * v.y);
-      fy += k * (w.z * v.x - w.x * v.z);
-      fz += k * (w.x * v.y - w.y * v.x);
-    }
   }
   ball.addForce({ x: fx, y: fy, z: fz }, true);
+}
+
+const ZERO = { x: 0, y: 0, z: 0 };
+
+/**
+ * Acceleration of a ball in the air from drag and Magnus lift (gravity not included), for velocity v and spin w.
+ * Shared by the physics and by every player's reading of a ball's flight, so both agree.
+ */
+export function airAcceleration(v: Vec3, w: Vec3): Vec3 {
+  const speed = Math.hypot(v.x, v.y, v.z);
+  if (speed < 1e-3) return { ...ZERO };
+  const q = (0.5 * BALL_PHYSICS.airDensity * AREA * speed) / BALL_SPEC.mass;
+  const cd = dragCoefficient(speed);
+  const a = { x: -q * cd * v.x, y: -q * cd * v.y, z: -q * cd * v.z };
+  const spin = Math.hypot(w.x, w.y, w.z);
+  if (spin > 0.5) {
+    const s = (BALL_SPEC.radius * spin) / speed;
+    const cl = 1 / (2 + 1 / s);
+    // Direction ω̂ × v̂, magnitude ½ρA·C_L·v² (per unit mass).
+    const k = (q * speed * cl) / (spin * speed);
+    a.x += k * (w.y * v.z - w.z * v.y);
+    a.y += k * (w.z * v.x - w.x * v.z);
+    a.z += k * (w.x * v.y - w.y * v.x);
+  }
+  return a;
 }
