@@ -16,7 +16,8 @@
     "check": "npm run typecheck && npm run test && npm run build",
     "preview": "vite preview",
     "sim": "vitest run src/engine/full-match.test.ts",
-    "probe": "node scripts/probe.mjs"
+    "probe": "node scripts/probe.mjs",
+    "lab": "vitest run src/engine/shot-lab.test.ts --silent=false"
   },
   "dependencies": {
     "@dimforge/rapier3d-simd-compat": "^0.21.0",

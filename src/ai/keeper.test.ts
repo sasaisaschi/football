@@ -1,0 +1,58 @@
+import RAPIER from '@dimforge/rapier3d-simd-compat';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { MatchEngine } from '../engine/match-engine';
+import { runFor, stageScenario } from '../engine/scenario-helper';
+import { createRng } from '../engine/rng';
+import type { MatchEvent } from '../engine/types';
+import { BALL_PHYSICS } from '../physics/ball';
+import { PITCH } from '../physics/pitch-geometry';
+import { Perception } from './perception';
+import { keeperShape } from './shape';
+
+beforeAll(async () => {
+  await RAPIER.init();
+});
+
+/** A struck ball from `d` m in front of the goal team 1 defends, aimed at (z, y) in the goal mouth. */
+function shot(seed: number, d: number, tz: number, ty: number, speed = 26) {
+  const e = new MatchEngine({ seed, halfMinutes: 45 });
+  const gk = e.profiles.find(p => p.team === 1 && p.role === 'GK')!.id;
+  const ball = { x: PITCH.halfLength - d, y: 0.11, z: 0 };
+  const dx = d, flat = Math.hypot(dx, tz), t = flat / (speed * 0.92);
+  const vy = (ty - ball.y + 0.5 * BALL_PHYSICS.gravity * t * t) / t, h = Math.sqrt(speed * speed - vy * vy);
+  stageScenario(e, { [gk]: keeperShape(-1, ball) }, ball, { x: (h * dx) / flat, y: vy, z: (h * tz) / flat });
+  const log: MatchEvent[] = [];
+  e.onEvent(ev => log.push(ev));
+  runFor(e, 2.5, () => log.some(ev => ev.type === 'goal' || ev.type === 'out'));
+  return { goal: log.some(ev => ev.type === 'goal'), touched: log.some(ev => (ev.type === 'touch' || ev.type === 'catch') && ev.player === gk) };
+}
+
+describe('goalkeeper against shots from distance', () => {
+  it('reaches most shots from 20 m towards the side of the goal instead of diving past them', () => {
+    // Before the dive was dosed the keeper flew a metre past such shots: 13 % of shots from 20 m were saved.
+    const rng = createRng(11);
+    let saved = 0;
+    for (let i = 0; i < 8; i++) {
+      const side = i % 2 ? 1 : -1;
+      if (!shot(2000 + i, 20, side * rng.range(1.5, 3.2), rng.range(0.3, 1.8)).goal) saved++;
+    }
+    expect(saved).toBeGreaterThanOrEqual(6);
+  });
+
+  it('does not dive past a ball that comes within arm\'s reach of his body', () => {
+    const r = shot(3000, 20, 0.6, 2.0);
+    expect(r.touched).toBe(true);
+    expect(r.goal).toBe(false);
+  });
+});
+
+describe('perception of a ball in the air', () => {
+  it('extrapolates the vertical pace with gravity, so a dropping ball is not believed to rise', () => {
+    const roster = new MatchEngine({ seed: 1, halfMinutes: 1 }).profiles;
+    const p = new Perception(roster[0], createRng(1));
+    p.reset({ now: 0, ball: { pos: { x: 0, y: 1, z: 0 }, vel: { x: 20, y: 4, z: 0 } }, players: [] });
+    const later = p.ballNow(0.4);
+    expect(later.vel.y).toBeCloseTo(4 - 9.81 * 0.4, 5);
+    expect(later.pos.y).toBeCloseTo(1 + 4 * 0.4 - 4.9 * 0.16, 5);
+  });
+});

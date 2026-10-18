@@ -4,6 +4,11 @@ import { PITCH, inPenaltyArea } from '../physics/pitch-geometry';
 import type { BrainContext, BrainOutput, PlayerBrain } from './brain';
 import { keeperShape } from './shape';
 
+/** Slowest sideways push of a dive: below it the keeper simply steps across (m/s). */
+const DIVE_MIN_SPEED = 1.5;
+/** How far beside his body a diving keeper's hands reach (shoulder swinging out plus the arm, m). */
+const DIVE_HAND_REACH = 0.9;
+
 /**
  * Goalkeeping on top of the normal brain: read shots towards the goal, move across, reach and dive, claim
  * loose balls in the area and distribute after a catch. Whether a shot is saved is decided by the contact
@@ -70,8 +75,12 @@ export class KeeperSkill {
         const standing: Vec3 = { x: point.x, y: point.y, z: self.z + Math.sign(crossing.z - self.z) * Math.max(0, Math.abs(crossing.z - self.z) - sidestep) };
         // A ball at the body is blocked by it; only a ball passing beside him needs a dive, along the line.
         const beside = crossing.z - self.z;
-        if (!this.dived && crossing.t < 0.7 && Math.abs(beside) > body.radius && !this.hands.withinReach(standing)) {
-          this.hands.dive({ x: self.x, z: self.z + Math.sign(beside) }, ctx.now, this.brain.profile.abilities.reflexes);
+        if (!this.dived && crossing.t < 0.7 && Math.abs(beside) > DIVE_HAND_REACH && !this.hands.withinReach(standing)) {
+          // The push is dosed to bring the hands, not the body, onto the ball's line as it arrives: a full-power dive
+          // at a shot still 0.6 s away carried him a metre past it and the ball went in on the inside (measured:
+          // shots from 20 m saved 13 %). A ball within the hands' sideways reach needs no dive at all.
+          const dose = Math.max(DIVE_MIN_SPEED, (Math.abs(beside) - DIVE_HAND_REACH) / crossing.t);
+          this.hands.dive({ x: self.x, z: self.z + Math.sign(beside) }, ctx.now, this.brain.profile.abilities.reflexes, dose);
           this.dived = true;
         }
       }

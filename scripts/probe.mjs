@@ -52,6 +52,7 @@ const losses = Object.keys(results[0].lossesAfter);
 const report = {
   seeds: `${from}-${to ?? from}`, minutesPerHalf: minutes,
   goals: p(r => r.score[0] + r.score[1]), ownGoals: p(r => r.ownGoals),
+  goalsFrom: Object.fromEntries(Object.keys(results[0].goalsFrom).map(k => [k, p(r => r.goalsFrom[k])])),
   shots: p(r => r.shots[0] + r.shots[1]), shotsAfterBuildUp: p(r => r.shotsAfterBuildUp),
   passes: p(r => r.passes), passCompletion: +(sum(r => r.passesCompleted) / Math.max(1, sum(r => r.passes))).toFixed(2),
   possessionChanges: p(r => r.possessionChanges), pingPong: p(r => r.pingPong),

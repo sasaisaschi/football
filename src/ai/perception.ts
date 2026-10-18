@@ -72,8 +72,10 @@ export class Perception {
   ballNow(now: number): BallSighting {
     const age = Math.min(1.5, Math.max(0, now - this.ball.seenAt));
     const { pos, vel } = this.ball;
-    const y = Math.max(0.11, pos.y + vel.y * age - 4.9 * age * age);
-    return { pos: { x: pos.x + vel.x * age, y, z: pos.z + vel.z * age }, vel, seenAt: this.ball.seenAt };
+    const y = pos.y + vel.y * age - 4.9 * age * age;
+    // In the air gravity changes the vertical pace too; the old pace would put a dropping ball far too high.
+    const airborne = y > 0.11;
+    return { pos: { x: pos.x + vel.x * age, y: Math.max(0.11, y), z: pos.z + vel.z * age }, vel: airborne ? { ...vel, y: vel.y - 9.81 * age } : vel, seenAt: this.ball.seenAt };
   }
 
   /** Believed current position of another player (extrapolated for at most one second). */

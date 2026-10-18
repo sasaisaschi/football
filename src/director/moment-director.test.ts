@@ -79,7 +79,8 @@ describe('decisive moment director', () => {
 
   it('the same decision does not guarantee the same success: outcomes of a chosen shot vary with execution', () => {
     const outcomes = new Set<string>();
-    for (const seed of [1, 2, 3, 4, 5, 6]) {
+    // A shot from 19 m is mostly caught; over a dozen executions some go wide or are parried.
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
       const { e, moment } = attackingSetup(seed);
       const shot = moment?.options.find(o => o.id.startsWith('shot'));
       if (!shot) continue;
@@ -128,16 +129,42 @@ describe('decisive moment director', () => {
     expect(moment?.kind).toBe('box-defence');
     expect(moment!.focusPlayer).toBe(defender);
     expect(moment!.options.map(o => o.id)).toEqual(['press', 'block', 'hold']);
-    const gap = () => Math.hypot(e.bodies[defender].position().x - e.bodies[carrier].position().x, e.bodies[defender].position().z - e.bodies[carrier].position().z);
-    const before = gap();
+    // The defender's own run towards the carrier (the carrier may shoot from there, so the gap alone would not
+    // show who closed it).
+    const target = e.bodies[carrier].position();
+    const toTarget = () => Math.hypot(e.bodies[defender].position().x - target.x, e.bodies[defender].position().z - target.z);
+    const before = toTarget();
     e.resolveMoment('press', 'user');
     runFor(e, 0.6);
-    expect(gap()).toBeLessThan(before - 1);
+    expect(toTarget()).toBeLessThan(before - 0.8);
 
     const second = setup();
     second.e.resolveMoment(second.moment!.defaultOptionId, 'delegated');
     const decision = second.e.events.find(ev => ev.type === 'decision');
     expect(decision).toMatchObject({ optionId: 'hold', chosenBy: 'delegated' });
+  });
+
+  // Known defect (PROJECT_REPORT §6, Chancenverwertung): the nearest defender already goes for the carrier at full
+  // speed, so 'press' and 'hold' close the same distance (1.12 m in 0.6 s) and the decision changes nothing here.
+  // Remove .fails once pressing makes a difference.
+  it.fails('box defence: pressing closes in faster than holding', () => {
+    const closing = (option: string) => {
+      const e = new MatchEngine({ seed: 9, halfMinutes: 45 });
+      const carrier = role(e, 1, 'ST'), defender = role(e, 0, 'RCB');
+      stageScenario(e, { [carrier]: { x: -31, z: 2 }, [defender]: { x: -35, z: 1 }, [role(e, 0, 'GK')]: { x: -51, z: 0 } }, { x: -30.6, y: 0.11, z: 2 });
+      e.bodies[carrier].heading = -Math.PI / 2;
+      e.referee.lastTouch = { player: carrier, team: 1, part: 'boot', time: e.time, position: e.ballPos() };
+      e.director = new MomentDirector({ userTeam: 0, cooldown: 0, maxPerHalf: 99, timeoutSeconds: 12 }).attach();
+      runFor(e, 0.5);
+      e.director = null;
+      const target = e.bodies[carrier].position();
+      const gap = () => Math.hypot(e.bodies[defender].position().x - target.x, e.bodies[defender].position().z - target.z);
+      const before = gap();
+      e.resolveMoment(option, 'user');
+      runFor(e, 0.6);
+      return before - gap();
+    };
+    expect(closing('press')).toBeGreaterThan(closing('hold') + 0.3);
   });
 });
 

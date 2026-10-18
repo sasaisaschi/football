@@ -35,6 +35,18 @@ describe('match statistics', () => {
     expect(s.shotsAfterBuildUp).toBe(1);
   });
 
+  it('a goal is credited to how it went in: a shot, a dribble, a ball off the body, an own goal', () => {
+    const st = id(0, 'ST'), cb = id(1, 'RCB');
+    const goal = (t: number, team: 0 | 1, ownGoal = false) => at(t, { type: 'goal', team, scorer: null, ownGoal, position: { x: 52.6, y: 0.5, z: 0 } });
+    const s = matchStats([
+      swing(1, st, 'shot'), touch(1.1, st), goal(1.5, 0),
+      swing(10, st, 'dribble'), touch(10.1, st), goal(11, 0),
+      touch(20, st, 'body'), goal(20.5, 0),
+      touch(30, cb), goal(30.5, 0, true),
+    ], roster);
+    expect(s.goalsFrom).toMatchObject({ shot: 1, dribble: 1, body: 1, own: 1 });
+  });
+
   it('a stoppage is no turnover, a ball off the body is classified, a quick return is ping-pong', () => {
     const cm = id(0, 'CM'), cb = id(1, 'RCB');
     const s = matchStats([
