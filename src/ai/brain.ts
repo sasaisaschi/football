@@ -5,6 +5,7 @@ import type { BodyCommand, PlayerBody } from '../physics/body';
 import type { Legs } from '../physics/legs';
 import { PITCH, inPenaltyArea } from '../physics/pitch-geometry';
 import { approach, trySwing } from './execution';
+import { blockLane, bodyInLine, carrierHasBall, jockey, pressCarrier } from './box-orders';
 import { tackle, tackleApproach } from './challenge';
 import { firstTouch } from './first-touch';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
@@ -167,7 +168,8 @@ export class PlayerBrain {
     }
     const order = this.userIntent;
     if (order?.type === 'move') {
-      if (ctx.now < order.until && !ctx.restart) return this.followOrder(order.action, ctx, ball);
+      const out = ctx.now < order.until && !ctx.restart ? this.followOrder(order.action, ctx, ball) : null;
+      if (out) return out;
       this.userIntent = null;
     }
     this.committedToBall = ctx.ballHeldBy === null && this.believesBallIsMine(ctx, ball);
@@ -176,11 +178,19 @@ export class PlayerBrain {
     return { command: this.steerAround(this.offBall(ctx, ball), ctx), effort: 1, swing: null };
   }
 
-  /** A movement order from the coach (via a decision moment). The body still has to make it happen. */
-  private followOrder(action: Extract<PlayerIntent, { type: 'move' }>['action'], ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): BrainOutput {
+  /** A movement order from the coach (via a decision moment). The body still has to make it happen; null: it is over. */
+  private followOrder(action: Extract<PlayerIntent, { type: 'move' }>['action'], ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): BrainOutput | null {
     const max = this.body.limits.maxSpeed;
+    if (action.kind === 'jockey' || action.kind === 'block-lane' || action.kind === 'press') {
+      // Box-defence orders are about a carrier with the ball at his feet; once it is gone, the player reads the game again.
+      const carrier = this.perception.playerNow(action.target, ctx.now);
+      if (!carrier || !carrierHasBall(carrier, ball)) return null;
+      if (action.kind === 'jockey') return jockey(this.body.position(), carrier, this.perception.others.get(action.target)?.vel ?? { x: 0, z: 0 }, ball, ctx.sign, max);
+      if (action.kind === 'block-lane') return blockLane(ball, ctx.sign, max);
+      return pressCarrier({ body: this.body, legs: this.legs, ballBody: ctx.ball, profile: this.profile, rng: this.rng, sign: ctx.sign, picture: () => this.picture(ctx) }, { ...carrier, id: action.target }, ball);
+    }
     switch (action.kind) {
-      case 'press': case 'tactical-foul': case 'mark': {
+      case 'tactical-foul': case 'mark': {
         const target = this.perception.playerNow(action.target, ctx.now) ?? ball.pos;
         // A tactical foul means running into the opponent's path; whether it becomes a foul is the referee's call.
         const lead = action.kind === 'tactical-foul' ? 0.35 : 0;
@@ -455,14 +465,6 @@ export class PlayerBrain {
     const speed = gap > 10 ? this.body.limits.maxSpeed * 0.92 : gap > 3 ? 5.5 : 3;
     return { target, speed, face: ball.pos };
   }
-}
-
-/** Does a body stand in the way from rom to 	o (closer than the target, within a body and a leg of the line)? */
-function bodyInLine(from: Vec2, to: Vec2, body: Vec2): boolean {
-  const dx = to.x - from.x, dz = to.z - from.z, l = Math.hypot(dx, dz) || 1;
-  const along = ((body.x - from.x) * dx + (body.z - from.z) * dz) / l;
-  if (along <= 0 || along >= l) return false;
-  return Math.abs((body.x - from.x) * dz - (body.z - from.z) * dx) / l < 0.6;
 }
 
 /** Laws 8, 13, 15–17: kick-off halves, 9.15 m (2 m at throw-ins) from the ball at restarts. */

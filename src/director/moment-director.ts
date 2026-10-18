@@ -171,15 +171,13 @@ export class MomentDirector {
       .sort((a, b) => a.dist - b.dist);
     const nearest = defenders[0];
     if (!nearest || nearest.dist > 7 || nearest.dist < 1.2) return null;
-    // A block point between carrier and goal centre, 2.5 m from the carrier.
-    const block = { x: c.x + ((goalX - c.x) / toGoal) * 2.5, z: c.z + (-c.z / toGoal) * 2.5 };
     const name = (id: number) => `${e.profiles[id].name} (${e.profiles[id].number})`;
-    const order = (action: { kind: 'press'; target: number } | { kind: 'recover'; target: { x: number; z: number } }): DecisionOption['effect'] =>
-      ({ type: 'player', player: nearest.id, intent: { type: 'move', action, source: 'user', decidedAt: e.time, until: e.time + 3 } });
+    const order = (kind: 'press' | 'block-lane' | 'jockey'): DecisionOption['effect'] =>
+      ({ type: 'player', player: nearest.id, intent: { type: 'move', action: { kind, target: carrier }, source: 'user', decidedAt: e.time, until: e.time + 3 } });
     const options: DecisionOption[] = [
-      { id: 'press', label: 'Zustellen', detail: `${name(nearest.id)} attackiert den Ballführenden`, effect: order({ kind: 'press', target: carrier }), outlook: 'kann den Ball erobern – oder wird überlaufen' },
-      { id: 'block', label: 'Schussbahn blocken', detail: `${name(nearest.id)} stellt sich zwischen Ball und Tor`, effect: order({ kind: 'recover', target: block }), outlook: 'erschwert den Abschluss, lässt Zeit für einen Pass' },
-      { id: 'hold', label: 'Ordnung halten', detail: 'Die Abwehr organisiert sich selbst', effect: { type: 'none' }, outlook: 'keine Vorgabe, die Spieler lesen die Lage selbst' },
+      { id: 'press', label: 'Zustellen', detail: `${name(nearest.id)} läuft den Ballführenden an und geht in den Zweikampf`, effect: order('press'), outlook: 'kann den Ball erobern – oder wird überlaufen' },
+      { id: 'block', label: 'Schussbahn blocken', detail: `${name(nearest.id)} stellt sich zwischen Ball und Tor`, effect: order('block-lane'), outlook: 'erschwert den Abschluss, lässt Zeit für einen Pass' },
+      { id: 'hold', label: 'Ordnung halten', detail: `${name(nearest.id)} bleibt torseitig auf Abstand und verzögert`, effect: order('jockey'), outlook: 'schwer zu überlaufen, der Gegner hat aber Zeit zum Abschluss' },
     ];
     return this.open(e, 'box-defence', 'Gefahr vor dem eigenen Strafraum', `${name(carrier)} hat den Ball ${Math.round(toGoal)} m vor unserem Tor.`, nearest.id, options, 'hold');
   }

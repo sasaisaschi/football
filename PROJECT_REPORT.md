@@ -209,7 +209,7 @@ Bewertung: Die Probe liegt mit 3,0 Toren/90 im Zielbereich 2–4, bei einem Raus
 
 ### PR #8 und Leistungskorrektur (17.10.2026)
 - **PR #8 nicht gemergt:** Er stammt vom alten Prototyp-Branch (vor dem Neustart, inkl. altem PR #2) und importiert Module (`./match`, `./pitch`, `./kick-decision`), die es im neuen `main` nicht mehr gibt; GitHub meldet Konflikte. Ein Merge hätte den Build zerstört und Altcode zurückgebracht. Die zwei darin enthaltenen, im Neuaufbau noch fehlenden Funktionen wurden stattdessen in die neue Architektur übernommen:
-  - Moment **„Gefahr vor dem eigenen Strafraum“** (`box-defence`): Zustellen, Schussbahn blocken oder Ordnung halten – als Bewegungsanweisung an den nächsten Verteidiger, körperlich ausgeführt.
+  - Moment **„Gefahr vor dem eigenen Strafraum“** (`box-defence`): Zustellen (anlaufen und stochern), Schussbahn blocken (in die Linie Ball–Tor) oder Ordnung halten (torseitig verzögern) – als Bewegungsanweisung an den nächsten Verteidiger, körperlich ausgeführt.
   - **„KI entscheiden lassen“** (Button und Taste `0`): wählt die Option, die die Spieler ohnehin gewählt hätten, und wird als `delegated` protokolliert (neben `user` und `timeout`).
 - **Leistungsfehler aus PR #5–#7 behoben:** Ein Physikschritt kostete 2,72 ms statt 1,49 ms; im Browser sank die Bildrate auf 36 FPS. Ursachen: (1) vier Physik-Teilschritte in *jedem* Tick, (2) die neue Rutsch-/Roll-Vorhersage des Balls wurde pro Optionsbewertung zehntausendfach neu integriert. Korrektur: vier Teilschritte nur, solange der Ball auf dem Rasen läuft (Flug/Ruhe: einer); Bodenball-Profile je Abschussgeschwindigkeit (0,05-m/s-Stufen) werden einmal berechnet und danach nur durchsucht. Gemessen: 2,02 ms pro Schritt, Optionswahl 0,65 → 0,02 ms pro Tick, **Browser 47 FPS** (Intel Iris Xe, 1600 × 900). Alle Tests unverändert grün.
 
@@ -377,7 +377,18 @@ Bewertung: Spieler schießen jetzt auch aus ≈ 20 m (19,9 statt 15 Schüsse/90,
 
 **Director-Tests angepasst, ein bestehender Fehler aufgedeckt:**
 - „Gleiche Entscheidung, unterschiedlicher Ausgang“: Ein Schuss aus 19 m wurde in allen 6 Wiederholungen gefangen. Mit 12 Wiederholungen: 9 gefangen, 2 im Aus, 1 im Spiel, kein Tor (real ≈ 5–8 % aus dieser Entfernung). Der Test nutzt jetzt 12.
-- „Gefahr vor dem eigenen Strafraum“: Der Test maß den Abstand Verteidiger–Gegner. Der Gegner schießt jetzt aus 21 m, statt auf den Verteidiger zuzudribbeln; deshalb misst der Test den Lauf des Verteidigers selbst. Dabei zeigte sich: **„Zustellen“ und „Ordnung halten“ bewirken in dieser Situation dasselbe**, auch auf `main` (je 1,12 m in 0,6 s), weil der nächste Verteidiger ohnehin mit voller Geschwindigkeit zum Ballführer läuft. Die Entscheidung ist hier wirkungslos. Festgehalten als `it.fails` in `moment-director.test.ts`; die Behebung ist offen (§9).
+- „Gefahr vor dem eigenen Strafraum“: Der Test maß den Abstand Verteidiger–Gegner. Der Gegner schießt jetzt aus 21 m, statt auf den Verteidiger zuzudribbeln; deshalb misst der Test den Lauf des Verteidigers selbst. Dabei zeigte sich: **„Zustellen“ und „Ordnung halten“ bewirken in dieser Situation dasselbe**, auch auf `main` (je 1,12 m in 0,6 s), weil der nächste Verteidiger ohnehin mit voller Geschwindigkeit zum Ballführer läuft. Die Entscheidung ist hier wirkungslos. Festgehalten als `it.fails` in `moment-director.test.ts`; behoben im folgenden Abschnitt.
+
+### Strafraum-Verteidigung: drei Optionen, drei Körperbewegungen (18.10.2026)
+
+Ursache des wirkungslosen Moments: Der Verteidiger steht beim Moment still, der Gegner schießt nach ≈ 0,6 s. „Ordnung halten“ war „keine Vorgabe“, und die eigene KI läuft als Ballgewinner ohnehin mit voller Beschleunigung an; „Zustellen“ konnte nicht schneller sein. „Schussbahn blocken“ lief zu einem beim Moment festgelegten Punkt, der mit dem Ballführer veraltete.
+
+Neu (`src/ai/box-orders.ts`, Bewegungsanweisungen `press`, `block-lane`, `jockey`; jede endet, sobald der Ball > 2,5 m vom Ballführer weg ist, danach liest der Spieler das Spiel wieder selbst):
+- **Zustellen:** mit voller Geschwindigkeit zum Ball, in Reichweite Stochern (Tackling-Schwung), nie durch den Körper des Gegners hindurch (dann torseitig herum).
+- **Schussbahn blocken:** Punkt 1,8 m vor dem Ball auf der Linie zur Tormitte, jeden Tick neu, volle Geschwindigkeit, Körper zum Ball, kein Zweikampf.
+- **Ordnung halten:** torseitig 3,5 m vor dem Ballführer, Tempo nur dessen Tempo plus 0,6 × Abstand: verzögern statt angreifen.
+
+Gemessen (Seed 9, Ballführer 21 m vor dem Tor, Verteidiger 4 m torseitig): Annäherung in 0,6 s Zustellen 1,14 m (aus dem Stand begrenzt die Beschleunigung, wie vorher), Blocken 1,14 m, Ordnung halten 0,74 m; der Schuss trifft beim Blocken (und hier auch beim Zustellen) den Körper des Verteidigers, beim Halten geht er zum Torwart. Beides sind jetzt normale Tests. Die autonome Partie nutzt keinen Director, die Probe ist daher unverändert: `npm run probe -- --seeds 1-12` ergibt wie in der Tabelle oben 19,9 Schüsse, 2,3 Tore nach Schuss, 4,1 Tore (1,1 Eigentore), 59 %, 1116 Wechsel, 35,3 Fouls pro 90 min.
 
 ## 7. Bekannte Grenzen / offene Punkte
 
@@ -412,6 +423,6 @@ Bewertung: Spieler schießen jetzt auch aus ≈ 20 m (19,9 statt 15 Schüsse/90,
 
 1. Spielqualität: (a) **Eigentore** (1,1/90, real ≈ 0,1): Rückpässe zum Torwart dosieren und neben das Tor zielen; ein Torwart, der den Ball nicht fangen darf, klärt einen auf sein Tor rollenden Ball statt ihn abzustoppen. (b) **Ballbesitz im letzten Drittel**: Stürmer verlieren den Ball bei der ersten Aktion; Annahme mit Körper zum Gegner, Ablage zum Unterstützer, danach Läufe/Steilpässe mit kalibriertem Passmodell und Abseitskorrektur (§6, Angriffsspiel). (c) Torwart bei Nahschüssen im Labor zu stark (92 %). Passquote (59 %), Ballannahme hoher Bälle; Einwürfe (150/90, Ziel ~45: Pässe, Klärungen und Abpraller ins Aus); Ping-Pong-Berührungen. Messung mit `npm run probe -- --seeds 1-12`. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
-3. Director: **Moment „Gefahr vor dem eigenen Strafraum“ wirksam machen**, denn „Zustellen“ und „Ordnung halten“ unterscheiden sich derzeit nicht (Test `it.fails`); weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
+3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
 5. Optionale KI-Rollen (Match Analyst, Pub Host) über Adapter; Physik und Spiel bleiben offline lauffähig.

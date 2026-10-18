@@ -79,6 +79,10 @@ export type BallAction =
 export type MovementAction =
   | { kind: 'hold-shape' }
   | { kind: 'press'; target: number }
+  /** Stay goal-side of the carrier at a jockeying distance and delay. */
+  | { kind: 'jockey'; target: number }
+  /** Stand in the ball's line to the own goal while the carrier has it. */
+  | { kind: 'block-lane'; target: number }
   | { kind: 'mark'; target: number }
   | { kind: 'run-behind'; target: Vec2 }
   | { kind: 'recover'; target: Vec2 }
