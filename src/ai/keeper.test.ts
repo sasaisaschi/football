@@ -81,7 +81,7 @@ describe('perception of a ball in the air', () => {
   it('extrapolates the vertical pace with gravity, so a dropping ball is not believed to rise', () => {
     const roster = new MatchEngine({ seed: 1, halfMinutes: 1 }).profiles;
     const p = new Perception(roster[0], createRng(1));
-    p.reset({ now: 0, ball: { pos: { x: 0, y: 1, z: 0 }, vel: { x: 20, y: 4, z: 0 } }, players: [] });
+    p.reset({ now: 0, ball: { pos: { x: 0, y: 1, z: 0 }, vel: { x: 20, y: 4, z: 0 }, spin: { x: 0, y: 0, z: 0 } }, players: [] });
     const later = p.ballNow(0.4);
     expect(later.vel.y).toBeCloseTo(4 - 9.81 * 0.4, 5);
     expect(later.pos.y).toBeCloseTo(1 + 4 * 0.4 - 4.9 * 0.16, 5);

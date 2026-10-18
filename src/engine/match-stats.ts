@@ -9,7 +9,7 @@ export type MatchStats = {
   score: [number, number];
   ownGoals: number;
   /** How each goal went in: the scorer's last swing (touch within 1 s of it), a ball off the body, or an own goal. */
-  goalsFrom: Record<BallAction['kind'] | 'body' | 'hands' | 'none' | 'own', number>;
+  goalsFrom: Record<BallAction['kind'] | 'head' | 'body' | 'hands' | 'none' | 'own', number>;
   shots: [number, number];
   /** Shots at the end of a move with at least three completed passes since the team won the ball. */
   shotsAfterBuildUp: number;
@@ -17,7 +17,7 @@ export type MatchStats = {
   passesCompleted: number;
   possessionChanges: number;
   /** How the losing team's last touch came about: its swing (touch within 1 s of it), a ball off the body or hands, or a boot touch without a swing. */
-  lossesAfter: Record<BallAction['kind'] | 'body' | 'hands' | 'none', number>;
+  lossesAfter: Record<BallAction['kind'] | 'head' | 'body' | 'hands' | 'none', number>;
   /** Changes won back by the losing team within 1 s: contested balls rather than real turnovers. */
   pingPong: number;
   /** Mean length of a spell of possession that ended in a turnover, in seconds. */
@@ -37,13 +37,13 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
   const team = (player: number) => profiles[player].team;
   const s: MatchStats = {
     score: [0, 0], ownGoals: 0,
-    goalsFrom: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, body: 0, hands: 0, none: 0, own: 0 },
+    goalsFrom: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, header: 0, head: 0, body: 0, hands: 0, none: 0, own: 0 },
     shots: [0, 0], shotsAfterBuildUp: 0, passes: 0, passesCompleted: 0, possessionChanges: 0,
-    lossesAfter: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, body: 0, hands: 0, none: 0 },
+    lossesAfter: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, header: 0, head: 0, body: 0, hands: 0, none: 0 },
     pingPong: 0, meanSpell: 0, fouls: 0, yellow: 0, red: 0, penalties: 0, offsides: 0, corners: 0, throwIns: 0, goalKicks: 0, keeperCatches: 0,
   };
   const lastSwing = new Map<number, { kind: BallAction['kind']; time: number }>();
-  let prev: { player: number; time: number; part: 'boot' | 'body' | 'hands' } | null = null;
+  let prev: { player: number; time: number; part: 'boot' | 'head' | 'body' | 'hands' } | null = null;
   let spellStart = 0, spellSum = 0;
   let lastChange: { from: 0 | 1; time: number } | null = null;
   let openPass: { player: number } | null = null;

@@ -13,6 +13,7 @@ export function stageScenario(e: MatchEngine, players: Record<number, Vec2>, bal
     const facing = Math.atan2(ball.x - target.x, ball.z - target.z);
     e.bodies[p.id].place(target.x, target.z, facing);
     e.legs[p.id].snap();
+    e.heads[p.id].reset();
     e.keepers.get(p.id)?.hands.snap();
   });
   const b = e.physics.ball;

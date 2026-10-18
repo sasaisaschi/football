@@ -560,9 +560,65 @@ Erste Probe: Mit der Landepunkt-Vorhersage fiel die Torquote je Schuss auf 1,2 v
 
 Bewertung: Der Unterschied bei den Toren nach Schuss (≈ 29 gegen ≈ 18 Tore in 960 Spielminuten) liegt bei etwa 1,5 Standardabweichungen und ist **nicht gesichert**. Die Torquote mit #24 liegt im realistischen Bereich, die Gesamttore kommen näher an den realen Wert. Die 5 % der ersten Probe waren Zufall der Seeds 1–12. Am Spiel wird deshalb nichts korrigiert. Die Torschüsse liegen etwas niedriger (−14 %, ebenfalls ≈ 1,6 Standardabweichungen).
 
+### Kopfball (19.10.2026)
+
+Bisher prallte ein hoher Ball, den niemand mit dem Fuß erreichte, zufällig vom Rumpf ab. Das war die häufigste erste Berührung eines hohen Balls (§6, hohe Bälle).
+
+Neu:
+- **`physics/head.ts`:** Eine Kopfkugel (r = 0,11 m), die nur während eines Kopfballs aktiv ist. Sie bewegt sich mit konstanter Geschwindigkeit entlang der Stoßnormalen durch den Ball; Rapier löst den Kontakt. Die Normale zeigt von der Ankunfts- zur gewünschten Abfluggeschwindigkeit (reibungsfreier Stoß), das Kopftempo folgt aus der Stoßzahl. Gibt der Kopf nach, ist es negativ. Reichweite: 0,15–0,6 m vor der Körperachse, bis 0,35 m Sprung. Der Ball darf dabei den Rumpf nicht streifen. Höchsttempo 7 m/s, nachgeben bis 3 m/s. Bis kurz vor dem Kontakt wird der Kopfball jeden Takt mit dem aktuellen Ballzustand neu geplant, wie ein Spieler, der den Ball mit den Augen verfolgt. Die Physik teilt den Takt in Unterschritte wie bei einem Schuss.
+- **`ai/heading.ts`:**
+  - **Klären** (Ball vom Gegner in unserer Hälfte, hoch und weg vom Tor);
+  - **Kopfball aufs Tor** (< 14 m, Ecke weg vom Torwart, ≈ 0,5 m Höhe an der Linie);
+  - **Ablegen** auf einen freien Mitspieler in 5–18 m;
+  - sonst **vor die eigenen Füße**.
+  
+  Geköpft wird, wenn der Gegner den Ball gespielt hat, wenn er umkämpft ist (Gegner < 3 m) oder vor dem gegnerischen Tor. Sonst lässt der Spieler den eigenen Pass herunterfallen.
+- **Gemeinsame Luftkräfte:** `airAcceleration()` in `physics/ball.ts` (Luftwiderstand mit Drag-Krise, Magnus-Auftrieb) wird von der Physik, der Kopfball-Planung und der Flugbahn-Vorhersage gleichermaßen genutzt. Spieler nehmen den Drall des Balls wahr. Vorher fehlte der Auftrieb: Ein hoher Ball war beim geplanten Kontakt 0,6 m höher als vorhergesagt.
+- Neue Kontaktart `head` und Aktion `header`. Ein Kopfball zum eigenen Torwart ist kein Rückpass (Regel 12 gilt nur für den Fuß).
+
+Einzelanalyse (6 Seeds):
+
+| | erste Version | mit Drall, Luftwiderstand und Nachplanen |
+| --- | --- | --- |
+| Kopfballversuche / Kopfberührungen | 164 / 41 (25 %) | 183 / **119 (65 %)** |
+| Körpertreffer in der Luft (über 1,3 m) | 154 (45) | 117 (19) |
+
+24 Seeds (pro 90 min):
+
+| | nach #24 | mit Kopfball |
+| --- | --- | --- |
+| Einwürfe | 70 | **61** |
+| Torschüsse | 21,8 | **22,9** |
+| Tore (nach Schuss / Eigentore) | 1,9 (1,2 / 0,8) | **3,0 (2,1 / 0,9)** |
+| Passquote | 61 % | 60 % |
+| Wechsel / Fouls | 1220 / 30 | 1252 / 33 |
+
+Tests: `head.test.ts` (Ballrichtung ±0,25 rad, Tempo ±30 % für drei Ziele, darunter ein nachgebender Kopfball; keine Reichweite für zu hohe oder seitliche Bälle), `heading.test.ts` (Wahl Klären / Torschuss / Ablegen / vor die Füße), `aerial.test.ts`.
+
+**Volle Partie (`npm run sim -- --silent=false`, Seed 2026):** **3 : 2** (4 Tore nach Schuss, 1 Eigentor). Torschüsse 7 / 6; Pässe 1489 / 61 %; Wechsel 1281; Fouls 27; Einwürfe 81; Rechenzeit 477 s (1,5 ms/Tick).
+
+Offen: In 24 Seeds fiel kein Kopfballtor (real ≈ 15 % der Tore). Die Spielerfigur springt und nickt in der Darstellung nicht sichtbar mit; das Rendern zeigt nur den Ball.
+
+### Fouls – Analyse, keine Übernahme (19.10.2026)
+
+Stand mit Kopfball (24 Seeds): ≈ 33 Fouls/90 (real ≈ 22). Einzelanalyse (12 Seeds, 84 Fouls):
+- 54 begehen Verteidiger beim Stellen oder Stochern, fast alle von hinten;
+- 67 mit 2,8–4,5 m/s Annäherung, nur 17 schneller;
+- in 45 Fällen hat das Opfer den Ball noch am Fuß, in 36 hat es ihn gerade gespielt oder angenommen.
+
+Gemessen (24 Seeds) und **verworfen**:
+
+| Variante | Fouls | Einwürfe | Schüsse (nach Kombination) |
+| --- | --- | --- | --- |
+| Stand mit Kopfball | 33,4 | 61 | 22,9 (2,1) |
+| Verteidiger nähert sich nur so schnell, dass er 1,2 m vor dem Ballführer stoppen kann | 32,1 | 63 | 23,6 (1,5) |
+| + Hineingehen zum Stochern nur mit Tempo des Ballführers + 1,5 m/s | 30,9 | 72 | 24,2 (0,4) |
+
+Keine Variante senkt die Fouls über das Rauschen (≈ ±2,5/90 bei 24 Seeds) hinaus, die zweite verschlechtert Einwürfe und Kombinationsschüsse. Die verbleibenden Fouls sind echte Körperkontakte von hinten knapp über der Schwelle des Schiedsrichters (2,8 m/s von hinten, 4 m/s von vorn, 5,6 m/s im Zweikampf um einen freien Ball). Wie viel Kontakt ein Schiedsrichter laufen lässt, ist eine Gestaltungsentscheidung. Eine Anpassung der Schwellen würde die Zahl direkt senken, bewusst nicht ohne Abstimmung.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
-- **Spielqualität noch nicht realistisch** (12 Seeds, Stand nach #22): Passquote ≈ 59 % (Ziel 75–85 %), Pässe ≈ 1400/90 (real ≈ 1000), Einwürfe ≈ 70/90 (real ≈ 45), Fouls ≈ 31/90 (real ≈ 22), Elfmeter ≈ 1,1/90 (real ≈ 0,3), Eigentore ≈ 1/90, Schüsse nach Kombination selten (≈ 1–2/90). Im Zielbereich: Torschüsse ≈ 24/90, Tore ≈ 3,4/90, Torquote ≈ 11 % (siehe §6).
+- **Spielqualität noch nicht realistisch** (12 Seeds, Stand nach #22): Passquote ≈ 59 % (Ziel 75–85 %), Pässe ≈ 1400/90 (real ≈ 1000), Einwürfe ≈ 61/90 (real ≈ 45), Fouls ≈ 31/90 (real ≈ 22), Elfmeter ≈ 1,1/90 (real ≈ 0,3), Eigentore ≈ 1/90, Schüsse nach Kombination selten (≈ 1–2/90). Im Zielbereich: Torschüsse ≈ 24/90, Tore ≈ 3,4/90, Torquote ≈ 11 % (siehe §6).
 - Der Körper ist eine aufrechte Kapsel (r = 0,27 m, Reibung 0); eine niedrigere Stoßzahl wurde gemessen und verworfen (§6). Ein streifender Ball behält seine Geschwindigkeit; der Torwart kippt beim Hechtsprung nicht mit dem ganzen Körper, nur die Hände reichen weiter.
 - Physik läuft mit ≥ 240 Hz (Rapier-Drallgrenze bei 60 Hz); ≈ 50 % mehr Rechenzeit pro Tick.
 - Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
@@ -591,7 +647,7 @@ Bewertung: Der Unterschied bei den Toren nach Schuss (≈ 29 gegen ≈ 18 Tore i
 
 ## 9. Nächste Schritte
 
-1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Hohe Bälle** – Kopfball und Brustannahme fehlen; Bälle prallen in der Luft von Körpern ab (häufigste erste Berührung). (b) **Fouls gegen Spieler, die gerade gepasst haben** – Verteidiger bremst rechtzeitig; Elfmeter zu häufig. (c) **Passquote** – weniger Pässe in umkämpften Lagen (≈ 1400 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
+1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Kopfballtore und Brustannahme** – Kopfbälle aufs Tor treffen noch nicht; ohne Brustannahme prallen hohe Bälle unterhalb der Kopfhöhe weiter vom Rumpf ab; Kopfball in der Darstellung zeigen. (b) **Fouls** (≈ 33/90): Spielverhalten ausgereizt (§6, Fouls); offen ist die Entscheidung, wie viel Körperkontakt der Schiedsrichter laufen lässt. (c) **Passquote** – weniger Pässe in umkämpften Lagen (≈ 1400 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.

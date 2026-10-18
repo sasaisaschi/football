@@ -12,7 +12,7 @@ import { PITCH, attackSign, ballOut, goalCrossed, inPenaltyArea } from '../physi
  */
 
 /** `deliberate`: the boot played the ball on purpose (a pass, dribble or first touch), not a block, deflection or poke. */
-export type Touch = { player: number; team: TeamId; part: 'boot' | 'body' | 'hands'; time: number; position: Vec3; deliberate?: boolean };
+export type Touch = { player: number; team: TeamId; part: 'boot' | 'head' | 'body' | 'hands'; time: number; position: Vec3; deliberate?: boolean };
 export type Decision =
   | { type: 'goal'; team: TeamId; scorer: number | null; ownGoal: boolean }
   | { type: 'restart'; kind: RestartKind; team: TeamId; spot: Vec2; reason: 'out' | 'offside' | 'foul' | 'handball' | 'back-pass' }

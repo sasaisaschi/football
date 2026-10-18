@@ -4,6 +4,7 @@ import type { Truth } from '../ai/perception';
 import { PlayerBody } from '../physics/body';
 import { KeeperHands } from '../physics/hands';
 import { Legs } from '../physics/legs';
+import { Head } from '../physics/head';
 import { PITCH, attackSign, BALL_SPEC } from '../physics/pitch-geometry';
 import { PHYSICS_DT, PhysicsWorld, type Contact, type ContactPart } from '../physics/world';
 import { Referee, penaltySpot, restartDistance, type Decision, type PlayerState } from '../rules/referee';
@@ -30,6 +31,7 @@ export class MatchEngine {
   readonly profiles: PlayerProfile[];
   readonly bodies: PlayerBody[] = [];
   readonly legs: Legs[] = [];
+  readonly heads: Head[] = [];
   readonly brains: PlayerBrain[] = [];
   readonly keepers = new Map<number, KeeperSkill>();
   readonly referee: Referee;
@@ -63,7 +65,11 @@ export class MatchEngine {
       const legs = new Legs(this.physics.world, body);
       this.physics.registerCollider(body.collider, p.id, 'body');
       this.physics.registerLegs(legs, p.id);
-      const brain = new PlayerBrain(p, body, legs, createRng(config.seed * 131 + p.id));
+      const head = new Head(this.physics.world, body);
+      this.physics.registerCollider(head.collider, p.id, 'head');
+      this.physics.registerKinematic(head);
+      this.heads.push(head);
+      const brain = new PlayerBrain(p, body, legs, createRng(config.seed * 131 + p.id), head);
       this.bodies.push(body);
       this.legs.push(legs);
       this.brains.push(brain);
@@ -100,6 +106,7 @@ export class MatchEngine {
       const pos = toWorld(sign, slot.u, slot.v);
       this.bodies[p.id].place(pos.x, pos.z, sign > 0 ? Math.PI / 2 : -Math.PI / 2);
       this.legs[p.id].snap();
+      this.heads[p.id].reset();
       this.keepers.get(p.id)?.hands.snap();
     }
     this.placeDeadBall(0, 0);
@@ -133,10 +140,10 @@ export class MatchEngine {
   }
 
   truth(): Truth {
-    const b = this.physics.ball.translation(), v = this.physics.ball.linvel();
+    const b = this.physics.ball.translation(), v = this.physics.ball.linvel(), w = this.physics.ball.angvel();
     return {
       now: this.time,
-      ball: { pos: { x: b.x, y: b.y, z: b.z }, vel: { x: v.x, y: v.y, z: v.z } },
+      ball: { pos: { x: b.x, y: b.y, z: b.z }, vel: { x: v.x, y: v.y, z: v.z }, spin: { x: w.x, y: w.y, z: w.z } },
       players: this.profiles.filter(p => !this.referee.sentOff.has(p.id)).map(p => ({ id: p.id, pos: this.bodies[p.id].position(), vel: this.bodies[p.id].velocity() })),
     };
   }
@@ -340,6 +347,7 @@ export class MatchEngine {
     const body = this.bodies[player];
     body.collider.setEnabled(false);
     for (const b of this.legs[player].boots) b.collider.setEnabled(false);
+    this.heads[player].reset();
     // He walks off: placed beside the pitch, outside the boards, where he no longer takes part.
     body.place(0, (PITCH.halfWidth + PITCH.runOff + 4) * (this.profiles[player].team === 0 ? 1 : -1), 0);
     body.body.setEnabled(false);
