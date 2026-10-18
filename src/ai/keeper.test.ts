@@ -46,6 +46,37 @@ describe('goalkeeper against shots from distance', () => {
   });
 });
 
+describe('defender caught behind a carrier', () => {
+  it('recovers alongside him instead of running into his back', () => {
+    // Team 1's striker breaks towards team 0's goal (−X) with the ball; team 0's centre-back starts right behind him.
+    let fouls = 0, alongside = 0;
+    for (let i = 0; i < 6; i++) {
+      const e = new MatchEngine({ seed: 6000 + i, halfMinutes: 45 });
+      const st = e.profiles.find(p => p.team === 1 && p.role === 'ST')!.id;
+      const cb = e.profiles.find(p => p.team === 0 && p.role === 'RCB')!.id;
+      stageScenario(e, { [st]: { x: -20, z: i - 3 }, [cb]: { x: -18.6, z: i - 3 } }, { x: -20.6, y: 0.11, z: i - 3 });
+      e.bodies[st].body.setLinvel({ x: -5, y: 0, z: 0 }, true);
+      e.bodies[cb].body.setLinvel({ x: -6, y: 0, z: 0 }, true);
+      e.bodies[st].heading = -Math.PI / 2;
+      e.referee.lastTouch = { player: st, team: 1, part: 'boot', time: e.time, position: e.ballPos() };
+      const log: MatchEvent[] = [];
+      e.onEvent(ev => log.push(ev));
+      let beside = false;
+      runFor(e, 2.5, () => {
+        const a = e.bodies[st].position(), b = e.bodies[cb].position();
+        // Directly behind him the defender's line stays within a few centimetres of the carrier's; at his shoulder it
+        // is offset to the side.
+        if (Math.abs(a.z - b.z) > 0.7) beside = true;
+        return log.some(ev => ev.type === 'foul' || ev.type === 'out' || ev.type === 'goal');
+      });
+      if (log.some(ev => ev.type === 'foul')) fouls++;
+      if (beside) alongside++;
+    }
+    expect(fouls).toBeLessThanOrEqual(1);
+    expect(alongside).toBeGreaterThanOrEqual(4);
+  });
+});
+
 describe('perception of a ball in the air', () => {
   it('extrapolates the vertical pace with gravity, so a dropping ball is not believed to rise', () => {
     const roster = new MatchEngine({ seed: 1, halfMinutes: 1 }).profiles;
