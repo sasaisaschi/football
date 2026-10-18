@@ -546,9 +546,19 @@ Danach in derselben Stichprobe: Empfänger < 2 m vom Landepunkt 145 statt 66; in
 
 Verworfen: **Brustannahme**. Ein Empfänger, der einen hohen Ball erwartet, machte seinen Körper weich (Stoßzahl 0). Das brachte in der Einzelanalyse mehr Fußberührungen (16 %), in der Probe aber keinen gesicherten Gewinn. Außerdem setzte der Torwart-Code den Zustand nicht zurück.
 
-⚠️ Beobachten: Mit der Landepunkt-Vorhersage fiel die Torquote je Schuss auf 1,2 von 21,8 (≈ 5 %, vorher ≈ 10 %, real ≈ 10 %). Die Seed-Hälften streuen stark (1–12: 0,8 Tore; 13–24: 3,0 wie `main`). Mehr gefangene Bälle des Torwarts (8,3 statt 5,3 auf 13–24) passen dazu, dass er hohe Bälle jetzt richtig anläuft.
+Erste Probe: Mit der Landepunkt-Vorhersage fiel die Torquote je Schuss auf 1,2 von 21,8 (≈ 5 %, vorher ≈ 10 %, real ≈ 10 %). Die Seed-Hälften streuen stark (1–12: 0,8 Tore; 13–24: 3,0 wie `main`). Mehr gefangene Bälle des Torwarts (8,3 statt 5,3 auf 13–24) passen dazu, dass er hohe Bälle jetzt richtig anläuft.
 
 **Volle Partie (`npm run sim -- --silent=false`, Seed 2026):** **4 : 6**: 7 Tore aus 28 Schüssen, 3 Eigentore. Pässe 1452 / 62 %; Fouls 21; Einwürfe 57; Ball im Spiel 92 %; Rechenzeit 752 s (2,3 ms/Tick). Die Partie widerspricht der niedrigen Torquote der Probe (25 % statt 5 %). Tore streuen pro Partie und pro Seed-Gruppe so stark, dass erst mehr Seeds (z. B. 48) eine Aussage über die Torquote erlauben.
+
+**Torquote abgesichert (48 Seeds, 18.10.2026):** Seeds 1–48 je 2 × 10 min, Stand vor #24 (`9ff4b50`) gegen #24. Die Seeds 25–48 zählen doppelt, weil es 24 statt 12 sind.
+
+| pro 90 min | vor #24 | mit #24 | real |
+| --- | --- | --- | --- |
+| Torschüsse | 24,0 | 20,7 | ≈ 25 |
+| Tore nach Schuss (Quote) | 2,73 (11,4 %) | 1,73 (8,3 %) | ≈ 10 % |
+| Tore gesamt (Eigentore) | 3,75 (0,95) | 3,0 (1,1) | ≈ 2,7 |
+
+Bewertung: Der Unterschied bei den Toren nach Schuss (≈ 29 gegen ≈ 18 Tore in 960 Spielminuten) liegt bei etwa 1,5 Standardabweichungen und ist **nicht gesichert**. Die Torquote mit #24 liegt im realistischen Bereich, die Gesamttore kommen näher an den realen Wert. Die 5 % der ersten Probe waren Zufall der Seeds 1–12. Am Spiel wird deshalb nichts korrigiert. Die Torschüsse liegen etwas niedriger (−14 %, ebenfalls ≈ 1,6 Standardabweichungen).
 
 ## 7. Bekannte Grenzen / offene Punkte
 
@@ -581,7 +591,7 @@ Verworfen: **Brustannahme**. Ein Empfänger, der einen hohen Ball erwartet, mach
 
 ## 9. Nächste Schritte
 
-1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Hohe Bälle** – Kopfball und Brustannahme fehlen; Bälle prallen in der Luft von Körpern ab (häufigste erste Berührung). Torquote je Schuss nach der Landepunkt-Vorhersage beobachten (§6). (b) **Fouls gegen Spieler, die gerade gepasst haben** – Verteidiger bremst rechtzeitig; Elfmeter zu häufig. (c) **Passquote** – weniger Pässe in umkämpften Lagen (≈ 1400 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
+1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Hohe Bälle** – Kopfball und Brustannahme fehlen; Bälle prallen in der Luft von Körpern ab (häufigste erste Berührung). (b) **Fouls gegen Spieler, die gerade gepasst haben** – Verteidiger bremst rechtzeitig; Elfmeter zu häufig. (c) **Passquote** – weniger Pässe in umkämpften Lagen (≈ 1400 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
