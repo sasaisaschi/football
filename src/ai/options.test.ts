@@ -38,3 +38,15 @@ describe('holding the ball', () => {
     expect(pass.value).toBeGreaterThan(shield.value);
   });
 });
+
+
+describe('back-pass to the own keeper', () => {
+  it('is never lofted, even where a ball over the top would look safer', () => {
+    const keeper = at(0, 'GK', { x: -48, z: 4 });
+    // An opponent stands in the ground lane; the lane over the top is free.
+    const pic = { ...picture([at(1, 'ST', { x: -38, z: 11 })], [keeper]), pos: { x: -29.4, z: 18 }, ball: { pos: { x: -29, y: 0.11, z: 18 }, vel: { x: 0, y: 0, z: 0 } } };
+    const pass = evaluateOptions(pic).find(o => o.kind === 'pass' && o.target === keeper.id);
+    expect(pass).toBeDefined();
+    expect(pass!.action.kind === 'pass' && pass!.action.lofted).toBe(false);
+  });
+});

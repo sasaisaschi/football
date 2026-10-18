@@ -152,7 +152,9 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     const loftSafe = td > 16 ? laneSafety(pic, from, target, loftSpeed, true, loftedTime(loftSpeed, 0.42)) * 0.5 : 0;
     // A rolling pass is preferred unless the ball over the top is clearly safer: chosen on any margin, long balls made up 41 %
     // of all passes and only 47 % of them reached a team-mate (17 % went straight out of play).
-    const lofted = loftSafe > groundSafe + LOFT_MARGIN;
+    // Never a ball over the top to the own keeper: he may not handle a deliberate back-pass, and a dropping ball
+    // he has to play with his feet bounced off him into the goal (traced own goals).
+    const lofted = m.profile.role !== 'GK' && loftSafe > groundSafe + LOFT_MARGIN;
     // Calibrated against measured completion (6 seeds): with accurate strikes the receiver keeps most balls
     // even with a marker two metres away; distance and pressure still cost accuracy.
     const accuracy = Math.exp(-td / (60 + 60 * pic.self.abilities.passing)) * (1 - 0.15 * pressure);
