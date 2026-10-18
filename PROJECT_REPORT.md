@@ -490,6 +490,25 @@ Ursachen und Korrekturen (`moment-director.ts`):
 
 Test: `moment-director.test.ts` prüft zusätzlich, dass pro Halbzeit höchstens ein Umschaltmoment kommt.
 
+### Fouls: Aufholen an der Schulter (18.10.2026)
+
+Analyse (temporär, 12 Seeds, 107 Fouls = 40/90): 80 begingen Verteidiger beim Stellen oder Ansetzen zum Stochern, 85 von hinten, meist mit 3–5 m/s Annäherung. Ein Verteidiger auf der falschen Seite lief zu seinem Punkt zwischen Ballführer und Tor und dabei durch dessen Rücken.
+
+Übernommen (`brain.ts`): Steht der Ballführer zwischen dem Verteidiger und diesem Punkt, holt der Verteidiger 1,1 m seitlich an der Schulter auf (Tempo des Ballführers + 1,5 m/s), statt durch ihn hindurchzulaufen. Test in `keeper.test.ts`: Mit dem alten Code blieb der Verteidiger in 6 von 6 Szenen genau hinter dem Angreifer (seitlicher Versatz ≈ 0), mit dem neuen zieht er seitlich vorbei (≈ 0,9 m).
+
+12 Seeds (pro 90 min), Ausgang ist der Stand nach #20:
+
+| | nach #20 | Schulter |
+| --- | --- | --- |
+| Fouls | 40 | **31** |
+| Elfmeter | – | 1,1 |
+| Schüsse (nach Kombination) | 22,5 (2,3) | 23,6 (1,1) |
+| Tore | 3,4 | 3,4 |
+| Passquote / Wechsel | 61 % / 1065 | 59 % / 1150 |
+| Einwürfe | 96 | 93 |
+
+Verbleibend (82 Fouls): 48 weiterhin von hinten beim Stellen, oft gegen einen Spieler, der gerade gepasst hat (35 der 82). Der Verteidiger kommt mit Schwung an und kann nicht mehr bremsen. Elfmeter mit 1,1/90 zu häufig (real ≈ 0,3). Die Schwellen des Schiedsrichters (von hinten 2,8 m/s, von vorn 4,0 m/s) sind bewusst unverändert: Sie wurden für die Bewertung kalibriert, nicht für die Foulzahl.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1030/90 (Berührungsfolge), Passquote 61 % zu niedrig, Einwürfe ≈ 150/90 zu viele, Torschüsse ≈ 20/90 (real ≈ 25; Chancen fast nur nach Ballgewinnen), Eigentore ≈ 1,1/90 zu viele, Fouls ≈ 35/90 (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.

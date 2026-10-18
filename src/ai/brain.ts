@@ -38,6 +38,8 @@ const BALL_DAMPING = 1.1;
 const CARRIER_REACH = 1.6;
 /** Within this distance of the carrier a jockeying defender no longer closes in (m). */
 const JOCKEY_CLOSE = 1.5;
+/** Sideways distance from the carrier at which a recovering defender runs alongside him (m). */
+const SHOULDER_GAP = 1.1;
 
 /**
  * One autonomous footballer. Decides from its own perception a few times per second: win the ball, play it,
@@ -262,6 +264,13 @@ export class PlayerBrain {
         // At arm's length he matches the carrier's pace instead of closing further: running on into a player who
         // shields the ball is a foul, not a challenge.
         const pace = Math.min(this.body.limits.maxSpeed, Math.hypot(cv.x, cv.z) + (close ? 0.5 : 1 + gap * 1.5));
+        if (bodyInLine(self, hold, carrier)) {
+          // Caught on the wrong side: recover at his shoulder instead of running through his back (measured: 85 of
+          // 107 fouls came from behind, most by a defender heading for the goal-side spot).
+          const side = (self.x - carrier.x) * gz - (self.z - carrier.z) * gx >= 0 ? 1 : -1;
+          const shoulder = { x: carrier.x + cv.x * 0.3 + (gz / gd) * side * SHOULDER_GAP, z: carrier.z + cv.z * 0.3 - (gx / gd) * side * SHOULDER_GAP };
+          return { command: { target: shoulder, speed: Math.min(this.body.limits.maxSpeed, Math.hypot(cv.x, cv.z) + 1.5), face: ball.pos }, effort: 1, swing: null };
+        }
         return { command: { target: hold, speed: pace, face: ball.pos }, effort: 1, swing: null };
       }
     }
