@@ -416,6 +416,34 @@ Keine der drei Regeln senkt die Eigentore messbar: Sie sind zu selten (≈ 6 in 
 
 Die Regel betrifft nur wenige Pässe; die Unterschiede bei Fouls, Einwürfen und Toren liegen im bekannten Rauschen (Fouls ±8, Tore ±2–3). Sie ist eine Plausibilitätsregel, deren Wirkung nicht nachweisbar ist. Eigentore bleiben bei ≈ 1,1/90.
 
+### Ballbehauptung im letzten Drittel und Bedrohungskurve (18.10.2026)
+
+Analyse (temporär, 6 Seeds, alle Aktionen des angreifenden Teams im letzten Drittel):
+- Abschirmen hielt den Ball (14 % verloren);
+- Pässe gingen zu 25 % verloren, bei einem erwarteten Erfolg von im Mittel 0,40;
+- Ballannahmen gingen zu 30 % verloren, auch mit mehr als 3 m Platz;
+- Dribblings gingen zu 54 % verloren.
+
+Taktweise Verfolgung verlorener Annahmen: Lag der Ball nach der weichen Annahme ruhig vor dem Fuß, konnte der Spieler erst nach 0,5–0,6 s wieder schießen oder passen. Der Schuh gab mit 0,6 m/s 25 cm nach und das Bein holte sich zurück; in dieser Zeit lief der Gegner von 5 m auf 1 m heran.
+
+Übernommen:
+- **Weiche Annahme kürzer** (`legs.ts`): Der Schuh gibt nur noch 8 cm nach, Nachschwingen und Zurückholen sind kürzer. Das Bein ist innerhalb von 0,5 s nach dem Kontakt wieder frei (vorher ≈ 0,8 s). Test in `physics.test.ts`.
+- **Erste Berührung enger, je weniger Platz** (`first-touch.ts`): Tempo 0,9 m/s plus 0,45 m/s je Meter Raum, höchstens wie bisher; der Raum zum Gegner zählt bei der Richtungswahl stärker. Allein ohne messbare Wirkung, aber Teil der gemessenen Endkonfiguration.
+- **Bedrohungskurve steiler** (`threatAt` in `options.ts`): 0,006 + 0,5·e^(−d/8) statt 0,006 + 0,32·e^(−d/13). Das ergibt ≈ 0,13 am Elfmeterpunkt, 0,06 an der Strafraumgrenze und 0,02 aus 30 m, wie veröffentlichte xT-Raster. Die alte Kurve bewertete Ballbesitz vor dem Strafraum fast doppelt so hoch; Abschirmen aus 18 m war dort mehr wert als ein Schuss. Test in `options.test.ts`.
+
+12 Seeds (pro 90 min):
+
+| Variante | Schüsse | Tore (nach Schuss / Eigentore) | Passquote | Wechsel | Fouls | Einwürfe |
+| --- | --- | --- | --- | --- | --- | --- |
+| `main` | 19,9 | 4,1 (2,3 / 1,1) | 59 % | 1116 | 35 | 150 |
+| weiche Annahme kürzer + enge erste Berührung | 13,9 | 2,3 (1,5 / 0,8) | 63 % | 1123 | 36 | 145 |
+| **+ Bedrohungskurve d/8 (übernommen)** | **22,1** | **3,4 (2,6 / 0,8)** | **62 %** | 1249 | 38 | **126** |
+| + Bedrohungskurve d/10 | 22,5 | 3,0 (1,9 / 1,1) | 60 % | 1158 | 36 | 148 |
+
+Mit den kürzeren Annahmen allein wurde das Spiel ruhiger: mehr Ballbesitz im letzten Drittel (716 statt 560 Aktionen in 6 Seeds) und Passquote 63 %. Dafür fielen die Schüsse auf 14, weil Chancen bisher aus Ballgewinnen in Tornähe entstanden. Die realistischere Bewertungskurve bringt die Schüsse auf 22 (real ≈ 25) bei 12 % Torquote; Tore 3,4/90 (real ≈ 2,7), Einwürfe 126 (vorher 150). Die Ballbesitzwechsel steigen auf 1249: Es wird mehr geschossen und riskanter nach vorne gespielt. Schüsse nach Kombination bleiben selten (0–0,8/90).
+
+**Volle Partie (`npm run sim -- --silent=false`, Seed 2026, 2 × 45 min):** **1 : 1** (1 Tor nach Schuss, 1 Eigentor). Torschüsse 11 / 16, davon 2 nach Kombination; Pässe 1070 / 58 %; Wechsel 1314; Fouls 39 (Gelb 4, Elfmeter 1); Einwürfe 129; Torwart fängt 8; Rechenzeit 374 s (1,15 ms/Tick).
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1030/90 (Berührungsfolge), Passquote 61 % zu niedrig, Einwürfe ≈ 150/90 zu viele, Torschüsse ≈ 20/90 (real ≈ 25; Chancen fast nur nach Ballgewinnen), Eigentore ≈ 1,1/90 zu viele, Fouls ≈ 35/90 (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.

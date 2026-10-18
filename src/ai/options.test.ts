@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createRoster } from '../engine/rosters';
 import type { Vec2 } from '../engine/types';
-import { evaluateOptions, type Picture } from './options';
+import { PITCH } from '../physics/pitch-geometry';
+import { evaluateOptions, threatAt, type Picture } from './options';
 
 const roster = createRoster(7);
 const player = (team: 0 | 1, role: string) => roster.find(p => p.team === team && p.role === role)!;
@@ -48,5 +49,16 @@ describe('back-pass to the own keeper', () => {
     const pass = evaluateOptions(pic).find(o => o.kind === 'pass' && o.target === keeper.id);
     expect(pass).toBeDefined();
     expect(pass!.action.kind === 'pass' && pass!.action.lofted).toBe(false);
+  });
+});
+
+describe('expected threat', () => {
+  it('follows published expected-threat grids in front of the goal (team attacking +X, central)', () => {
+    const at = (d: number) => threatAt(1, { x: PITCH.halfLength - d, z: 0 });
+    expect(at(11)).toBeGreaterThan(0.1);
+    expect(at(16)).toBeGreaterThan(0.04);
+    expect(at(16)).toBeLessThan(0.08);
+    expect(at(30)).toBeLessThan(0.03);
+    expect(at(60)).toBeLessThan(0.012);
   });
 });

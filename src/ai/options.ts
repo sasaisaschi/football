@@ -52,7 +52,10 @@ export function threatAt(sign: 1 | -1, p: Vec2): number {
   const goalX = sign * PITCH.halfLength;
   const d = Math.hypot(goalX - p.x, p.z);
   const central = Math.exp(-((p.z / 22) ** 2));
-  return 0.006 + 0.32 * Math.exp(-d / 13) * (0.4 + 0.6 * central);
+  // Shaped after published expected-threat grids: ≈ 0.13 at the penalty spot, 0.05 at the edge of the area,
+  // 0.02 from 30 m. The former, flatter curve (0.10 at 16 m) made holding the ball in front of the area worth more
+  // than a shot from there (measured: 14 shots/90 once possession got calmer).
+  return 0.006 + 0.5 * Math.exp(-d / 8) * (0.4 + 0.6 * central);
 }
 
 /** Opening angle of the goal mouth from p, in radians. */
