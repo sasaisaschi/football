@@ -26,6 +26,12 @@ const RECEIVER_RISK = 0.4;
 const CLOSING_SPEED = 2;
 /** How much safer a lofted pass must look than the ground pass to the same team-mate before it is chosen. */
 const LOFT_MARGIN = 0.3;
+/**
+ * Worth of having the ball at all, beyond the threat from where it is: a possession produces chances later
+ * (≈ 0.02 xG per possession in professional football). Losing the ball costs it; a clearance mostly gives it away.
+ * Measured 0.01–0.04: 0.02 gave the fewest turnovers and the most shots after a passing move.
+ */
+const POSSESSION_VALUE = 0.02;
 /** Lowest expected-goals value a player still shoots from. */
 const MIN_SHOT_XG = 0.04;
 /** Pressure (0…1, see pressureOn) from which holding the ball is an option. */
@@ -97,6 +103,20 @@ export function shotXg(pic: Picture, from: Vec2, aim: Vec2): number {
   return base * Math.pow(0.55, blockers) * (1 - 0.35 * pressureOn(pic)) * (0.75 + 0.5 * pic.self.abilities.shooting);
 }
 
+/** Reaction before an opponent starts for a pass (s). */
+const INTERCEPT_REACTION = 0.25;
+/** Acceleration of a player starting for a ball (m/s²); elite starts reach 5.5–8. */
+const INTERCEPT_ACCEL = 6;
+
+/**
+ * Time to cover s metres from a standstill, accelerating to max. Assuming top speed from the first step made
+ * every nearby opponent look like an interception: ground passes predicted at < 20 % arrived 54 % of the time.
+ */
+function runTime(s: number, vmax: number): number {
+  const sAccel = (vmax * vmax) / (2 * INTERCEPT_ACCEL);
+  return s <= sAccel ? Math.sqrt((2 * s) / INTERCEPT_ACCEL) : vmax / INTERCEPT_ACCEL + (s - sAccel) / vmax;
+}
+
 /** Probability that nobody intercepts a ground pass from a to b launched at v0. */
 function laneSafety(pic: Picture, a: Vec2, b: Vec2, v0: number, lofted: boolean, flight: number): number {
   let safe = 1;
@@ -104,7 +124,7 @@ function laneSafety(pic: Picture, a: Vec2, b: Vec2, v0: number, lofted: boolean,
     const { d, t } = segmentDistance(o.pos, a, b);
     const along = Math.hypot(b.x - a.x, b.z - a.z) * t;
     const ballTime = lofted ? (t > 0.85 ? flight * t : Infinity) : rollTime(v0, along);
-    const reach = Math.max(0, d - 0.9) / (6.5 * (0.6 + 0.4 * o.profile.abilities.pace)) + 0.25;
+    const reach = INTERCEPT_REACTION + runTime(Math.max(0, d - 0.9), 6.5 * (0.6 + 0.4 * o.profile.abilities.pace));
     if (ballTime === Infinity) continue;
     const margin = ballTime - reach;
     safe *= 1 - 1 / (1 + Math.exp(-margin * 6));
@@ -117,7 +137,7 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
   const from = { x: pic.ball.pos.x, z: pic.ball.pos.z };
   const sign = pic.sign;
   // Losing the ball hands the opponents their threat from that spot and gives up the threat we had there.
-  const lossCost = (p: Vec2) => threatAt((-sign) as 1 | -1, p) * 0.8 + threatAt(sign, p);
+  const lossCost = (p: Vec2) => threatAt((-sign) as 1 | -1, p) * 0.8 + threatAt(sign, p) + POSSESSION_VALUE;
   const pressure = pressureOn(pic);
 
   // Shot at the corner the keeper covers least.
@@ -219,7 +239,7 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     kind: 'clear',
     action: { kind: 'clear', direction: { x: away.x / n, z: away.z / n }, speed: 25 },
     success: 0.5,
-    value: -lossCost(from) * 0.35 - 0.01,
+    value: -lossCost(from) * 0.35 - 0.6 * POSSESSION_VALUE - 0.01,
     note: 'klären',
   });
   return out.sort((a, b) => b.value - a.value);

@@ -444,6 +444,34 @@ Mit den kürzeren Annahmen allein wurde das Spiel ruhiger: mehr Ballbesitz im le
 
 **Volle Partie (`npm run sim -- --silent=false`, Seed 2026, 2 × 45 min):** **1 : 1** (1 Tor nach Schuss, 1 Eigentor). Torschüsse 11 / 16, davon 2 nach Kombination; Pässe 1070 / 58 %; Wechsel 1314; Fouls 39 (Gelb 4, Elfmeter 1); Einwürfe 129; Torwart fängt 8; Rechenzeit 374 s (1,15 ms/Tick).
 
+### Passquote: Abfangmodell und Wert des Ballbesitzes (18.10.2026)
+
+Analyse (temporär, 7 Seeds, jeder Pass mit Plan und Ausgang):
+- Flache Pässe wurden massiv unterschätzt: erwartet < 20 % (Median 26 m) → 54 % angekommen, 40–60 % → 79 %, 60–80 % → 91 %. Deshalb wurden hohe Bälle gewählt (38 % aller Pässe, nur 36 % angekommen, 18–22 % ins Aus).
+- Echte Luftlöcher sind selten: 9 % der Passschwünge treffen den Ball nicht, davon ist in 78 von 124 Fällen ein Mitspieler zuerst am Ball.
+
+Übernommen (`options.ts`):
+- **Abfangmodell mit Reaktion und Beschleunigung:** Ein Gegner startet nach 0,25 s und beschleunigt mit 6 m/s² auf sein Höchsttempo; vorher hatte er es ab dem ersten Schritt. Danach ergeben erwartete 60–80 % tatsächlich 83 %. Test in `options.test.ts`.
+- **Wert des Ballbesitzes 0,02** (≈ xG pro Ballbesitz im Profifußball) in den Verlustkosten. Eine Klärung kostet 60 % davon. Gemessen mit 0,01 / 0,02 / 0,03 / 0,04.
+- **Director** (`moment-director.ts`): Der Angriffsmoment nutzte feste Wertschwellen (Option > 0,004, beste ≥ 0,035, Abstand als Verhältnis), die mit dem Bewertungsmodell der KI wandern. Mit dem Ballbesitzwert fiel jeder riskante Pass darunter, und der Moment öffnete nicht mehr. Neu wählt der Director Pass und Dribbling nur, wenn sie mindestens 30 % Erfolg versprechen; ein Schuss wird immer angeboten. Die Stakes sind erfüllt, wenn das xT der Ballposition oder das xG des Schusses mindestens 0,035 beträgt. Eine echte Zwickmühle liegt vor, wenn Optionen höchstens 0,05 hinter der besten liegen.
+
+12 Seeds (pro 90 min), Ausgang ist der Stand nach #19:
+
+| Variante | Wechsel | Passquote | Pässe | Schüsse (nach Kombination) | Tore | Fouls | Einwürfe |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Stand nach #19 | 1249 | 62 % | 1062 | 22,1 (0) | 3,4 | 38 | 126 |
+| Abfangmodell | 1274 | 59 % | 1434 | 21 (0,8) | 2,3 | 40 | 105 |
+| + Ballbesitzwert 0,01 | 1178 | 59 % | 1409 | 22,5 (1,1) | 4,1 | 40 | 97 |
+| **+ Ballbesitzwert 0,02 (übernommen)** | **1065** | **61 %** | 1392 | **22,5 (2,3)** | **3,4** | 40 | **96** |
+| + Ballbesitzwert 0,03 | 1127 | 60 % | 1379 | 21 (1,9) | 2,6 | 33 | 89 |
+| + Ballbesitzwert 0,04 | 1079 | 60 % | 1362 | 19,5 (1,5) | 3,4 | 50 | 80 |
+
+Bewertung: Die Wechsel sinken um 15 %, die Einwürfe von 126 auf 96, und erstmals entstehen messbar Schüsse nach Kombinationen (2,3/90). Die **Passquote bleibt bei ≈ 60 %** und liegt damit weiter weit unter dem Ziel 75–85 %. Mit diesen Hebeln ist das Ziel nicht erreichbar. Es wird mehr gepasst als real (≈ 1400 statt ≈ 1000/90). Fouls schwanken zwischen gleichwertigen Varianten um bis zu ±8 und liegen weiter bei ≈ 40 (Ziel ≈ 22).
+
+**Volle Partie (`npm run sim -- --silent=false`, Seed 2026):** 1 : 2, alle 3 Tore nach Schüssen; Torschüsse 19 / 10 (2 nach Kombination); Pässe 1397 / 60 %; Wechsel 1134; Fouls 46; Einwürfe 90; Rechenzeit 552 s.
+
+**Neuer Befund zum Director (auch auf `main`):** Mit den App-Einstellungen (Abklingzeit 75 s, höchstens 5 Momente pro Halbzeit) öffnete der Director in 4 Partien à 2 × 10 min 40 Momente: 30–33 Gegenpressing, 4–6 Strafraumverteidigung, 2 Konter, 1–2 Durchbruch. **Kein einziger Angriffsmoment („Abschluss oder Ablage?“).** Die Gegenpressing-Momente füllen das Limit pro Halbzeit, bevor ein Angriffsmoment entsteht. Behebung: nächster Schritt (§9).
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1030/90 (Berührungsfolge), Passquote 61 % zu niedrig, Einwürfe ≈ 150/90 zu viele, Torschüsse ≈ 20/90 (real ≈ 25; Chancen fast nur nach Ballgewinnen), Eigentore ≈ 1,1/90 zu viele, Fouls ≈ 35/90 (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
@@ -477,6 +505,6 @@ Mit den kürzeren Annahmen allein wurde das Spiel ruhiger: mehr Ballbesitz im le
 
 1. Spielqualität: (a) **Eigentore** (1,1/90, real ≈ 0,1): Rückpässe zum Torwart dosieren und neben das Tor zielen; ein Torwart, der den Ball nicht fangen darf, klärt einen auf sein Tor rollenden Ball statt ihn abzustoppen. (b) **Ballbesitz im letzten Drittel**: Stürmer verlieren den Ball bei der ersten Aktion; Annahme mit Körper zum Gegner, Ablage zum Unterstützer, danach Läufe/Steilpässe mit kalibriertem Passmodell und Abseitskorrektur (§6, Angriffsspiel). (c) Torwart bei Nahschüssen im Labor zu stark (92 %). Passquote (59 %), Ballannahme hoher Bälle; Einwürfe (150/90, Ziel ~45: Pässe, Klärungen und Abpraller ins Aus); Ping-Pong-Berührungen. Messung mit `npm run probe -- --seeds 1-12`. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
-3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
+3. Director: **Momente ausbalancieren**: Gegenpressing füllt das Limit, und Angriffsmomente kommen im Spiel nicht vor (§6, Passquote). Weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
 5. Optionale KI-Rollen (Match Analyst, Pub Host) über Adapter; Physik und Spiel bleiben offline lauffähig.
