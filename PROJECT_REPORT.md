@@ -509,9 +509,28 @@ Analyse (temporär, 12 Seeds, 107 Fouls = 40/90): 80 begingen Verteidiger beim S
 
 Verbleibend (82 Fouls): 48 weiterhin von hinten beim Stellen, oft gegen einen Spieler, der gerade gepasst hat (35 der 82). Der Verteidiger kommt mit Schwung an und kann nicht mehr bremsen. Elfmeter mit 1,1/90 zu häufig (real ≈ 0,3). Die Schwellen des Schiedsrichters (von hinten 2,8 m/s, von vorn 4,0 m/s) sind bewusst unverändert: Sie wurden für die Bewertung kalibriert, nicht für die Foulzahl.
 
+### Einwürfe – Analyse, keine Übernahme (18.10.2026)
+
+Stand nach #22: 93 Einwürfe/90 (am Anfang dieser Serie 150, real ≈ 45). Ursachen (temporär, 12 Seeds, 248 Einwürfe):
+- 52 % durch Pässe, fast alle hohe Bälle (52 von 58 in einer Stichprobe), Abschuss ≈ 22 m/s aus zentraler Position ohne Gegnerdruck. Ziel 15–50 m entfernt, 18–26 m neben der Mitte.
+- 29 % durch Abpraller vom Körper.
+- jeweils < 8 % durch Dribbling, Annahme und Klärung.
+
+Physik geprüft: Hohe Bälle kommen nahe am Zielpunkt auf (Abweichung 0–6 m auf 15–50 m), rollen danach aber 25–30 m weiter, wenn der Empfänger sie nicht kontrolliert. Gelingt die Annahme nicht (etwa jeder zweite hohe Ball), geht der Ball meist ins Aus.
+
+Gemessen (12 Seeds, pro 90 min) und **verworfen**:
+
+| Variante | Einwürfe | Schüsse | Fouls | Wechsel |
+| --- | --- | --- | --- | --- |
+| Stand nach #22 | 93 | 23,6 | 31 | 1150 |
+| kein hoher Ball auf Ziele < 8 m von der Seitenlinie | 88 | 23,6 | 29 | 1136 |
+| hoher Ball landet bei 85 % der Distanz | **66** | **10,9** | 26 | 1237 |
+
+Der kürzer gespielte hohe Ball senkt die Einwürfe deutlich, halbiert aber die Torschüsse: Lange Bälle erreichen die Angreifer nicht mehr. Der nächste Ansatz wäre ein besseres Annehmen herunterfallender Bälle (zum Landepunkt laufen, nach dem Aufsprung kontrollieren), statt seltener lang zu spielen.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
-- **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1030/90 (Berührungsfolge), Passquote 61 % zu niedrig, Einwürfe ≈ 150/90 zu viele, Torschüsse ≈ 20/90 (real ≈ 25; Chancen fast nur nach Ballgewinnen), Eigentore ≈ 1,1/90 zu viele, Fouls ≈ 35/90 (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
+- **Spielqualität noch nicht realistisch** (12 Seeds, Stand nach #22): Passquote ≈ 59 % (Ziel 75–85 %), Pässe ≈ 1400/90 (real ≈ 1000), Einwürfe ≈ 93/90 (real ≈ 45), Fouls ≈ 31/90 (real ≈ 22), Elfmeter ≈ 1,1/90 (real ≈ 0,3), Eigentore ≈ 1/90, Schüsse nach Kombination selten (≈ 1–2/90). Im Zielbereich: Torschüsse ≈ 24/90, Tore ≈ 3,4/90, Torquote ≈ 11 % (siehe §6).
 - Der Körper ist eine aufrechte Kapsel (r = 0,27 m, Reibung 0); eine niedrigere Stoßzahl wurde gemessen und verworfen (§6). Ein streifender Ball behält seine Geschwindigkeit; der Torwart kippt beim Hechtsprung nicht mit dem ganzen Körper, nur die Hände reichen weiter.
 - Physik läuft mit ≥ 240 Hz (Rapier-Drallgrenze bei 60 Hz); ≈ 50 % mehr Rechenzeit pro Tick.
 - Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
@@ -540,7 +559,7 @@ Verbleibend (82 Fouls): 48 weiterhin von hinten beim Stellen, oft gegen einen Sp
 
 ## 9. Nächste Schritte
 
-1. Spielqualität: (a) **Eigentore** (1,1/90, real ≈ 0,1): Rückpässe zum Torwart dosieren und neben das Tor zielen; ein Torwart, der den Ball nicht fangen darf, klärt einen auf sein Tor rollenden Ball statt ihn abzustoppen. (b) **Ballbesitz im letzten Drittel**: Stürmer verlieren den Ball bei der ersten Aktion; Annahme mit Körper zum Gegner, Ablage zum Unterstützer, danach Läufe/Steilpässe mit kalibriertem Passmodell und Abseitskorrektur (§6, Angriffsspiel). (c) Torwart bei Nahschüssen im Labor zu stark (92 %). Passquote (59 %), Ballannahme hoher Bälle; Einwürfe (150/90, Ziel ~45: Pässe, Klärungen und Abpraller ins Aus); Ping-Pong-Berührungen. Messung mit `npm run probe -- --seeds 1-12`. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
+1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Annahme hoher Bälle** – zum Landepunkt laufen, nach dem Aufsprung kontrollieren; Hauptquelle der Einwürfe und ein Grund für die Passquote. (b) **Fouls gegen Spieler, die gerade gepasst haben** – Verteidiger bremst rechtzeitig; Elfmeter zu häufig. (c) **Passquote** – weniger Pässe in umkämpften Lagen (≈ 1400 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
