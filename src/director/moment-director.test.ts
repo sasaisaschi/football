@@ -144,27 +144,36 @@ describe('decisive moment director', () => {
     expect(decision).toMatchObject({ optionId: 'hold', chosenBy: 'delegated' });
   });
 
-  // Known defect (PROJECT_REPORT §6, Chancenverwertung): the nearest defender already goes for the carrier at full
-  // speed, so 'press' and 'hold' close the same distance (1.12 m in 0.6 s) and the decision changes nothing here.
-  // Remove .fails once pressing makes a difference.
-  it.fails('box defence: pressing closes in faster than holding', () => {
-    const closing = (option: string) => {
-      const e = new MatchEngine({ seed: 9, halfMinutes: 45 });
-      const carrier = role(e, 1, 'ST'), defender = role(e, 0, 'RCB');
-      stageScenario(e, { [carrier]: { x: -31, z: 2 }, [defender]: { x: -35, z: 1 }, [role(e, 0, 'GK')]: { x: -51, z: 0 } }, { x: -30.6, y: 0.11, z: 2 });
-      e.bodies[carrier].heading = -Math.PI / 2;
-      e.referee.lastTouch = { player: carrier, team: 1, part: 'boot', time: e.time, position: e.ballPos() };
-      e.director = new MomentDirector({ userTeam: 0, cooldown: 0, maxPerHalf: 99, timeoutSeconds: 12 }).attach();
-      runFor(e, 0.5);
-      e.director = null;
-      const target = e.bodies[carrier].position();
-      const gap = () => Math.hypot(e.bodies[defender].position().x - target.x, e.bodies[defender].position().z - target.z);
-      const before = gap();
-      e.resolveMoment(option, 'user');
-      runFor(e, 0.6);
-      return before - gap();
-    };
+  /** Seed 9: the carrier winds up for a shot 21 m out; the RCB stands 4 m goal-side of him. */
+  const boxDefence = (option: string) => {
+    const e = new MatchEngine({ seed: 9, halfMinutes: 45 });
+    const carrier = role(e, 1, 'ST'), defender = role(e, 0, 'RCB');
+    stageScenario(e, { [carrier]: { x: -31, z: 2 }, [defender]: { x: -35, z: 1 }, [role(e, 0, 'GK')]: { x: -51, z: 0 } }, { x: -30.6, y: 0.11, z: 2 });
+    e.bodies[carrier].heading = -Math.PI / 2;
+    e.referee.lastTouch = { player: carrier, team: 1, part: 'boot', time: e.time, position: e.ballPos() };
+    e.director = new MomentDirector({ userTeam: 0, cooldown: 0, maxPerHalf: 99, timeoutSeconds: 12 }).attach();
+    runFor(e, 0.5);
+    e.director = null;
+    const target = e.bodies[carrier].position();
+    const gap = () => Math.hypot(e.bodies[defender].position().x - target.x, e.bodies[defender].position().z - target.z);
+    const before = gap();
+    const from = e.events.length;
+    e.resolveMoment(option, 'user');
+    return { e, defender, closed: () => before - gap(), events: () => e.events.slice(from) };
+  };
+
+  it('box defence: pressing closes in faster than holding (jockeying keeps its distance)', () => {
+    const closing = (option: string) => { const s = boxDefence(option); runFor(s.e, 0.6); return s.closed(); };
     expect(closing('press')).toBeGreaterThan(closing('hold') + 0.3);
   });
-});
 
+  it('box defence: only a defender who steps into the shooting lane gets his body to the shot', () => {
+    const shotTouchedBy = (option: string) => {
+      const s = boxDefence(option);
+      runFor(s.e, 1.5);
+      return s.events().some(ev => ev.type === 'touch' && ev.player === s.defender);
+    };
+    expect(shotTouchedBy('block')).toBe(true);
+    expect(shotTouchedBy('hold')).toBe(false);
+  });
+});
