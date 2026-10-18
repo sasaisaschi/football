@@ -98,15 +98,19 @@ describe('decisive moment director', () => {
     const director = new MomentDirector({ userTeam: 0, cooldown: 60, maxPerHalf: 3, timeoutSeconds: 12 });
     e.director = director.attach();
     const times: number[] = [];
+    const kinds: { kind: string; half: number }[] = [];
     while (e.phase !== 'full-time' && e.time < 600) {
       e.step();
       if (e.phase === 'decision' && e.moment) {
         times.push(e.time);
+        kinds.push({ kind: e.moment.kind, half: e.half });
         e.resolveMoment(e.moment.defaultOptionId, 'timeout');
       }
     }
     expect(e.phase).toBe('full-time');
     expect(times.length).toBeLessThanOrEqual(6);
+    // No kind of situation crowds out the others: at most one transition moment (counter, counter-press) per half.
+    for (const half of [1, 2]) expect(kinds.filter(k => k.half === half && (k.kind === 'counter-press' || k.kind === 'counter-attack')).length).toBeLessThanOrEqual(1);
     for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(60 - 0.5);
   }, 300_000);
 

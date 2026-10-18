@@ -6,10 +6,22 @@ import { PITCH } from '../physics/pitch-geometry';
 
 /** A pass or take-on the player could realistically pull off (estimated chance of success); a shot is offered whenever the player would consider it. */
 const MIN_SUCCESS = 0.3;
-/** Threat at stake for an attacking moment: expected threat of the ball's position or the chance of the shot. */
-const STAKES = 0.035;
+/** Threat at stake for an attacking moment (≈ 27 m central): expected threat of the ball's position or the shot's chance. */
+const STAKES = 0.02;
 /** Options within this much expected threat (goal probability) of the best one make a real dilemma. */
 const DILEMMA_GAP = 0.05;
+/** How often the director looks at the match (s). */
+const CHECK_INTERVAL = 0.1;
+/**
+ * Moments per half for each kind of situation, within the overall limit. Without them the most frequent kind
+ * crowded out the rest: counter-press moments filled every half, attacking moments never came (4 matches).
+ */
+const GROUP_LIMIT = { attack: 3, transition: 1, defence: 2 } as const;
+const GROUP: Record<MomentKind, keyof typeof GROUP_LIMIT> = {
+  'finish-or-pass': 'attack', 'take-on': 'attack', 'counter-attack': 'transition', 'counter-press': 'transition', 'breakaway-defence': 'defence', 'box-defence': 'defence',
+};
+/** A ball lost after holding it at least this long (s) is a real loss of possession, not a ricochet. */
+const SPELL_FOR_COUNTER_PRESS = 4;
 
 export type DirectorConfig = {
   userTeam: TeamId;
@@ -30,10 +42,13 @@ export class MomentDirector {
   private nextCheck = 0;
   private lastMomentAt = -Infinity;
   private momentsThisHalf = 0;
+  private groupThisHalf: Record<keyof typeof GROUP_LIMIT, number> = { attack: 0, transition: 0, defence: 0 };
   private half: 1 | 2 = 1;
   private nextId = 1;
   private lastTouchTeam: TeamId | null = null;
   private possessionChangedAt = -Infinity;
+  /** How long the team that just lost the ball had held it. */
+  private lostSpell = 0;
 
   constructor(readonly config: DirectorConfig = DEFAULT_DIRECTOR) {}
 
@@ -43,16 +58,21 @@ export class MomentDirector {
   }
 
   evaluate(e: MatchEngine): DecisionMoment | null {
-    if (e.half !== this.half) { this.half = e.half; this.momentsThisHalf = 0; }
+    if (e.half !== this.half) { this.half = e.half; this.momentsThisHalf = 0; this.groupThisHalf = { attack: 0, transition: 0, defence: 0 }; }
     const touchTeam = e.referee.lastTouch?.team ?? null;
-    if (touchTeam !== this.lastTouchTeam) { this.lastTouchTeam = touchTeam; this.possessionChangedAt = e.time; }
+    if (touchTeam !== this.lastTouchTeam) { this.lostSpell = e.time - this.possessionChangedAt; this.lastTouchTeam = touchTeam; this.possessionChangedAt = e.time; }
     if (e.time < this.nextCheck) return null;
-    this.nextCheck = e.time + 0.25;
+    // The carrier's window between controlling the ball and his next swing is short; checked every 0.25 s it was
+    // mostly missed.
+    this.nextCheck = e.time + CHECK_INTERVAL;
     if (e.time - this.lastMomentAt < this.config.cooldown || this.momentsThisHalf >= this.config.maxPerHalf) return null;
-    const moment = this.attackingMoment(e) ?? this.transitionMoment(e) ?? this.breakawayMoment(e) ?? this.boxDefenceMoment(e);
+    const open = (g: keyof typeof GROUP_LIMIT) => this.groupThisHalf[g] < GROUP_LIMIT[g];
+    const moment = (open('attack') ? this.attackingMoment(e) : null) ?? (open('transition') ? this.transitionMoment(e) : null)
+      ?? (open('defence') ? this.breakawayMoment(e) ?? this.boxDefenceMoment(e) : null);
     if (!moment) return null;
     this.lastMomentAt = e.time;
     this.momentsThisHalf++;
+    this.groupThisHalf[GROUP[moment.kind]]++;
     return moment;
   }
 
@@ -124,7 +144,8 @@ export class MomentDirector {
       ];
       return this.open(e, 'counter-attack', 'Ballgewinn – Konter?', `Ballgewinn ${Math.round((u + 1) * 52.5)} m vor dem eigenen Tor.`, touch.player, options, base.risk > 0.6 ? 'counter' : 'secure');
     }
-    if (touch.team !== team && u > 0.15 && e.time - e.halfStartedAt > 20) {
+    // A real loss: we had the ball for a while and the opponent now has it under control, not a ricochet.
+    if (touch.team !== team && u > 0.15 && e.time - e.halfStartedAt > 20 && this.lostSpell >= SPELL_FOR_COUNTER_PRESS && this.carrier(e, touch.team) !== null) {
       const options: DecisionOption[] = [
         { id: 'gegenpress', label: 'Sofort gegenpressen', detail: 'Hoch pressen, Linie rückt auf', effect: { type: 'team', team, instruction: instr({ press: 'high', lineHeight: 0.7 }), seconds: 10 }, outlook: 'schnelle Rückeroberung möglich, Raum hinter der Abwehr' },
         { id: 'drop', label: 'Fallen lassen', detail: 'Kompakt hinter den Ball', effect: { type: 'team', team, instruction: instr({ press: 'low', lineHeight: -0.6 }), seconds: 10 }, outlook: 'sicherer, Gegner baut ruhig auf' },
