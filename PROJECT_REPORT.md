@@ -346,9 +346,42 @@ Nichts davon ist übernommen:
 
 Der Code der Versuche (`ai/attack.ts`, Abseitskorrektur, Vorlauf) ist nicht im Repo; Beschreibung und Messwerte stehen hier.
 
+### Chancenverwertung und Torwart gegen Distanzschüsse (18.10.2026)
+
+**Korrektur zum vorigen Abschnitt:** Die Aussage „23 % der Schüsse sind Tore“ war falsch, denn dort waren alle Tore durch die Zahl der Schüsse geteilt. Neue Messgröße `goalsFrom` (`match-stats.ts`, getestet; in `npm run probe`): wie jedes Tor fiel. Stand `main` (12 Seeds, pro 90 min): 3,4 Tore, davon 1,5 nach Schuss (10 % von 15 Schüssen, realistisch), **1,1 Eigentore** (real ≈ 0,1), 0,8 sonstige (Pass, Körper).
+
+**Neues Werkzeug `npm run lab`** (`shot-lab.test.ts`): je 60 Schüsse aufs Tor aus 8/12/16/20/25 m mit 26 m/s gegen den Torwart allein, Ziel gleichverteilt über das Tor, ohne Schützenfehler.
+
+| Torwart hält (Labor) | 8 m | 12 m | 16 m | 20 m | 25 m |
+| --- | --- | --- | --- | --- | --- |
+| vorher | 90 % | 83 % | 72 % | **13 %** | **13 %** |
+| Hechtsprung dosiert | 92 % | 90 % | 80 % | 27 % | 28 % |
+| **+ Ballhöhe richtig, Sprung nur außerhalb der Handreichweite** | 92 % | 92 % | 92 % | **85 %** | **92 %** |
+
+Ursachen (Einzelverfolgung im Labor, temporär):
+- **Hechtsprung zu früh und zu weit:** Er sprang, sobald der Ball < 0,7 s entfernt war, immer mit voller Kraft (4–5 m/s), und rutschte ungebremst weiter. Bei 20 m stand er beim Eintreffen einen Meter jenseits der Ballbahn; der Ball ging innen vorbei. Neu: Die Sprungkraft ist so dosiert, dass die Hände (nicht der Körper) genau beim Eintreffen auf der Ballbahn sind; innerhalb von 0,9 m neben dem Körper kein Sprung (`keeper.ts`, `KeeperHands.dive` mit Tempo).
+- **Ballhöhe falsch geschätzt:** Die Wahrnehmung schrieb die Position eines fliegenden Balls mit Schwerkraft fort, seine senkrechte Geschwindigkeit aber nicht. Der Torwart hielt sinkende Bälle für bis zu 0,7 m höher, also für unerreichbar, und sprang (`perception.ts`).
+
+Im Spiel (12 Seeds, pro 90 min):
+
+| Variante | Schüsse | Tore nach Schuss (Quote) | Tore gesamt (Eigentore) | Passquote | Wechsel | Fouls |
+| --- | --- | --- | --- | --- | --- | --- |
+| `main` (Schuss ab xG 0,06) | 15 | 1,5 (10 %) | 3,4 (1,1) | 61 % | 1031 | 34 |
+| Schuss ab xG 0,04, alter Torwart | 20,3 | 4,1 (**20 %**) | 6,0 (1,5) | 59 % | – | – |
+| Torwart-Korrektur, xG 0,06 | 14,3 | 1,5 (10 %) | 3,8 (2,3) | 61 % | 1032 | 30 |
+| **übernommen: Torwart-Korrektur + Schuss ab xG 0,04** | **19,9** | **2,3 (12 %)** | **4,1 (1,1)** | 59 % | 1116 | 35 |
+
+Bewertung: Spieler schießen jetzt auch aus ≈ 20 m (19,9 statt 15 Schüsse/90, real ≈ 25); die Quote bleibt realistisch (12 %). Die überzähligen Tore sind Eigentore (1,1/90). Verfolgt: harte Rückpässe (> 20 m/s) zum Torwart, der den Ball nicht in die Hand nehmen darf (Rückpassregel), ihn nur abstoppt und auf das eigene Tor weiterrollen lässt. Im Labor sind Nahschüsse (8–12 m) mit 92 % zu oft gehalten (real ≈ 50–65 %); der Torwart sieht dort den Ball ohne Schussvorbereitung sofort. Im Spiel liegt die Quote aber im Zielbereich.
+
+**Volle Partie (`npm run sim -- --silent=false`, Seed 2026, 2 × 45 min):** 0 : 5 → **3 : 1**: 1 Tor nach Schuss, 1 nach Pass, 2 Eigentore. Torschüsse 4 / 6 (weniger als in der Probe), Pässe 942 / 60 %, Wechsel 1042, Fouls 47, Gelb 1, Einwürfe 140, Rechenzeit 486 s (1,5 ms/Tick). Auch hier stammen die überzähligen Tore aus Eigentoren. Die 47 Fouls dieser einzelnen Partie liegen deutlich über der Probe (35); Fouls schwanken pro Partie stark.
+
+**Director-Tests angepasst, ein bestehender Fehler aufgedeckt:**
+- „Gleiche Entscheidung, unterschiedlicher Ausgang“: Ein Schuss aus 19 m wurde in allen 6 Wiederholungen gefangen. Mit 12 Wiederholungen: 9 gefangen, 2 im Aus, 1 im Spiel, kein Tor (real ≈ 5–8 % aus dieser Entfernung). Der Test nutzt jetzt 12.
+- „Gefahr vor dem eigenen Strafraum“: Der Test maß den Abstand Verteidiger–Gegner. Der Gegner schießt jetzt aus 21 m, statt auf den Verteidiger zuzudribbeln; deshalb misst der Test den Lauf des Verteidigers selbst. Dabei zeigte sich: **„Zustellen“ und „Ordnung halten“ bewirken in dieser Situation dasselbe**, auch auf `main` (je 1,12 m in 0,6 s), weil der nächste Verteidiger ohnehin mit voller Geschwindigkeit zum Ballführer läuft. Die Entscheidung ist hier wirkungslos. Festgehalten als `it.fails` in `moment-director.test.ts`; die Behebung ist offen (§9).
+
 ## 7. Bekannte Grenzen / offene Punkte
 
-- **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1030/90 (Berührungsfolge), Passquote 61 % zu niedrig, Einwürfe ≈ 150/90 zu viele, Torschüsse ≈ 15/90 zu wenige (Chancen fast nur nach Ballgewinnen), Fouls ≈ 34/90 (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
+- **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1030/90 (Berührungsfolge), Passquote 61 % zu niedrig, Einwürfe ≈ 150/90 zu viele, Torschüsse ≈ 20/90 (real ≈ 25; Chancen fast nur nach Ballgewinnen), Eigentore ≈ 1,1/90 zu viele, Fouls ≈ 35/90 (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
 - Der Körper ist eine aufrechte Kapsel (r = 0,27 m, Reibung 0); eine niedrigere Stoßzahl wurde gemessen und verworfen (§6). Ein streifender Ball behält seine Geschwindigkeit; der Torwart kippt beim Hechtsprung nicht mit dem ganzen Körper, nur die Hände reichen weiter.
 - Physik läuft mit ≥ 240 Hz (Rapier-Drallgrenze bei 60 Hz); ≈ 50 % mehr Rechenzeit pro Tick.
 - Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
@@ -373,12 +406,12 @@ Der Code der Versuche (`ai/attack.ts`, Abseitskorrektur, Vorlauf) ist nicht im R
 7. **Realismus-Kalibrierung** – Schussmechanik (Freiraum Körper/Ball, Vorhalten, Schuhspitze, Stoßzahl), Ball rollt (240 Hz), Spieler-Ballmodell mit Rutschphase, Entscheidungsrauschen auf Werteskala, xG, Direktspiel, Hechtsprung mit kippendem Oberkörper (gemessen über 6 Seeds und volle Partie).
 8. **Ballverluste** – Drallkorrektur der Schwungplanung, Standbeinbeugung, gerichtete erste Ballmitnahme, Abschirmen, Tackling, Begleittempo beim Stellen, Absichern vor dem Tor, Formation erst bei Ballkontrolle, Weg um den Ball, kalibrierte Pass-/Dribbelbewertung, Torwart verteilt nur, Regel 16 (gemessen über 6 Seeds und volle Partie).
 9. **Torwart** – Rückpassregel nur bei absichtlichem Zuspiel, Torwart verlässt die Linie nur als Erster am Ball, sprintet zurück; Körperdämpfung und Hände vor dem Körper gemessen und verworfen (6 Seeds, Schusslabor).
-10. **Ballbesitz** – Messwerkzeug `npm run probe`, Ursachenanalyse der Ballverluste, Anspielstationen, Körper ab dem Treffpunkt frei, Ballführer-Reichweite für Verteidiger, flacher Pass bevorzugt, Ballhalten/Abschirmen unter Druck, Verteidiger stellt mit Abstand und stochert nicht durch den Gegner (gemessen über 12 Seeds).
+10. **Ballbesitz** – Messwerkzeug `npm run probe`, Ursachenanalyse der Ballverluste, Anspielstationen, Körper ab dem Treffpunkt frei, Ballführer-Reichweite für Verteidiger, flacher Pass bevorzugt, Ballhalten/Abschirmen unter Druck, Verteidiger stellt mit Abstand und stochert nicht durch den Gegner, Torwart gegen Distanzschüsse, Schuss ab xG 0,04 (gemessen über 12 Seeds und Schusslabor).
 
 ## 9. Nächste Schritte
 
-1. Spielqualität: (a) **Chancenverwertung**: 23 % der Schüsse sind Tore (real ≈ 10 %) – Torwart gegen Distanzschüsse, Schussgenauigkeit; erst danach die Schussschwelle senken. (b) **Ballbesitz im letzten Drittel**: Stürmer verlieren den Ball bei der ersten Aktion; Annahme mit Körper zum Gegner, Ablage zum Unterstützer, danach Läufe/Steilpässe mit kalibriertem Passmodell und Abseitskorrektur (§6, Angriffsspiel). Passquote (61 %), Ballannahme hoher Bälle; Einwürfe (150/90, Ziel ~45: Pässe, Klärungen und Abpraller ins Aus); Ping-Pong-Berührungen. Messung mit `npm run probe -- --seeds 1-12`. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
+1. Spielqualität: (a) **Eigentore** (1,1/90, real ≈ 0,1): Rückpässe zum Torwart dosieren und neben das Tor zielen; ein Torwart, der den Ball nicht fangen darf, klärt einen auf sein Tor rollenden Ball statt ihn abzustoppen. (b) **Ballbesitz im letzten Drittel**: Stürmer verlieren den Ball bei der ersten Aktion; Annahme mit Körper zum Gegner, Ablage zum Unterstützer, danach Läufe/Steilpässe mit kalibriertem Passmodell und Abseitskorrektur (§6, Angriffsspiel). (c) Torwart bei Nahschüssen im Labor zu stark (92 %). Passquote (59 %), Ballannahme hoher Bälle; Einwürfe (150/90, Ziel ~45: Pässe, Klärungen und Abpraller ins Aus); Ping-Pong-Berührungen. Messung mit `npm run probe -- --seeds 1-12`. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
-3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
+3. Director: **Moment „Gefahr vor dem eigenen Strafraum“ wirksam machen**, denn „Zustellen“ und „Ordnung halten“ unterscheiden sich derzeit nicht (Test `it.fails`); weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
 5. Optionale KI-Rollen (Match Analyst, Pub Host) über Adapter; Physik und Spiel bleiben offline lauffähig.

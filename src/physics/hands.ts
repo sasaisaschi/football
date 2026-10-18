@@ -105,12 +105,20 @@ export class KeeperHands {
     this.target = this.restRel();
   }
 
-  /** A dive: one bounded push sideways (and slightly up), after which the keeper needs time to get up. */
-  dive(towards: { x: number; z: number }, now: number, power: number): void {
+  /** Fastest sideways push of a dive (m/s) for a keeper of the given power (0…1). */
+  static diveSpeed(power: number): number {
+    return 3.2 + 2 * power;
+  }
+
+  /**
+   * A dive: one bounded push sideways (and slightly up), after which the keeper needs time to get up. speed is
+   * what the keeper chooses, never more than his power allows.
+   */
+  dive(towards: { x: number; z: number }, now: number, power: number, speed = KeeperHands.diveSpeed(power)): void {
     const p = this.keeper.body.translation();
     const dx = towards.x - p.x, dz = towards.z - p.z;
     const d = Math.hypot(dx, dz) || 1;
-    const speed = 3.2 + 2 * power;
+    speed = Math.min(speed, KeeperHands.diveSpeed(power));
     const v = this.keeper.body.linvel();
     this.keeper.body.setLinvel({ x: v.x * 0.3 + (dx / d) * speed, y: v.y, z: v.z * 0.3 + (dz / d) * speed }, true);
     this.diveUntil = now + 0.55;

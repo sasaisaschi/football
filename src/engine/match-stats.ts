@@ -8,6 +8,8 @@ import type { BallAction, MatchEvent, PlayerProfile } from './types';
 export type MatchStats = {
   score: [number, number];
   ownGoals: number;
+  /** How each goal went in: the scorer's last swing (touch within 1 s of it), a ball off the body, or an own goal. */
+  goalsFrom: Record<BallAction['kind'] | 'body' | 'hands' | 'none' | 'own', number>;
   shots: [number, number];
   /** Shots at the end of a move with at least three completed passes since the team won the ball. */
   shotsAfterBuildUp: number;
@@ -34,7 +36,9 @@ export type MatchStats = {
 export function matchStats(events: readonly MatchEvent[], profiles: readonly PlayerProfile[]): MatchStats {
   const team = (player: number) => profiles[player].team;
   const s: MatchStats = {
-    score: [0, 0], ownGoals: 0, shots: [0, 0], shotsAfterBuildUp: 0, passes: 0, passesCompleted: 0, possessionChanges: 0,
+    score: [0, 0], ownGoals: 0,
+    goalsFrom: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, body: 0, hands: 0, none: 0, own: 0 },
+    shots: [0, 0], shotsAfterBuildUp: 0, passes: 0, passesCompleted: 0, possessionChanges: 0,
     lossesAfter: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, body: 0, hands: 0, none: 0 },
     pingPong: 0, meanSpell: 0, fouls: 0, yellow: 0, red: 0, penalties: 0, offsides: 0, corners: 0, throwIns: 0, goalKicks: 0, keeperCatches: 0,
   };
@@ -74,6 +78,11 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
       case 'goal':
         s.score[ev.team]++;
         if (ev.ownGoal) s.ownGoals++;
+        if (ev.ownGoal || !prev) s.goalsFrom.own++;
+        else {
+          const sw = lastSwing.get(prev.player);
+          s.goalsFrom[prev.part !== 'boot' ? prev.part : sw && prev.time - sw.time < 1 ? sw.kind : 'none']++;
+        }
         break;
       case 'out':
         if (ev.restart === 'corner') s.corners++;

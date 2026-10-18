@@ -26,6 +26,8 @@ const RECEIVER_RISK = 0.4;
 const CLOSING_SPEED = 2;
 /** How much safer a lofted pass must look than the ground pass to the same team-mate before it is chosen. */
 const LOFT_MARGIN = 0.3;
+/** Lowest expected-goals value a player still shoots from. */
+const MIN_SHOT_XG = 0.04;
 /** Pressure (0…1, see pressureOn) from which holding the ball is an option. */
 const SHIELD_PRESSURE = 0.5;
 /** Chance of keeping the ball with a shielding touch: base plus room away from the opponents, capped. */
@@ -123,8 +125,9 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     const aimZ = side * (PITCH.goalHalfWidth - 0.65);
     const xg = shotXg(pic, from, { x: gx, z: aimZ });
     const dist = Math.hypot(gx - from.x, aimZ - from.z);
-    // Only a real chance is worth a shot; speculative efforts mostly give the ball away.
-    if (xg >= 0.06) out.push({
+    // Only a real chance is worth a shot; speculative efforts mostly give the ball away. From ≈ 20 m central
+    // (xG ≈ 0.04) players do try it, as in professional football (measured: 20 shots/90, 12 % scored).
+    if (xg >= MIN_SHOT_XG) out.push({
       kind: 'shot',
       action: { kind: 'shot', aim: { x: gx, y: Math.min(1.6, 0.35 + dist / 40), z: aimZ }, speed: 24 + 4 * pic.self.abilities.shooting },
       success: xg,

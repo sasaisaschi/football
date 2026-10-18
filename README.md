@@ -23,6 +23,7 @@ npm run check          # typecheck + unit/integration tests + production build
 npm run test:browser   # real browser run (local Chrome/Edge, headless) with screenshots in browser-check-output/
 npm run sim            # full 2 x 45 min autonomous match with statistics (several minutes)
 npm run probe          # several seeds in parallel (default 1-6, 2 x 10 min), statistics per 90 min; --seeds 7-12 --minutes 10 --parallel 4
+npm run lab            # shot lab: on-target shots from 8–25 m against the keeper alone, save rate per distance and zone
 ```
 
 Keys during a match: `1`–`4` choose an option at a decision moment, `0` lets the players decide, `M` toggles sound.
