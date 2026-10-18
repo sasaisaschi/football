@@ -528,9 +528,31 @@ Gemessen (12 Seeds, pro 90 min) und **verworfen**:
 
 Der kürzer gespielte hohe Ball senkt die Einwürfe deutlich, halbiert aber die Torschüsse: Lange Bälle erreichen die Angreifer nicht mehr. Der nächste Ansatz wäre ein besseres Annehmen herunterfallender Bälle (zum Landepunkt laufen, nach dem Aufsprung kontrollieren), statt seltener lang zu spielen.
 
+### Annahme hoher Bälle: zum Landepunkt laufen (18.10.2026)
+
+Analyse (temporär, 12 Seeds, 993 hohe Pässe): Nur 10 % endeten mit einer Fußberührung des Empfängers, 51 % beim Gegner, 14 % im Aus. Beim Aufkommen stand der Empfänger in 421 von 601 Fällen mehr als 5 m vom Landepunkt entfernt, nur in 66 näher als 2 m. Die Spieler berechneten den Treffpunkt, als würde der Ball rollen, und liefen entlang seines Schattens auf dem Rasen.
+
+Übernommen: **Flugbahn-Vorhersage** (`ai/aerial.ts`): Schwerkraft, Luftwiderstand, Aufsprung (mittlere Stoßzahl Ball/Rasen, Reibung) und Ausrollen. Der Spieler läuft zum ersten Punkt, an dem der Ball wieder höchstens 0,5 m hoch ist und den er rechtzeitig erreicht. Das gilt für alle (Empfänger, Gegner, Torwart, die Entscheidung, wer zum Ball geht). Test `aerial.test.ts`: Die Vorhersage trifft die Rapier-Flugbahn auf < 1,5 m und < 0,15 s.
+
+Danach in derselben Stichprobe: Empfänger < 2 m vom Landepunkt 145 statt 66; ins Aus 8 % statt 14 %; Fußberührung des Empfängers 13 %. Der Gegner kam aber öfter an den Ball (59 %): Meist prallt der Ball in der Luft von einem Körper ab, weil Kopfball und Brustannahme fehlen.
+
+24 Seeds (pro 90 min):
+
+| Variante | Einwürfe | Passquote | Schüsse | Tore (nach Schuss / Eigentore) | Fouls | Wechsel |
+| --- | --- | --- | --- | --- | --- | --- |
+| `main` (nach #23) | 94 | 59 % | 23,5 | 3,2 (2,5 / 0,6) | 28 | 1137 |
+| **Landepunkt (übernommen)** | **70** | **61 %** | 21,8 | 1,9 (1,2 / 0,8) | 30 | 1220 |
+| + Brustannahme (Körper federt ab) | 66 | 60 % | 22,5 | 2,8 (1,3 / 1,5) | 28 | 1209 |
+
+Verworfen: **Brustannahme**. Ein Empfänger, der einen hohen Ball erwartet, machte seinen Körper weich (Stoßzahl 0). Das brachte in der Einzelanalyse mehr Fußberührungen (16 %), in der Probe aber keinen gesicherten Gewinn. Außerdem setzte der Torwart-Code den Zustand nicht zurück.
+
+⚠️ Beobachten: Mit der Landepunkt-Vorhersage fiel die Torquote je Schuss auf 1,2 von 21,8 (≈ 5 %, vorher ≈ 10 %, real ≈ 10 %). Die Seed-Hälften streuen stark (1–12: 0,8 Tore; 13–24: 3,0 wie `main`). Mehr gefangene Bälle des Torwarts (8,3 statt 5,3 auf 13–24) passen dazu, dass er hohe Bälle jetzt richtig anläuft.
+
+**Volle Partie (`npm run sim -- --silent=false`, Seed 2026):** **4 : 6**: 7 Tore aus 28 Schüssen, 3 Eigentore. Pässe 1452 / 62 %; Fouls 21; Einwürfe 57; Ball im Spiel 92 %; Rechenzeit 752 s (2,3 ms/Tick). Die Partie widerspricht der niedrigen Torquote der Probe (25 % statt 5 %). Tore streuen pro Partie und pro Seed-Gruppe so stark, dass erst mehr Seeds (z. B. 48) eine Aussage über die Torquote erlauben.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
-- **Spielqualität noch nicht realistisch** (12 Seeds, Stand nach #22): Passquote ≈ 59 % (Ziel 75–85 %), Pässe ≈ 1400/90 (real ≈ 1000), Einwürfe ≈ 93/90 (real ≈ 45), Fouls ≈ 31/90 (real ≈ 22), Elfmeter ≈ 1,1/90 (real ≈ 0,3), Eigentore ≈ 1/90, Schüsse nach Kombination selten (≈ 1–2/90). Im Zielbereich: Torschüsse ≈ 24/90, Tore ≈ 3,4/90, Torquote ≈ 11 % (siehe §6).
+- **Spielqualität noch nicht realistisch** (12 Seeds, Stand nach #22): Passquote ≈ 59 % (Ziel 75–85 %), Pässe ≈ 1400/90 (real ≈ 1000), Einwürfe ≈ 70/90 (real ≈ 45), Fouls ≈ 31/90 (real ≈ 22), Elfmeter ≈ 1,1/90 (real ≈ 0,3), Eigentore ≈ 1/90, Schüsse nach Kombination selten (≈ 1–2/90). Im Zielbereich: Torschüsse ≈ 24/90, Tore ≈ 3,4/90, Torquote ≈ 11 % (siehe §6).
 - Der Körper ist eine aufrechte Kapsel (r = 0,27 m, Reibung 0); eine niedrigere Stoßzahl wurde gemessen und verworfen (§6). Ein streifender Ball behält seine Geschwindigkeit; der Torwart kippt beim Hechtsprung nicht mit dem ganzen Körper, nur die Hände reichen weiter.
 - Physik läuft mit ≥ 240 Hz (Rapier-Drallgrenze bei 60 Hz); ≈ 50 % mehr Rechenzeit pro Tick.
 - Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
@@ -559,7 +581,7 @@ Der kürzer gespielte hohe Ball senkt die Einwürfe deutlich, halbiert aber die 
 
 ## 9. Nächste Schritte
 
-1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Annahme hoher Bälle** – zum Landepunkt laufen, nach dem Aufsprung kontrollieren; Hauptquelle der Einwürfe und ein Grund für die Passquote. (b) **Fouls gegen Spieler, die gerade gepasst haben** – Verteidiger bremst rechtzeitig; Elfmeter zu häufig. (c) **Passquote** – weniger Pässe in umkämpften Lagen (≈ 1400 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
+1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Hohe Bälle** – Kopfball und Brustannahme fehlen; Bälle prallen in der Luft von Körpern ab (häufigste erste Berührung). Torquote je Schuss nach der Landepunkt-Vorhersage beobachten (§6). (b) **Fouls gegen Spieler, die gerade gepasst haben** – Verteidiger bremst rechtzeitig; Elfmeter zu häufig. (c) **Passquote** – weniger Pässe in umkämpften Lagen (≈ 1400 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
