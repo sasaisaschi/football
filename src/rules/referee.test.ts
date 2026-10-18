@@ -70,8 +70,14 @@ describe('Law 12 – fouls and misconduct', () => {
     const ref = new Referee(roster);
     ref.lastTouch = touch(att, -10, 0, 'boot', 9.5);
     const states = new Map([[att, state({ x: -10, z: 0 }, { x: 3, z: 0 }, Math.PI / 2)], [def, state({ x: -10.6, z: 0 }, { x: 6, z: 0 }, Math.PI / 2)]]);
-    const d = ref.onBodyContact(def, att, 3, 10, 1, { x: -9.6, y: 0.11, z: 0 }, states, null);
+    const d = ref.onBodyContact(def, att, 4, 10, 1, { x: -9.6, y: 0.11, z: 0 }, states, null);
     expect(d).toMatchObject({ type: 'foul', offender: def, victim: att, penalty: false });
+  });
+  it('a light brush from behind is played on', () => {
+    const ref = new Referee(roster);
+    ref.lastTouch = touch(att, -10, 0, 'boot', 9.5);
+    const states = new Map([[att, state({ x: -10, z: 0 }, { x: 3, z: 0 }, Math.PI / 2)], [def, state({ x: -10.6, z: 0 }, { x: 5, z: 0 }, Math.PI / 2)]]);
+    expect(ref.onBodyContact(def, att, 3, 10, 1, { x: -9.6, y: 0.11, z: 0 }, states, null)).toBeNull();
   });
   it('two players contesting a loose ball at moderate speed is not a foul', () => {
     const ref = new Referee(roster);
