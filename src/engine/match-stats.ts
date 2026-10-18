@@ -9,6 +9,8 @@ export type MatchStats = {
   score: [number, number];
   ownGoals: number;
   shots: [number, number];
+  /** Shots at the end of a move with at least three completed passes since the team won the ball. */
+  shotsAfterBuildUp: number;
   passes: number;
   passesCompleted: number;
   possessionChanges: number;
@@ -32,7 +34,7 @@ export type MatchStats = {
 export function matchStats(events: readonly MatchEvent[], profiles: readonly PlayerProfile[]): MatchStats {
   const team = (player: number) => profiles[player].team;
   const s: MatchStats = {
-    score: [0, 0], ownGoals: 0, shots: [0, 0], passes: 0, passesCompleted: 0, possessionChanges: 0,
+    score: [0, 0], ownGoals: 0, shots: [0, 0], shotsAfterBuildUp: 0, passes: 0, passesCompleted: 0, possessionChanges: 0,
     lossesAfter: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, body: 0, hands: 0, none: 0 },
     pingPong: 0, meanSpell: 0, fouls: 0, yellow: 0, red: 0, penalties: 0, offsides: 0, corners: 0, throwIns: 0, goalKicks: 0, keeperCatches: 0,
   };
@@ -41,20 +43,22 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
   let spellStart = 0, spellSum = 0;
   let lastChange: { from: 0 | 1; time: number } | null = null;
   let openPass: { player: number } | null = null;
+  let movePasses = 0;
   for (const ev of events) {
     switch (ev.type) {
       case 'swing':
         lastSwing.set(ev.player, { kind: ev.action, time: ev.time });
-        if (ev.action === 'shot') s.shots[team(ev.player)]++;
+        if (ev.action === 'shot') { s.shots[team(ev.player)]++; if (movePasses >= 3) s.shotsAfterBuildUp++; }
         if (ev.action === 'pass') { s.passes++; openPass = { player: ev.player }; }
         break;
       case 'touch': case 'catch': {
         if (openPass && ev.player !== openPass.player) {
-          if (team(ev.player) === team(openPass.player)) s.passesCompleted++;
+          if (team(ev.player) === team(openPass.player)) { s.passesCompleted++; movePasses++; }
           openPass = null;
         }
         if (prev && team(prev.player) !== team(ev.player)) {
           s.possessionChanges++;
+          movePasses = 0;
           const sw = lastSwing.get(prev.player);
           s.lossesAfter[prev.part !== 'boot' ? prev.part : sw && prev.time - sw.time < 1 ? sw.kind : 'none']++;
           if (lastChange && lastChange.from === team(ev.player) && ev.time - lastChange.time < 1) s.pingPong++;
