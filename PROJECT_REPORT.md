@@ -390,6 +390,32 @@ Neu (`src/ai/box-orders.ts`, Bewegungsanweisungen `press`, `block-lane`, `jockey
 
 Gemessen (Seed 9, Ballführer 21 m vor dem Tor, Verteidiger 4 m torseitig): Annäherung in 0,6 s Zustellen 1,14 m (aus dem Stand begrenzt die Beschleunigung, wie vorher), Blocken 1,14 m, Ordnung halten 0,74 m; der Schuss trifft beim Blocken (und hier auch beim Zustellen) den Körper des Verteidigers, beim Halten geht er zum Torwart. Beides sind jetzt normale Tests. Die autonome Partie nutzt keinen Director, die Probe ist daher unverändert: `npm run probe -- --seeds 1-12` ergibt wie in der Tabelle oben 19,9 Schüsse, 2,3 Tore nach Schuss, 4,1 Tore (1,1 Eigentore), 59 %, 1116 Wechsel, 35,3 Fouls pro 90 min.
 
+### Eigentore nach Rückpässen (18.10.2026)
+
+Verfolgt (12 Seeds, alle 3 Eigentore in 240 min):
+- ein harter, hoch angesetzter Rückpass (21,6 m/s), der vom Torwart ins Tor sprang;
+- ein Ball quer vor dem Tor, den der Torwart abstoppte und beim Nachlaufen mit dem Körper ins Tor schob;
+- ein Rückpass auf einer Linie direkt aufs Tor, den der Torwart nur mit dem Körper traf.
+
+**Übernommen** (auf Entscheidung des Auftraggebers): **Rückpass zum Torwart nie hoch** (`options.ts`; Test `options.test.ts`, der ohne die Regel fehlschlägt).
+
+**Gebaut, gemessen, verworfen:**
+- Rückpass nur auf einer Linie, die bei einem Fehler neben dem Tor endet (sonst neben den Torwart).
+- Torwart schlägt einen Ball weg, der auf sein Tor rollt und den er nicht fangen darf.
+
+Keine der drei Regeln senkt die Eigentore messbar: Sie sind zu selten (≈ 6 in 480 Spielminuten, Rauschen ±2–3). Ein Rückpass-Labor (200 nachgestellte Situationen) brachte nur 4–5 Rückpässe, also keine Aussage.
+
+12 Seeds (pro 90 min):
+
+| | `main` | Rückpass nie hoch |
+| --- | --- | --- |
+| Tore (nach Schuss / Eigentore) | 4,1 (2,3 / 1,1) | 2,6 (1,5 / 1,1) |
+| Torschüsse | 19,9 | 19,5 |
+| Passquote / Wechsel | 59 % / 1116 | 60 % / 1136 |
+| Fouls / Einwürfe | 35 / 150 | 43 / 164 |
+
+Die Regel betrifft nur wenige Pässe; die Unterschiede bei Fouls, Einwürfen und Toren liegen im bekannten Rauschen (Fouls ±8, Tore ±2–3). Sie ist eine Plausibilitätsregel, deren Wirkung nicht nachweisbar ist. Eigentore bleiben bei ≈ 1,1/90.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1030/90 (Berührungsfolge), Passquote 61 % zu niedrig, Einwürfe ≈ 150/90 zu viele, Torschüsse ≈ 20/90 (real ≈ 25; Chancen fast nur nach Ballgewinnen), Eigentore ≈ 1,1/90 zu viele, Fouls ≈ 35/90 (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
