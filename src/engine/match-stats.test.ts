@@ -21,6 +21,18 @@ describe('match statistics', () => {
     expect(s.passesCompleted).toBe(1);
     expect(s.possessionChanges).toBe(1);
     expect(s.lossesAfter.pass).toBe(1);
+    expect(s.shotsAfterBuildUp).toBe(0);
+  });
+
+  it('a shot after three completed passes in the move counts as built up, a shot after a ball win does not', () => {
+    const [a, b, c] = [id(0, 'CM'), id(0, 'LCM'), id(0, 'ST')], cb = id(1, 'RCB');
+    const pass = (t: number, from: number, to: number) => [swing(t, from, 'pass'), touch(t + 0.1, from), touch(t + 1, to)];
+    const s = matchStats([
+      ...pass(1, a, b), ...pass(3, b, c), ...pass(5, c, a), swing(7, a, 'shot'), touch(7.1, a),
+      touch(8, cb), swing(9, cb, 'shot'), touch(9.1, cb),
+    ], roster);
+    expect(s.shots).toEqual([1, 1]);
+    expect(s.shotsAfterBuildUp).toBe(1);
   });
 
   it('a stoppage is no turnover, a ball off the body is classified, a quick return is ping-pong', () => {

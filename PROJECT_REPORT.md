@@ -321,6 +321,31 @@ Bewertung: Ballbesitzwechsel −19 %, Passquote +2 Punkte, Einwürfe −7 %, Sch
 
 **Volle Partie (`npm run sim -- --silent=false`, Seed 2026, 2 × 45 min):** Ergebnis 1 : 2 → **0 : 5** (1 Eigentor); Torschüsse 10 / 3 → 6 / 8; Pässe 1002 / 59 % → 974 / 61 %; Ballbesitzwechsel 1331 → 1097 (Ping-Pong 407 → 302, mittlere Besitzdauer 2,8 → 3,3 s); Fouls 30 → 41 (Gelb 3, Elfmeter 1); Abseits / Ecken / Einwürfe / Abstöße 9 / 13 / 143 / 18; Rechenzeit 427 s (1,32 ms/Tick). Die Fouls dieser einzelnen Partie liegen über der 12-Seed-Probe (34). 5 Tore aus 14 Schüssen sind Rauschen einer einzelnen Partie, aber ein Grund, die Abschluss- und Torwartbilanz weiter zu beobachten.
 
+### Angriffsspiel im letzten Drittel – Analyse, keine Übernahme (18.10.2026)
+
+**Neue Messgröße:** `shotsAfterBuildUp` in `match-stats.ts` (getestet) und `npm run probe`: Schüsse am Ende eines Angriffs mit mindestens drei angekommenen Pässen seit dem Ballgewinn.
+
+**Befund (Stand nach #13, 12 Seeds, pro 90 min):** 15 Torschüsse, davon **0** nach einer Kombination; alle entstehen nach Ballgewinnen. Einzelanalyse (6 Seeds, temporär): Nur ≈ 117 Angriffe pro Partie (beide Teams) erreichen das letzte Drittel, 2 % davon enden mit einem Schuss. Fast alle gehen dort bei der ersten Aktion verloren (Median 0 Pässe im letzten Drittel), meist beim Dribbling oder der Annahme eines Stürmers mit einem Gegner auf 1,2 m. Pro Ballbesitz gibt es im Mittel ≈ 1 Pass (real ≈ 5).
+
+Gemessen (12 Seeds, Ausgang: 1031 Wechsel, 61 %, 15 Schüsse, 34 Fouls, 3,4 Tore):
+
+| Variante | Wechsel | Passquote | Schüsse (nach Kombination) | Fouls | Einwürfe | Tore |
+| --- | --- | --- | --- | --- | --- | --- |
+| Abseits am Standort des Empfängers beim Abspiel (Regel 11) | 1030 | 58 % | 15,8 (0) | 34 | 166 | 6,0 |
+| + Läufe in die Tiefe, Strafraumbesetzung (Pfosten, Rückraum) | 1047 | 62 % | 12,8 (0,8) | 41 | 147 | 6,0 |
+| + Pässe in den Lauf (Vorlauf = Ballreisezeit, max. 2,5 s) | 882 | 49 % | 22,1 (0) | 34 | 143 | 10,1 |
+| Abseits + Läufe + Schuss ab xG 0,03 | 1030 | 61 % | 18 (0,8) | 50 | 158 | 5,3 |
+| Abseits + Läufe + Schuss ab xG 0,04 | 1049 | 59 % | 18 (0,8) | 34 | 159 | 7,1 |
+| Abseits + Schuss ab xG 0,04 (ohne Läufe) | 998 | 60 % | 18,4 (0,4) | 30 | 164 | 7,5 |
+
+Nichts davon ist übernommen:
+- **Läufe/Strafraumbesetzung** bringen nichts, solange der Angriff schon bei der ersten Aktion im letzten Drittel endet.
+- **Abseitskorrektur** ist regelrichtig, aber das Passmodell ist für Steilpässe nicht kalibriert: Passquote −3 Punkte, mehr Einwürfe. Sie gehört zusammen mit einer Kalibrierung der Steilpässe umgesetzt.
+- **Niedrigere Schussschwelle** bringt realistischere Schusszahlen (18), aber die Tore verdoppeln sich (3,4 → 7,5): Zusätzliche Schüsse mit xG ≈ 0,04 gehen viel zu oft ins Tor. Zuerst muss die Verwertung stimmen; schon im Ausgang treffen 23 % der Schüsse (real ≈ 10 %).
+- Fouls streuen zwischen Varianten mit gleichem Defensivverhalten um bis zu ±8/90; Unterschiede darunter sind kein Befund.
+
+Der Code der Versuche (`ai/attack.ts`, Abseitskorrektur, Vorlauf) ist nicht im Repo; Beschreibung und Messwerte stehen hier.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1030/90 (Berührungsfolge), Passquote 61 % zu niedrig, Einwürfe ≈ 150/90 zu viele, Torschüsse ≈ 15/90 zu wenige (Chancen fast nur nach Ballgewinnen), Fouls ≈ 34/90 (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
@@ -352,7 +377,7 @@ Bewertung: Ballbesitzwechsel −19 %, Passquote +2 Punkte, Einwürfe −7 %, Sch
 
 ## 9. Nächste Schritte
 
-1. Spielqualität: Angriffsspiel im letzten Drittel (Läufe in die Tiefe, Flanken, Abschluss nach Kombination) für mehr Torschüsse aus Ballbesitz; Passquote (61 %), Ballannahme hoher Bälle; Einwürfe (150/90, Ziel ~45: Pässe, Klärungen und Abpraller ins Aus); Ping-Pong-Berührungen. Messung mit `npm run probe -- --seeds 1-12`. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
+1. Spielqualität: (a) **Chancenverwertung**: 23 % der Schüsse sind Tore (real ≈ 10 %) – Torwart gegen Distanzschüsse, Schussgenauigkeit; erst danach die Schussschwelle senken. (b) **Ballbesitz im letzten Drittel**: Stürmer verlieren den Ball bei der ersten Aktion; Annahme mit Körper zum Gegner, Ablage zum Unterstützer, danach Läufe/Steilpässe mit kalibriertem Passmodell und Abseitskorrektur (§6, Angriffsspiel). Passquote (61 %), Ballannahme hoher Bälle; Einwürfe (150/90, Ziel ~45: Pässe, Klärungen und Abpraller ins Aus); Ping-Pong-Berührungen. Messung mit `npm run probe -- --seeds 1-12`. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
