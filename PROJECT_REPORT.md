@@ -472,6 +472,24 @@ Bewertung: Die Wechsel sinken um 15 %, die Einwürfe von 126 auf 96, und erstmal
 
 **Neuer Befund zum Director (auch auf `main`):** Mit den App-Einstellungen (Abklingzeit 75 s, höchstens 5 Momente pro Halbzeit) öffnete der Director in 4 Partien à 2 × 10 min 40 Momente: 30–33 Gegenpressing, 4–6 Strafraumverteidigung, 2 Konter, 1–2 Durchbruch. **Kein einziger Angriffsmoment („Abschluss oder Ablage?“).** Die Gegenpressing-Momente füllen das Limit pro Halbzeit, bevor ein Angriffsmoment entsteht. Behebung: nächster Schritt (§9).
 
+### Director: Momente ausbalanciert (18.10.2026)
+
+Messung mit den App-Einstellungen (Abklingzeit 75 s, höchstens 5 pro Halbzeit), 4 Partien à 2 × 10 min, Nutzerteam 0:
+
+| | vorher | nachher |
+| --- | --- | --- |
+| Momente gesamt | 40 | 31 |
+| Angriff („Abschluss oder Ablage?“, „Durchsetzen oder abspielen?“) | **0** | **14** |
+| Gegenpressing / Konter | 30–33 / 2 | 6 / 1 |
+| Strafraumverteidigung / Durchbruch | 4–6 / 1–2 | 8 / 2 |
+
+Ursachen und Korrekturen (`moment-director.ts`):
+- **Gegenpressing bei jeder gegnerischen Berührung:** Auch ein kurzer Abpraller in unserer Angriffshälfte reichte; ohne Limits waren es ≈ 39 pro 20 min. Jetzt nur nach einem echten Ballverlust: Wir hatten den Ball mindestens 4 s, und der Gegner hat ihn jetzt am Fuß.
+- **Ein gemeinsames Limit für alle Momentarten:** Die häufigste Art füllte jede Halbzeit. Jetzt hat jede Gruppe ein eigenes Kontingent pro Halbzeit (innerhalb des Gesamtlimits): Angriff 3, Umschalten 1, Abwehr 2.
+- **Angriffsmoment verpasst:** Zwischen Ballannahme und nächstem Schwung bleibt dem Ballführer wenig Zeit, und alle 0,25 s geprüft lag der Ballführer meist schon im Schwung. Jetzt wird alle 0,1 s geprüft. Die Stakes-Schwelle liegt bei xT oder xG 0,02 (≈ 27 m zentral) statt 0,035.
+
+Test: `moment-director.test.ts` prüft zusätzlich, dass pro Halbzeit höchstens ein Umschaltmoment kommt.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität noch nicht realistisch:** Ballbesitzwechsel ≈ 1030/90 (Berührungsfolge), Passquote 61 % zu niedrig, Einwürfe ≈ 150/90 zu viele, Torschüsse ≈ 20/90 (real ≈ 25; Chancen fast nur nach Ballgewinnen), Eigentore ≈ 1,1/90 zu viele, Fouls ≈ 35/90 (siehe §6). Abpraller vom Körper und vom Torwart führen weiter zu Eigentoren; gescheiterte Tacklings und hohe Bälle unter Druck kosten den Ball.
@@ -505,6 +523,6 @@ Bewertung: Die Wechsel sinken um 15 %, die Einwürfe von 126 auf 96, und erstmal
 
 1. Spielqualität: (a) **Eigentore** (1,1/90, real ≈ 0,1): Rückpässe zum Torwart dosieren und neben das Tor zielen; ein Torwart, der den Ball nicht fangen darf, klärt einen auf sein Tor rollenden Ball statt ihn abzustoppen. (b) **Ballbesitz im letzten Drittel**: Stürmer verlieren den Ball bei der ersten Aktion; Annahme mit Körper zum Gegner, Ablage zum Unterstützer, danach Läufe/Steilpässe mit kalibriertem Passmodell und Abseitskorrektur (§6, Angriffsspiel). (c) Torwart bei Nahschüssen im Labor zu stark (92 %). Passquote (59 %), Ballannahme hoher Bälle; Einwürfe (150/90, Ziel ~45: Pässe, Klärungen und Abpraller ins Aus); Ping-Pong-Berührungen. Messung mit `npm run probe -- --seeds 1-12`. Torergebnis über mehr Seeds absichern; Abpraller vom Körper (streifende Bälle, Torwart-Abpraller ins eigene Tor), Tackling-Erfolg und hohe Bälle unter Druck; Ziel ~250 Ballbesitzwechsel, ~900 Pässe bei 75–85 %, 2–4 Tore (Messung über `npm run sim` und Mehr-Seed-Probe).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
-3. Director: **Momente ausbalancieren**: Gegenpressing füllt das Limit, und Angriffsmomente kommen im Spiel nicht vor (§6, Passquote). Weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
+3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
 5. Optionale KI-Rollen (Match Analyst, Pub Host) über Adapter; Physik und Spiel bleiben offline lauffähig.
