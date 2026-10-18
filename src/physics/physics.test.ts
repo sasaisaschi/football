@@ -289,4 +289,25 @@ describe('boot / ball contact', () => {
     expect(contacts.some(c => c.kind === 'ball' && c.part === 'boot')).toBe(true);
     expect(Math.hypot(s.w.ball.linvel().x, s.w.ball.linvel().z)).toBeLessThan(4);
   });
+
+  it('after a cushion the leg is ready for the next action within half a second of the contact', () => {
+    const s = scene({ x: 7, z: 0.12 });
+    s.w.ball.setLinvel({ x: -12, y: 0, z: 0 }, true);
+    let plan = null;
+    for (let i = 0; i < 60 && !plan; i++) {
+      plan = s.legs.plan(s.w.ball, { technique: 'cushion', side: 1, dirX: -1, dirZ: 0, elevation: 0, ballSpeed: 0 });
+      if (!plan) { s.tick(); s.w.step(); }
+    }
+    s.legs.start(plan!);
+    let t = 0, contactAt = -1, readyAt = -1;
+    run(s.w, 1.5, () => {
+      s.tick();
+      t += 1 / 60;
+      if (contactAt < 0 && Math.hypot(s.w.ball.linvel().x, s.w.ball.linvel().z) < 8) contactAt = t;
+      if (contactAt >= 0 && readyAt < 0 && !s.legs.busy()) readyAt = t;
+    });
+    expect(contactAt).toBeGreaterThan(0);
+    // Before: the boot gave a quarter of a metre at walking pace and the leg was busy for ≈ 0.8 s after contact.
+    expect(readyAt - contactAt).toBeLessThan(0.5);
+  });
 });

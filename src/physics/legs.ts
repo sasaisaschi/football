@@ -26,6 +26,8 @@ export const MAX_BOOT_SPEED = 24;
  * 0.51·h hip reaches only ≈ 0.5 m forward at ball height, a band of ≈ 10 cm beyond the body clearance.
  */
 export const KICK_HIP_DROP = 0.1;
+/** How far the boot gives with the ball after a cushioning contact (m). */
+const CUSHION_GIVE = 0.08;
 /** Boot travel past the planned contact point after which the swing no longer needs the planned body pace (m). */
 const CONTACT_MARGIN = 0.1;
 
@@ -65,7 +67,7 @@ export type StrikePlan = {
 const TECH = {
   instep: { windup: 0.2, back: 0.5, follow: 0.3, followTime: 0.12, recover: 0.25 },
   inside: { windup: 0.14, back: 0.32, follow: 0.2, followTime: 0.1, recover: 0.2 },
-  cushion: { windup: 0.1, back: 0.04, follow: 0.22, followTime: 0.16, recover: 0.2 },
+  cushion: { windup: 0.1, back: 0.04, follow: 0.12, followTime: 0.08, recover: 0.12 },
 } as const;
 
 type Boot = { body: RAPIER.RigidBody; collider: RAPIER.Collider; rel: Vec3 };
@@ -226,7 +228,9 @@ export class Legs {
     contact.y = Math.max(BOOT.radius * 0.7, contact.y + err.vertical);
 
     const windupEnd = add(contact, path, -tech.back);
-    const strikeEnd = add(contact, path, 0.25);
+    // A cushion gives with the ball only briefly: the boot need not travel on a quarter of a metre at walking pace
+    // (that kept a receiver from playing the dead ball for half a second).
+    const strikeEnd = add(contact, path, req.technique === 'cushion' ? CUSHION_GIVE : 0.25);
     const followEnd = add(strikeEnd, path, tech.follow * 0.5);
     followEnd.y += 0.15;
 
