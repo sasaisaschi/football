@@ -599,6 +599,23 @@ Tests: `head.test.ts` (Ballrichtung ±0,25 rad, Tempo ±30 % für drei Ziele, da
 
 Offen: In 24 Seeds fiel kein Kopfballtor (real ≈ 15 % der Tore). Die Spielerfigur springt und nickt in der Darstellung nicht sichtbar mit; das Rendern zeigt nur den Ball.
 
+### Fouls – Analyse, keine Übernahme (19.10.2026)
+
+Stand mit Kopfball (24 Seeds): ≈ 33 Fouls/90 (real ≈ 22). Einzelanalyse (12 Seeds, 84 Fouls):
+- 54 begehen Verteidiger beim Stellen oder Stochern, fast alle von hinten;
+- 67 mit 2,8–4,5 m/s Annäherung, nur 17 schneller;
+- in 45 Fällen hat das Opfer den Ball noch am Fuß, in 36 hat es ihn gerade gespielt oder angenommen.
+
+Gemessen (24 Seeds) und **verworfen**:
+
+| Variante | Fouls | Einwürfe | Schüsse (nach Kombination) |
+| --- | --- | --- | --- |
+| Stand mit Kopfball | 33,4 | 61 | 22,9 (2,1) |
+| Verteidiger nähert sich nur so schnell, dass er 1,2 m vor dem Ballführer stoppen kann | 32,1 | 63 | 23,6 (1,5) |
+| + Hineingehen zum Stochern nur mit Tempo des Ballführers + 1,5 m/s | 30,9 | 72 | 24,2 (0,4) |
+
+Keine Variante senkt die Fouls über das Rauschen (≈ ±2,5/90 bei 24 Seeds) hinaus, die zweite verschlechtert Einwürfe und Kombinationsschüsse. Die verbleibenden Fouls sind echte Körperkontakte von hinten knapp über der Schwelle des Schiedsrichters (2,8 m/s von hinten, 4 m/s von vorn, 5,6 m/s im Zweikampf um einen freien Ball). Wie viel Kontakt ein Schiedsrichter laufen lässt, ist eine Gestaltungsentscheidung. Eine Anpassung der Schwellen würde die Zahl direkt senken, bewusst nicht ohne Abstimmung.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität noch nicht realistisch** (12 Seeds, Stand nach #22): Passquote ≈ 59 % (Ziel 75–85 %), Pässe ≈ 1400/90 (real ≈ 1000), Einwürfe ≈ 61/90 (real ≈ 45), Fouls ≈ 31/90 (real ≈ 22), Elfmeter ≈ 1,1/90 (real ≈ 0,3), Eigentore ≈ 1/90, Schüsse nach Kombination selten (≈ 1–2/90). Im Zielbereich: Torschüsse ≈ 24/90, Tore ≈ 3,4/90, Torquote ≈ 11 % (siehe §6).
@@ -630,7 +647,7 @@ Offen: In 24 Seeds fiel kein Kopfballtor (real ≈ 15 % der Tore). Die Spielerfi
 
 ## 9. Nächste Schritte
 
-1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Kopfballtore und Brustannahme** – Kopfbälle aufs Tor treffen noch nicht; ohne Brustannahme prallen hohe Bälle unterhalb der Kopfhöhe weiter vom Rumpf ab; Kopfball in der Darstellung zeigen. (b) **Fouls gegen Spieler, die gerade gepasst haben** – Verteidiger bremst rechtzeitig; Elfmeter zu häufig. (c) **Passquote** – weniger Pässe in umkämpften Lagen (≈ 1400 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
+1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Kopfballtore und Brustannahme** – Kopfbälle aufs Tor treffen noch nicht; ohne Brustannahme prallen hohe Bälle unterhalb der Kopfhöhe weiter vom Rumpf ab; Kopfball in der Darstellung zeigen. (b) **Fouls** (≈ 33/90): Spielverhalten ausgereizt (§6, Fouls); offen ist die Entscheidung, wie viel Körperkontakt der Schiedsrichter laufen lässt. (c) **Passquote** – weniger Pässe in umkämpften Lagen (≈ 1400 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
