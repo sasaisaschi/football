@@ -62,3 +62,15 @@ describe('expected threat', () => {
     expect(at(60)).toBeLessThan(0.012);
   });
 });
+
+
+describe('pass safety', () => {
+  it('an opponent a few metres from a 20 m ground pass is not an interception: he needs to react and accelerate', () => {
+    // Measured with the former model (top speed from the first step): passes predicted below 20 % arrived 54 % of the time.
+    const pic = picture([at(1, 'RCM', { x: 10, z: 5 })], [at(0, 'ST', { x: 19.4, z: 0 })]);
+    const pass = evaluateOptions(pic).find(o => o.kind === 'pass')!;
+    expect(pass.action.kind === 'pass' && pass.action.lofted).toBe(false);
+    // Lane, accuracy over 20 m and the receiver's room together.
+    expect(pass.success).toBeGreaterThan(0.4);
+  });
+});

@@ -4,6 +4,13 @@ import type { MatchEngine } from '../engine/match-engine';
 import type { DecisionMoment, DecisionOption, MomentKind, PlayerIntent, TeamId, TeamInstruction } from '../engine/types';
 import { PITCH } from '../physics/pitch-geometry';
 
+/** A pass or take-on the player could realistically pull off (estimated chance of success); a shot is offered whenever the player would consider it. */
+const MIN_SUCCESS = 0.3;
+/** Threat at stake for an attacking moment: expected threat of the ball's position or the chance of the shot. */
+const STAKES = 0.035;
+/** Options within this much expected threat (goal probability) of the best one make a real dilemma. */
+const DILEMMA_GAP = 0.05;
+
 export type DirectorConfig = {
   userTeam: TeamId;
   /** Minimum simulated seconds between two moments, so decisions stay rare and meaningful. */
@@ -67,12 +74,15 @@ export class MomentDirector {
     const shot = options.find(o => o.kind === 'shot');
     const passes = options.filter(o => o.kind === 'pass').slice(0, 2);
     const dribble = options.find(o => o.kind === 'dribble');
-    const candidates = [shot, ...passes, dribble].filter((o): o is EvaluatedOption => !!o && o.value > 0.004);
+    // Only options a player could realistically pull off; their values may be negative (a risk of losing the ball),
+    // so a dilemma is judged by how close they are, not by a ratio or a fixed floor that shifts with the AI's
+    // value model.
+    const candidates = [shot, ...passes, dribble].filter((o): o is EvaluatedOption => !!o && (o.kind === 'shot' || o.success >= MIN_SUCCESS));
     if (candidates.length < 2) return null;
     const best = Math.max(...candidates.map(o => o.value));
     // Relevant: there is real threat at stake and at least two options are close enough to be a dilemma.
-    if (best < 0.035) return null;
-    const contenders = candidates.filter(o => o.value >= best * 0.45).slice(0, 4);
+    if (Math.max(threatAt(sign, { x: ball.x, z: ball.z }), shot?.success ?? 0) < STAKES) return null;
+    const contenders = candidates.filter(o => o.value >= best - DILEMMA_GAP).slice(0, 4);
     if (contenders.length < 2) return null;
     const name = (id: number) => `${e.profiles[id].name} (${e.profiles[id].number})`;
     const decisionOptions: DecisionOption[] = contenders.map((o, i) => ({
