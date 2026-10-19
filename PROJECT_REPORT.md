@@ -651,6 +651,28 @@ Die Tore stiegen auf den Seeds 1–24 von 2,8 auf 3,8, auf 25–48 blieben sie g
 
 Bewertung: Die Passquote liegt mit 76 % im realen Bereich (75–85 %). Offen bleiben lange Bälle über 30 m (≈ 46 %, real ≈ 50–60 %) und mehr Pässe als real (≈ 1360 statt ≈ 1000/90).
 
+### Lange Bälle: Schussphysik für hohe Bälle – Analyse, noch keine Übernahme (19.10.2026)
+
+Diagnose (8 Seeds, alle Pässe ab 25 m): Hohe Bälle kamen zu ≈ 47 % an und landeten im Median 10–15 m neben dem Ziel. Ursache ist der Schuss, nicht die Flugberechnung: Nur ≈ 40 % starteten innerhalb ±0,05 rad des geplanten Winkels (0,42 rad), 17 % mit weniger als 60 % des geplanten Tempos.
+
+Zwei Fehler in `legs.ts`, beide im Startlabor (`lofted-strike.test.ts`, fünf Lagen ohne Fehler) belegt:
+
+1. **Waagerechter Schuh.** Die Planung nimmt an, dass sich der Schuh entlang der Kontaktnormale bewegt. Er schwang aber waagerecht, glitt bei hohen Bällen über den Ball und Reibung drückte ihn flach. **Gebaut:** Ab 0,3 rad kommt der Schuh flach heran und steigt auf den letzten 8 cm entlang der Normale durch den Ball.
+2. **Schuh hinkt dem Körper nach.** Er wurde relativ zur Körperposition *vor* dem Teilschritt gesetzt und lag bei einem laufenden Spieler einen Teilschritt zurück (2 cm bei 5 m/s). **Gebaut:** Er wird auf die Körperposition am Ende des Teilschritts gesetzt.
+
+Labor: vorher 0,36–0,50 rad und bis zu 20 statt 25 m/s, mit beiden Korrekturen 25 m/s bei 0,414–0,445 rad in allen fünf Lagen. Im Spiel bleibt die Streuung aus dem zufälligen Ausführungsfehler (≈ 0,05 rad je cm Kontakthöhe): hohe Bälle ab 30 m 45 → 48 %.
+
+| pro 90 min | main | nur steigender Schuh (48 Seeds) | nur Nachlauf-Korrektur (Seeds 1–24) | beide (48 Seeds) |
+| --- | --- | --- | --- | --- |
+| Schüsse | 22,4 | 21,3 | 17,3 | 18,3 |
+| Tore (aus Schüssen) | 3,7 (2,4) | 5,6 (3,8) | 4,3 (2,8) | 4,0 (2,6) |
+| Eigentore | 1,2 | 1,6 | 1,5 | 1,7 |
+| Einwürfe | 62 | 54 | 56 | 56 |
+
+Die Schüsse fehlen nicht durch Luftschläge (45 von 48 bzw. 27 von 30 Schusschwüngen treffen den Ball). Mit der Nachlauf-Korrektur wird öfter gedribbelt (Dribbelschwünge +19 %, mehr Fehltritte) und seltener geschossen. Der steigende Schuh macht hohe Bälle und Flanken präzise, die Tore steigen auf 5,6/90.
+
+Bewertung: Beide Korrekturen sind physikalisch richtig, aber Dribbeln, Schussauswahl und Torwart sind auf den fehlerhaften Schuss kalibriert. Übernahme erst zusammen mit dieser Nachkalibrierung (Branch `claude/12th-man-long-balls`).
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität** (48 Seeds, Stand 19.10.2026): Im Zielbereich sind Passquote ≈ 76 %, Fouls ≈ 23/90, Elfmeter ≈ 0,4/90 und Torschüsse ≈ 22/90. Leicht darüber liegen die Tore (≈ 3,5/90, real ≈ 2,7). Noch nicht realistisch: Pässe ≈ 1360/90 (real ≈ 1000), Einwürfe ≈ 62/90 (real ≈ 45), Eigentore ≈ 1/90, Schüsse nach Kombination ≈ 3/90, lange Bälle über 30 m ≈ 46 %, keine Kopfballtore (siehe §6).

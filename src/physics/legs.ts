@@ -30,6 +30,14 @@ export const KICK_HIP_DROP = 0.1;
 const CUSHION_GIVE = 0.08;
 /** Boot travel past the planned contact point after which the swing no longer needs the planned body pace (m). */
 const CONTACT_MARGIN = 0.1;
+/**
+ * Launch angle from which a strike is lofted: the boot comes in low and rises along the contact normal through
+ * the ball, as a real foot does under a lofted pass. Swinging level instead, it also slid across the ball at
+ * W·sin(angle) and friction pulled the ball down: lofted passes left ≈ 0.05–0.1 rad flatter than planned.
+ */
+const LOFT_RISE_FROM = 0.3;
+/** Length of the rising part of a lofted strike before the contact (m). */
+const LOFT_RISE = 0.08;
 
 export type Technique = 'instep' | 'inside' | 'cushion';
 export type Side = 0 | 1; // 0 = left, 1 = right
@@ -55,6 +63,8 @@ export type StrikePlan = {
   windupEnd: Vec3;
   contact: Vec3;
   strikeEnd: Vec3;
+  /** Lofted strike: where the boot turns from its low approach into the rise through the ball. */
+  bend: Vec3 | null;
   followEnd: Vec3;
   direction: Vec3;
   windupTime: number;
@@ -139,7 +149,7 @@ export class Legs {
     const s = this.swing;
     if (!s) return false;
     if (s.phase === 'windup') return true;
-    return s.phase === 'strike' && s.t * s.plan.strikeSpeed < len(sub(s.plan.contact, s.plan.windupEnd)) + CONTACT_MARGIN;
+    return s.phase === 'strike' && s.t * s.plan.strikeSpeed < toContact(s.plan) + CONTACT_MARGIN;
   }
 
   /**
@@ -155,6 +165,7 @@ export class Legs {
     const airborne = ballP.y > BALL_SPEC.radius + 0.02;
     const meetV = (t: number): Vec3 => ({ x: ballV.x, y: ballV.y - (airborne ? BALL_PHYSICS.gravity * t : 0), z: ballV.z });
     let direction: Vec3, normal: Vec3, worldBootSpeed: number;
+    let rising = false;
     if (req.technique === 'cushion') {
       const h = Math.hypot(ballV.x, ballV.z);
       if (h < 0.5) return null;
@@ -195,16 +206,23 @@ export class Legs {
       normal = { x: direction.x * Math.cos(nel), y: Math.sin(nel), z: direction.z * Math.cos(nel) };
       const incoming = v.x * normal.x + v.y * normal.y + v.z * normal.z;
       const impulse = target.x * normal.x + target.y * normal.y + target.z * normal.z - incoming;
-      // The boot travels level: its normal speed is the horizontal speed times cos(elevation).
-      worldBootSpeed = (impulse / (1 + BOOT_RESTITUTION) + incoming) / Math.cos(nel);
+      // A low strike travels level: its normal speed is the horizontal speed times cos(elevation). A lofted one
+      // rises along the normal, so its horizontal speed is the normal speed times cos(elevation).
+      rising = req.elevation >= LOFT_RISE_FROM;
+      const normalSpeed = impulse / (1 + BOOT_RESTITUTION) + incoming;
+      worldBootSpeed = rising ? normalSpeed * Math.cos(nel) : normalSpeed / Math.cos(nel);
     }
     // In the body's frame the boot has to supply what the running body does not already carry. A cushion
     // simply gives with the ball along its line.
     const swingX = direction.x * worldBootSpeed - bodyV.x, swingZ = direction.z * worldBootSpeed - bodyV.z;
+    const swingY = rising ? worldBootSpeed * Math.tan(Math.asin(normal.y)) : 0;
     const cushion = req.technique === 'cushion';
-    const swingLen = cushion ? swingX * direction.x + swingZ * direction.z : Math.hypot(swingX, swingZ);
+    const swingLen = cushion ? swingX * direction.x + swingZ * direction.z : Math.hypot(swingX, swingY, swingZ);
     if (!cushion && (swingLen < 0.3 || swingX * direction.x + swingZ * direction.z <= 0)) return null;
-    const path: Vec3 = cushion ? direction : { x: swingX / swingLen, y: 0, z: swingZ / swingLen };
+    const path: Vec3 = cushion ? direction : { x: swingX / swingLen, y: swingY / swingLen, z: swingZ / swingLen };
+    const level: Vec3 = { x: path.x, y: 0, z: path.z };
+    const levelLen = Math.hypot(level.x, level.z) || 1;
+    const approachDir: Vec3 = { x: level.x / levelLen, y: 0, z: level.z / levelLen };
     // The boot meets the ball along its velocity relative to the ball; it is held along that line so the
     // striking surface, not the side of the boot, arrives first.
     const mx = direction.x * worldBootSpeed - ballV.x, mz = direction.z * worldBootSpeed - ballV.z, ml = Math.hypot(mx, mz);
@@ -213,7 +231,7 @@ export class Legs {
     const strikeSpeed = Math.min(MAX_BOOT_SPEED, Math.max(0.6, swingLen));
 
     const reach = BOOT.radius + BALL_SPEC.radius;
-    const contactTime = tech.windup + tech.back / strikeSpeed + err.timing;
+    const contactTime = tech.windup + (tech.back + (rising ? LOFT_RISE : 0)) / strikeSpeed + err.timing;
     const relBall: Vec3 = {
       x: ballP.x + ballV.x * contactTime - (bodyP.x + bodyV.x * contactTime),
       y: Math.max(BALL_SPEC.radius, ballP.y + ballV.y * contactTime - 4.9 * contactTime * contactTime * (ballP.y > BALL_SPEC.radius + 0.02 ? 1 : 0)),
@@ -227,7 +245,9 @@ export class Legs {
     contact = add(contact, { x: lateral.x / ln, y: 0, z: lateral.z / ln }, err.lateral);
     contact.y = Math.max(BOOT.radius * 0.7, contact.y + err.vertical);
 
-    const windupEnd = add(contact, path, -tech.back);
+    // A lofted strike comes in level and low, then rises through the ball along the planned path.
+    const bend = rising ? add(contact, path, -LOFT_RISE) : null;
+    const windupEnd = bend ? add(bend, approachDir, -tech.back) : add(contact, path, -tech.back);
     // A cushion gives with the ball only briefly: the boot need not travel on a quarter of a metre at walking pace
     // (that kept a receiver from playing the dead ball for half a second).
     const strikeEnd = add(contact, path, req.technique === 'cushion' ? CUSHION_GIVE : 0.25);
@@ -253,7 +273,7 @@ export class Legs {
 
     const axis = req.technique === 'instep' ? meet : { x: direction.z, y: 0, z: -direction.x };
     return {
-      technique: req.technique, side: req.side, windupEnd, contact, strikeEnd, followEnd, direction: path,
+      technique: req.technique, side: req.side, windupEnd, contact, strikeEnd, bend, followEnd, direction: path,
       windupTime: tech.windup + Math.max(0, err.timing), strikeSpeed, followTime: tech.followTime, recoverTime: tech.recover, axis,
     };
   }
@@ -286,7 +306,7 @@ export class Legs {
       if (swing && swing.plan.side === side) continue;
       const boot = this.boots[side];
       boot.rel = this.rest(side);
-      this.stage(boot, boot.rel, { ...this.owner.facing(), y: 0 });
+      this.stage(boot, boot.rel, { ...this.owner.facing(), y: 0 }, dt);
     }
     if (!swing) return;
     const { plan } = swing;
@@ -299,9 +319,8 @@ export class Legs {
       if (k >= 1) this.next('strike', plan.windupEnd);
     } else if (swing.phase === 'strike') {
       // Constant boot speed through the ball: decelerating in the contact step would hand over only part of it.
-      const k = Math.min(1, (swing.t * plan.strikeSpeed) / len(sub(plan.strikeEnd, plan.windupEnd)));
-      rel = lerp(plan.windupEnd, plan.strikeEnd, k);
-      if (k >= 1) this.next('follow', plan.strikeEnd);
+      rel = alongStrike(plan, swing.t * plan.strikeSpeed);
+      if (swing.t * plan.strikeSpeed >= strikeLength(plan)) this.next('follow', plan.strikeEnd);
     } else if (swing.phase === 'follow') {
       const k = Math.min(1, swing.t / plan.followTime);
       rel = lerp(plan.strikeEnd, plan.followEnd, 1 - (1 - k) * (1 - k));
@@ -313,7 +332,7 @@ export class Legs {
     }
     const boot = this.boots[plan.side];
     boot.rel = rel;
-    this.stage(boot, rel, plan.axis);
+    this.stage(boot, rel, plan.axis, dt);
   }
 
   bootWorld(side: Side): Vec3 {
@@ -328,9 +347,14 @@ export class Legs {
     this.swing.from = { ...from };
   }
 
-  private stage(boot: Boot, rel: Vec3, axis: Vec3): void {
-    const p = this.owner.body.translation();
-    boot.body.setNextKinematicTranslation({ x: p.x + rel.x, y: rel.y, z: p.z + rel.z });
+  /**
+   * Poses the boot for the end of the coming (sub)step, relative to where the body will be then. Relative to the
+   * body's position before the step, the boot trailed a running player by one substep (2 cm at 5 m/s): on a
+   * rising lofted strike that met the ball higher than planned and flattened the launch by up to 0.05 rad.
+   */
+  private stage(boot: Boot, rel: Vec3, axis: Vec3, dt: number): void {
+    const p = this.owner.body.translation(), v = this.owner.body.linvel();
+    boot.body.setNextKinematicTranslation({ x: p.x + v.x * dt + rel.x, y: rel.y, z: p.z + v.z * dt + rel.z });
     boot.body.setNextKinematicRotation(rotationFromY(axis));
   }
 }
@@ -350,6 +374,26 @@ export function rolledLaunch(spin: Vec3, dir: { x: number; z: number }, speed: n
   const k = (28 * dw + Math.sqrt(disc)) / 98;
   if (k <= 0) return null;
   return { x: (7 * k * dir.x - 2 * wx) / 5, z: (7 * k * dir.z - 2 * wz) / 5 };
+}
+
+/** Boot travel of the strike phase: level approach, then (lofted) the rise through the ball. */
+function strikeLength(p: StrikePlan): number {
+  return p.bend ? len(sub(p.bend, p.windupEnd)) + len(sub(p.strikeEnd, p.bend)) : len(sub(p.strikeEnd, p.windupEnd));
+}
+
+/** Boot travel from the end of the wind-up to the planned contact. */
+function toContact(p: StrikePlan): number {
+  return p.bend ? len(sub(p.bend, p.windupEnd)) + len(sub(p.contact, p.bend)) : len(sub(p.contact, p.windupEnd));
+}
+
+/** Boot position after travelling `d` metres of the strike phase at constant speed. */
+function alongStrike(p: StrikePlan, d: number): Vec3 {
+  if (p.bend) {
+    const first = len(sub(p.bend, p.windupEnd));
+    if (d < first) return lerp(p.windupEnd, p.bend, d / first);
+    return lerp(p.bend, p.strikeEnd, Math.min(1, (d - first) / len(sub(p.strikeEnd, p.bend))));
+  }
+  return lerp(p.windupEnd, p.strikeEnd, Math.min(1, d / len(sub(p.strikeEnd, p.windupEnd))));
 }
 
 /** Quaternion turning the capsule's local Y axis onto `axis`. */
