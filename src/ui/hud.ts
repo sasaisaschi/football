@@ -11,6 +11,8 @@ export class Hud {
   private readonly status: HTMLElement;
   private readonly speed: HTMLElement;
   private readonly lines: string[] = [];
+  /** Wall time until which the status line is shown. */
+  private statusUntil = 0;
 
   constructor(private readonly halfMinutes: number) {
     this.el.className = 'hud';
@@ -37,15 +39,26 @@ export class Hud {
     return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
   }
 
-  update(s: MatchSnapshot, timeScale: number): void {
+  update(s: MatchSnapshot, timeScale: number, wall: number): void {
+    if (this.statusUntil && wall > this.statusUntil) this.clearStatus();
     this.score.textContent = `${s.score[0]} : ${s.score[1]}`;
     this.clock.textContent = this.clockText(s);
     this.speed.hidden = timeScale <= 1;
     this.speed.textContent = `Zeitraffer x${timeScale}`;
   }
 
-  setStatus(text: string): void {
+  /**
+   * Shows a status line for `seconds` of wall time; a newer one replaces it. Without an end a line stayed for
+   * minutes after the moment it described (measured in the browser test).
+   */
+  setStatus(text: string, wall: number, seconds: number): void {
     this.status.textContent = text;
+    this.statusUntil = wall + seconds;
+  }
+
+  clearStatus(): void {
+    this.status.textContent = '';
+    this.statusUntil = 0;
   }
 
   log(text: string, clock: string): void {

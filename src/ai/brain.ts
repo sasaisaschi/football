@@ -15,6 +15,7 @@ import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from 
 import { offBallCommand } from './off-ball';
 import { chooseThrow, throwInStand } from './throw-in';
 import { slideDirection } from './slide';
+import { chestControl, meetAtChest } from './chest';
 import { Perception, type Truth } from './perception';
 import { offsideLineU, toTeam } from './shape';
 
@@ -49,8 +50,6 @@ const JOCKEY_CLOSE = 1.5;
 const SHOULDER_GAP = 1.1;
 /** Extra pace of the lunge into a sliding tackle over the run (m/s). */
 const SLIDE_LUNGE = 0.5;
-/** Pace the chest sends the ball on with, towards where the player faces: it drops a stride ahead (m/s). */
-const CHEST_DROP_PACE = 1;
 
 /**
  * One autonomous footballer. Decides from its own perception a few times per second: win the ball, play it,
@@ -241,10 +240,10 @@ export class PlayerBrain {
     const goalX = ctx.sign * PITCH.halfLength;
     const atGoal = Math.hypot(goalX - self.x, self.z) < 16;
     // My team's ball with nobody near: brought down with the chest if it arrives at chest height, else with the foot.
-    if (ownBall && !contested && !atGoal) return this.chestControl(ctx, ball);
+    if (ownBall && !contested && !atGoal) return this.takeOnChest(ctx, ball) ?? meetAtChest(this.body, ball);
     const forehead = this.body.height - 0.12;
     const meet = headerIntercept(self, this.body.limits.maxSpeed, ball.pos, ball.vel, forehead, ball.spin);
-    if (!meet) return this.chestControl(ctx, ball);
+    if (!meet) return this.takeOnChest(ctx, ball);
     if (!this.head.busy()) {
       let choice = chooseHeader(pic, ownBall, meet.at, forehead);
       let plan = this.head.plan(ctx.ball, choice.velocity);
@@ -258,7 +257,7 @@ export class PlayerBrain {
         return { command: { target: self, speed: this.body.speed(), face: ball.pos }, effort: 1, swing: { action: { kind: 'header', velocity: choice.velocity }, source: 'ai' } };
       }
       // Too low for the head: a ball arriving at chest height is taken down with the chest.
-      const chest = this.chestControl(ctx, ball);
+      const chest = this.takeOnChest(ctx, ball);
       if (chest) return chest;
     }
     // Stand just beyond the point on the ball's line, facing it, so it meets the forehead in front of the body.
@@ -267,19 +266,11 @@ export class PlayerBrain {
     return { command: { target: stand, speed: this.body.limits.maxSpeed, face: ball.pos }, effort: 1, swing: null };
   }
 
-  /**
-   * Chest control: the chest goes out to meet the ball in front of the body and gives with it, so it drops a stride
-   * ahead of the feet. Null when the ball does not arrive at chest height within reach.
-   */
-  private chestControl(ctx: BrainContext, ball: { pos: Vec3 }): BrainOutput | null {
-    if (this.chest.busy() || this.head.busy() || this.legs.busy()) return null;
-    const f = this.body.facing();
-    const target = { x: f.x * CHEST_DROP_PACE, y: 0.5, z: f.z * CHEST_DROP_PACE };
-    const plan = this.chest.plan(ctx.ball, target);
-    if (!plan) return null;
-    this.chest.start(plan, target);
-    this.intent = null;
-    return { command: { target: this.body.position(), speed: this.body.speed(), face: ball.pos }, effort: 1, swing: { action: { kind: 'control' }, source: 'ai' } };
+  /** Chest control if the ball arrives at chest height within reach; the ball decision is then made. */
+  private takeOnChest(ctx: BrainContext, ball: { pos: Vec3; vel: Vec3; spin: Vec3 }): BrainOutput | null {
+    const out = chestControl(this.body, this.legs, this.head, this.chest, ctx.ball, ball);
+    if (out) this.intent = null;
+    return out;
   }
 
   /** Off the ball, players run around each other instead of through each other. */

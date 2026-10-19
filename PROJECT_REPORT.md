@@ -87,6 +87,8 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 | 19.10.2026 | Fußballmechaniken: `npm run check` | `tsc` ohne Fehler, **19 Testdateien / 99 Tests bestanden** (2 übersprungen: Langsimulation und Schusslabor, nur über eigene Befehle), `vite build` erfolgreich. Neu: Kopfballsprung, Kopfballtor, Einwurf, Brustannahme, Grätsche (Physik, Entscheidung, Schiedsrichter). Kein Browsertest (folgt als nächster Schritt) |
 | 19.10.2026 | Browsertest nach #30: `npm run test:browser` (Chrome, Intel Iris Xe, D3D11) | `ok: true`, keine Konsolenfehler/-warnungen, Uhr läuft, Entscheidungsmoment erschienen, eingefroren, als `user` protokolliert. **55,7 FPS** vor, **59,3 FPS** nach den Korrekturen |
 | 19.10.2026 | Browser-Aufnahme der neuen Mechaniken (Seeds 11, 23; je 2 × 6 min; Vollbild und Nahaufnahme bei jedem Ereignis) | Kopfballsprünge, Brustannahmen, Einwürfe und Grätschen im laufenden Spiel aufgenommen, keine Laufzeitfehler. Gefunden und behoben: Einwurf-Endlosschleife, zerfallende Figur bei Rumpfneigung (§6) |
+| 19.10.2026 | Phase A: `npm run check` | `tsc` ohne Fehler, **20 Testdateien / 103 Tests bestanden**, `vite build` erfolgreich. Neu: `render/presentation.test.ts` (Kamera zeigt Einwürfe an beiden Seitenlinien, Zeitraffer nur in ruhigen Phasen) |
+| 19.10.2026 | Phase A: Abschluss-Browsertest (`npm run test:browser` und Prüfskript für die vier Befunde, Seed 23, 2 × 5 min) | `ok: true`, keine Fehler/Warnungen, **53 FPS**. Einwürfe nahe und ferne Seitenlinie im Fernsehbild, keiner im Zeitraffer; Zeitraffer in 4 von 1284 Stichproben, nie bei ruhendem Ball oder hohem Ball; 9 Statusmeldungen, längste 9,3 s |
 
 **Testinhalte:** Feldmaße/Regel 9/10, Zufall reproduzierbar; Ballaufprall, Rollweg, keine Kraftakkumulation, Magnus-Richtung, Netz/Pfosten/Latte; Beschleunigungsgrenzen, 22 Körper stabil, bitgleiche Wiederholung; Fußkontakt (Nähe kickt nie, Richtung/Tempo, Spannstoß mit Lift, Richtungsabhängigkeit, Drallkorrektur beim seitlichen Antippen, Fehltreffer mit Drall, Luftloch, Reichweite, Ballannahme); Schiedsrichter (Abseits, Einwurf-Ausnahme, Seitenwechsel, Ecke/Abstoß/Einwurf/Tor/Eigentor, Foul von hinten, Zweikampf ≠ Foul, Notbremse = Rot + Elfmeter, taktisches Foul = Gelb, Gelb-Rot, Mitspieler-Kontakt, Handspiel außerhalb, Rückpass); vollständige Partie ohne ungültige Zustandsübergänge, gleicher Seed = gleiche Partie, kein kollektives Ballverfolgen, Torwart-Ergebnisse variieren, Ballfreigabe innerhalb von 6 s; Director (Moment friert ein, jede angebotene Option wird als echter Schwung ausgeführt, gleiche Lage + andere Entscheidung → anderer Verlauf, gleiche Entscheidung → unterschiedlicher Erfolg, Momente selten und mit Abstand); Quelltext „kein Magnetismus“.
 
@@ -788,7 +790,47 @@ Nicht gemessen: Auswirkungen auf Tore, Schüsse, Fouls und Einwürfe über viele
   - In drei Partien zu 2 × 6 min fiel kein Tor.
   - Nach einem Einwurf prallt der Ball meist vom Körper des Empfängers ab (13 von 24); die Brustannahme greift dabei selten.
 
-Diese Punkte sind nicht verändert worden. Sie sind Kandidaten für die Nachkalibrierung und die Darstellung (§9).
+Diese Punkte sind nicht verändert worden. Sie sind Kandidaten für die Nachkalibrierung und die Darstellung (§9). *(Kamera an der nahen Seitenlinie, Zeitraffer, Statusmeldung und Ballannahme nach Einwürfen sind behoben, siehe „Phase A“.)*
+
+### Phase A: Spielerlebnis korrigiert (19.10.2026)
+
+Auftrag: die vier offenen Befunde des Browsertests beheben, Ursachen gezielt, ohne Kalibrierungsserien.
+
+**1. Ballannahme nach Einwürfen** (`ai/chest.ts`, `ai/brain.ts`)
+- **Ursache:** Der Empfänger lief nur dorthin, wo ein hoher Ball auf den Rasen kommt. Wenn der Ball in Brusthöhe ankam, stand er falsch, kein Brustannahme-Plan passte (z. B. 0 von 121 Versuchen), und der aufspringende Ball prallte von seinen Beinen ab.
+- **Neu:** Bei einem eigenen, ungestörten hohen Ball stellt sich der Empfänger in die Ballbahn, wo der Ball Brusthöhe hat (wie beim Kopfball). Geht das nicht, nimmt er den Ball wie bisher mit dem Fuß.
+- Die Brustannahme-Logik ist aus `brain.ts` in `ai/chest.ts` ausgelagert (500-Zeilen-Grenze).
+
+| 6 Seeds × 2 × 6 min | vorher | nachher |
+| --- | --- | --- |
+| Erste Berührung = Abprall vom Körper des Empfängers | 25 von 54 (46 %) | 6 von 36 (17 %) |
+| Brustannahme als erste Berührung | ≈ 0 | 13 von 36 |
+| Einwerfende Mannschaft nach 3 s am Ball | 65 % | 69 % |
+
+Insgesamt verdoppeln sich die Brustannahmen (31 → 65), und es gibt weniger Einwürfe (54 → 36), weil weniger Bälle vom Körper ins Aus springen.
+
+**2. Kameraführung** (`render/camera-director.ts`)
+- **Ursache:** Die Hauptkamera steht hinter der nahen Seitenlinie (z = 45,5 m, 21 m hoch, 36° Bildwinkel) und folgte dem Ball quer mit Faktor 0,55. An der nahen Linie lagen Werfer 24° unter der Bildmitte, außerhalb der halben 18°.
+- **Neu:** Zur nahen Linie hin folgt der Blickpunkt stärker (bis 0,85, `nearSideFollow`). Die Linie liegt dann etwa 10° unter der Mitte, frei von der Statuszeile.
+- **Test:** Werfer an beiden Linien, projiziert durch die echte Kamera. Mit dem alten Faktor lag der nahe Werfer bei −1,36, also unterhalb des Bildes.
+
+**3. Zeitraffer** (`render/time-lapse.ts`, `app.ts`)
+- **Ursache:** Zeitraffer lief überall in der mittleren Zone, auch bei Zweikämpfen und nach 2 s auch bei jedem ruhenden Ball.
+- **Neu: normales Tempo, wenn**
+  - der Ball in einer Strafraumhälfte ist (|x| > 22 m);
+  - der Ball ruht (Standardsituationen);
+  - der Ball höher als 1 m ist;
+  - Spieler beider Mannschaften innerhalb von 2,5 m am Ball sind (Zweikampf);
+  - in den 3 s nach Foul, Abseits, Aus, Wiederanpfiff, Tor, Fang, Vorteil, Schuss, Kopfball, Tackling oder Einwurf.
+- Zeitraffer gibt es nur nach 3 s ohne all das.
+
+**4. Statusmeldungen** (`ui/hud.ts`, `app.ts`)
+- **Ursache:** Eine Meldung blieb stehen, bis eine neue kam, teils minutenlang.
+- **Neu:**
+  - Jede Meldung hat eine Laufzeit: 6 s; die Meldung zur eben getroffenen Entscheidung höchstens 12 s, bis ihr Ausgang sie ersetzt.
+  - Ein neuer Entscheidungsmoment leert die Zeile.
+
+**Abschluss-Browsertest:** Werte in §5. In den Aufnahmen steht der Werfer an der nahen Linie mit dem Ball über dem Kopf mitten im Bild. An der fernen Linie ist er klein am oberen Bildrand zu sehen, wie bisher.
 
 ## 7. Bekannte Grenzen / offene Punkte
 
@@ -823,9 +865,7 @@ Diese Punkte sind nicht verändert worden. Sie sind Kandidaten für die Nachkali
 
 ## 9. Nächste Schritte
 
-1. Entscheiden, was aus dem Browsertest (§6) angegangen wird:
-   - **Darstellung:** Kamera zeigt die nahe Seitenlinie, kein Zeitraffer bei ruhendem Ball und Zweikämpfen, Statusmeldung veraltet, Kopfballsprung und Brustannahme aus der Fernsehperspektive kaum sichtbar.
-   - **Spiel:** Ballannahme nach dem Einwurf.
+1. **Phase B:** die interaktive Spielerfahrung des zwölften Manns, gemeinsam mit dem Auftraggeber zu entwickeln.
 2. Nachkalibrierung (Messung mit `npm run probe`, 48 Seeds): Schüsse (≈ 19/90, real ≈ 25), Tore (in drei kurzen Browserpartien keines), Häufigkeit von Kopfballtoren, Grätschen und Fouls, Passzahl (≈ 1360 statt ≈ 1000/90), lange Bälle über 30 m.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
