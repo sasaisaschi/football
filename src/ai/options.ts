@@ -20,6 +20,9 @@ export type Picture = {
 
 /** Pace a ground pass should still have on arrival: firm enough not to give defenders time (m/s). */
 const PASS_ARRIVAL = 3.5;
+/** Longer ground passes are struck harder and still carry pace at the receiver: added per metre beyond 10 m, capped (m/s). */
+const PASS_ARRIVAL_PER_M = 0.15;
+const PASS_ARRIVAL_MAX = 7;
 /** Chance that a receiver with an opponent at his heels loses the ball again (scaled by how close he is). */
 const RECEIVER_RISK = 0.4;
 /** How fast an opponent effectively closes on a receiver while the pass is on its way (m/s). */
@@ -168,7 +171,7 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     const u = toTeam(sign, target).u;
     if (u > pic.offsideLineU - 0.01 && u > toTeam(sign, from).u) continue; // receiver would be offside
     const td = Math.hypot(target.x - from.x, target.z - from.z);
-    const ground = groundPassSpeed(td, PASS_ARRIVAL);
+    const ground = groundPassSpeed(td, Math.min(PASS_ARRIVAL_MAX, PASS_ARRIVAL + PASS_ARRIVAL_PER_M * Math.max(0, td - 10)));
     const groundSafe = laneSafety(pic, from, target, ground, false, 0);
     const loftSpeed = loftedPassSpeed(td, Math.min(MAX_ELEVATION, 0.42));
     // A dropping ball is much harder to bring down than a rolling one (measured: about half are kept).
