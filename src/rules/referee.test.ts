@@ -40,6 +40,25 @@ describe('Law 11 – offside', () => {
     expect(ref.onBallContact(touch(id(0, 'LB'), 5, 33.4, 'hands'), 1, pos)[0]).toMatchObject({ type: 'in-play', kind: 'throw-in' });
     expect(ref.onBallContact(touch(id(0, 'ST'), 30, 2, 'boot', 2), 1, pos)).toEqual([]);
   });
+  it('a throw-in released above the touchline is in play once it enters the pitch, and retaken if it never does', () => {
+    const ref = new Referee(roster);
+    ref.awaitRestart('throw-in', 0);
+    const pos = positions({ [id(0, 'LB')]: { x: 5, z: 34.3 } });
+    const released = { ...touch(id(0, 'LB'), 5, 34.15, 'hands'), position: { x: 5, y: 2.2, z: 34.15 } };
+    expect(ref.onBallContact(released, 1, pos)[0]).toMatchObject({ type: 'in-play', kind: 'throw-in' });
+    // Still above the line on its way in: not out again (it was before, and the throw-ins went back and forth).
+    expect(ref.checkBall({ x: 5.3, y: 2.3, z: 34.15 }, 1)).toBeNull();
+    expect(ref.checkBall({ x: 6, y: 2, z: 33 }, 1)).toBeNull();
+    // Once in, the touchline is the touchline again: out off team 0, throw-in to team 1.
+    expect(ref.checkBall({ x: 7, y: 0.5, z: 34.3 }, 1)).toMatchObject({ kind: 'throw-in', team: 1 });
+
+    const again = new Referee(roster);
+    again.awaitRestart('throw-in', 0);
+    again.onBallContact(released, 1, pos);
+    expect(again.checkBall({ x: 5.5, y: 1, z: 34.4 }, 1)).toBeNull();
+    // Thrown and landed outside without entering: retaken by the same team.
+    expect(again.checkBall({ x: 5.8, y: 0.11, z: 34.6 }, 1)).toMatchObject({ kind: 'throw-in', team: 0 });
+  });
   it('switches the attacking direction in the second half', () => {
     const ref = new Referee(roster);
     ref.pendingRestart = null;
