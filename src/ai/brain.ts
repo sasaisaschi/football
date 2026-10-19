@@ -235,9 +235,13 @@ export class PlayerBrain {
     const meet = headerIntercept(self, this.body.limits.maxSpeed, ball.pos, ball.vel, forehead, ball.spin);
     if (!meet) return null;
     if (!this.head.busy()) {
-      const choice = chooseHeader(pic, ownBall, forehead);
-      const plan = this.head.plan(ctx.ball, choice.velocity);
+      let choice = chooseHeader(pic, ownBall, meet.at, forehead);
+      let plan = this.head.plan(ctx.ball, choice.velocity);
       if (plan) {
+        // Judged once more from where the planned contact really is (the run-in point differs by a metre or two).
+        const again = chooseHeader(pic, ownBall, plan.contact, plan.contact.y);
+        const replanned = this.head.plan(ctx.ball, again.velocity);
+        if (replanned) { choice = again; plan = replanned; }
         this.head.start(plan, choice.velocity);
         this.intent = null;
         return { command: { target: self, speed: this.body.speed(), face: ball.pos }, effort: 1, swing: { action: { kind: 'header', velocity: choice.velocity }, source: 'ai' } };

@@ -160,6 +160,8 @@ export type PlayerView = {
   boots: [Vec3, Vec3];
   swingingBoot: -1 | 0 | 1;
   hands: Vec3 | null;
+  /** Forehead (header) or chest (chest control) while the player is playing the ball with it. */
+  upperBody: { part: 'head' | 'chest'; position: Vec3 } | null;
   booked: 'none' | 'yellow' | 'red';
   sentOff: boolean;
 };

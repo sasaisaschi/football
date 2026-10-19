@@ -74,13 +74,20 @@ export class PlayerFigure {
     this.root.visible = !view.sentOff;
     if (view.sentOff) return;
     const speed = Math.hypot(view.velocity.x, view.velocity.z);
-    this.root.position.set(view.position.x, 0, view.position.z);
+    // The capsule's height above standing is a jump: the whole figure leaves the ground with it.
+    this.root.position.set(view.position.x, Math.max(0, view.position.y - this.profile.heightM / 2), view.position.z);
     this.root.rotation.set(0, view.heading, 0);
     // Lean into acceleration and sideways for dives (keeper flying sideways).
     const right = Math.cos(view.heading) * view.velocity.x - Math.sin(view.heading) * view.velocity.z;
     const forward = Math.sin(view.heading) * view.velocity.x + Math.cos(view.heading) * view.velocity.z;
     const dive = this.profile.role === 'GK' && Math.abs(right) > 3.2 ? Math.sign(right) * Math.min(1.2, (Math.abs(right) - 3.2) * 0.9) : 0;
     this.body.rotation.set(Math.min(0.25, forward * 0.025), 0, -dive);
+    if (view.upperBody) {
+      // Header or chest control: the trunk bends so that forehead or chest is where the physical contact part is.
+      this.root.updateMatrixWorld(true);
+      const p = this.root.worldToLocal(tmp.set(view.upperBody.position.x, view.upperBody.position.y, view.upperBody.position.z));
+      this.body.rotation.set(Math.max(-0.6, Math.min(0.9, Math.atan2(p.z, p.y))), 0, Math.max(-0.5, Math.min(0.5, -Math.atan2(p.x, p.y))));
+    }
     this.gait += dt * (2 + speed * 1.15);
     this.root.updateMatrixWorld(true);
     for (const side of [0, 1] as const) {

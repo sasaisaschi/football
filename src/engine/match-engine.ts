@@ -13,7 +13,7 @@ import { createRng, type Rng } from './rng';
 import { createRoster, TEAMS } from './rosters';
 import { chooseTaker, PLACE_DELAY, restartReady, type RestartState } from './restarts';
 import type {
-  BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, RestartKind, TeamId, TeamInstruction, Vec2,
+  BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, PlayerView, RestartKind, TeamId, TeamInstruction, Vec2,
 } from './types';
 
 export type MatchConfig = { seed: number; halfMinutes: number; rosterSeed?: number };
@@ -406,6 +406,7 @@ export class MatchEngine {
           boots: [legs.bootWorld(0), legs.bootWorld(1)],
           swingingBoot: legs.swing ? legs.swing.plan.side : -1,
           hands: keeper ? keeper.hands.world3() : null,
+          upperBody: this.upperBodyView(p.id),
           booked: this.referee.sentOff.has(p.id) ? 'red' : this.referee.yellow.has(p.id) ? 'yellow' : 'none',
           sentOff: this.referee.sentOff.has(p.id),
         };
@@ -415,6 +416,11 @@ export class MatchEngine {
       restart: this.restart ? { kind: this.restart.kind, team: this.restart.team, position: this.restart.spot } : null,
       moment: this.moment,
     };
+  }
+
+  private upperBodyView(id: number): PlayerView['upperBody'] {
+    const head = this.heads[id].active();
+    return head ? { part: 'head', position: head } : null;
   }
 
   teamName(team: TeamId): string {

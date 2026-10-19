@@ -62,6 +62,29 @@ describe('heading', () => {
     expect(wide.head.plan(wide.w.ball, { x: 5, y: 2, z: 0 })).toBeNull();
   });
 
+  it('jumps for a ball above his head: the body leaves the ground, meets the ball at the top and lands again', () => {
+    const s = scene({ x: 7, y: 2.4, z: 0.2 }, { x: -12, y: 2, z: 0 });
+    const target = { x: 8, y: 3, z: 0 };
+    const plan = s.head.plan(s.w.ball, target);
+    expect(plan).not.toBeNull();
+    expect(plan!.rise).toBeGreaterThan(0.05);
+    s.head.start(plan!, target);
+    const standing = s.body.height / 2;
+    let peak = 0, liftAtContact = -1;
+    for (let i = 0; i < 90; i++) {
+      s.body.drive({ target: s.body.position(), speed: 0 }, 1 / 60);
+      s.head.refine(s.w.ball, target);
+      for (const c of s.w.step()) {
+        if (c.kind === 'ball' && c.part === 'body') throw new Error('the ball hit the torso');
+        if (c.kind === 'ball' && c.part === 'head' && liftAtContact < 0) liftAtContact = s.body.body.translation().y - standing;
+      }
+      peak = Math.max(peak, s.body.body.translation().y - standing);
+    }
+    expect(liftAtContact).toBeGreaterThan(0.6 * plan!.rise);
+    expect(peak).toBeLessThan(plan!.rise + 0.08);
+    expect(Math.abs(s.body.body.translation().y - standing)).toBeLessThan(0.02);
+  });
+
   it('leaves no collider in play outside a header', () => {
     const s = scene({ x: 2, y: 1.7, z: 0 }, { x: -6, y: 0, z: 0 });
     expect(s.head.collider.isEnabled()).toBe(false);

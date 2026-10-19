@@ -115,11 +115,12 @@ export class Legs {
     this.boots = [make(0), make(1)];
   }
 
-  /** Resting boot under its hip, inside the torso footprint. Side 1 (right) is to the right of the facing. */
+  /** Resting boot under its hip, inside the torso footprint; it leaves the turf with the body in a jump. Side 1 (right) is to the right of the facing. */
   rest(side: Side): Vec3 {
     const f = this.owner.facing();
     const s = side === 1 ? 1 : -1;
-    return { x: -f.z * s * this.hipOffset, y: BOOT.radius, z: f.x * s * this.hipOffset };
+    const lift = Math.max(0, this.owner.body.translation().y - this.owner.height / 2);
+    return { x: -f.z * s * this.hipOffset, y: BOOT.radius + lift, z: f.x * s * this.hipOffset };
   }
 
   /** Hip joint while kicking: the standing knee flexes, so the hip sits KICK_HIP_DROP below its standing height. */

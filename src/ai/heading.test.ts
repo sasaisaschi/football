@@ -20,14 +20,14 @@ function picture(ball: Vec2, mates: ReturnType<typeof at>[] = [], opponents: Ret
 
 describe('choosing a header', () => {
   it('clears a ball the opponents played into our half: up and away from our goal', () => {
-    const h = chooseHeader(picture({ x: -40, z: 5 }), false, 1.7);
+    const h = chooseHeader(picture({ x: -40, z: 5 }), false, { x: -40, z: 5 }, 1.7);
     expect(h.purpose).toBe('clear');
     expect(h.velocity.x).toBeGreaterThan(5);
     expect(h.velocity.y).toBeGreaterThan(3);
   });
 
   it('goes for goal in the opponents\' area, aimed low under the bar', () => {
-    const h = chooseHeader(picture({ x: PITCH.halfLength - 9, z: 1 }, [], [at(1, 'GK', { x: PITCH.halfLength - 1, z: 0 })]), true, 1.8);
+    const h = chooseHeader(picture({ x: PITCH.halfLength - 9, z: 1 }, [], [at(1, 'GK', { x: PITCH.halfLength - 1, z: 0 })]), true, { x: PITCH.halfLength - 9, z: 1 }, 1.8);
     expect(h.purpose).toBe('shot');
     expect(h.velocity.x).toBeGreaterThan(8);
     // Height at the goal line on its arc (gravity only): about half a metre.
@@ -37,9 +37,18 @@ describe('choosing a header', () => {
   });
 
   it('lays it off to a free team-mate nearby, otherwise heads it down to the own feet', () => {
-    const free = chooseHeader(picture({ x: 5, z: 0 }, [at(0, 'CM', { x: -3, z: 6 })]), true, 1.7);
+    const free = chooseHeader(picture({ x: 5, z: 0 }, [at(0, 'CM', { x: -3, z: 6 })]), true, { x: 5, z: 0 }, 1.7);
     expect(free.purpose).toBe('lay-off');
-    const marked = chooseHeader(picture({ x: 5, z: 0 }, [at(0, 'CM', { x: -3, z: 6 })], [at(1, 'LCM', { x: -3, z: 5 })]), true, 1.7);
+    const marked = chooseHeader(picture({ x: 5, z: 0 }, [at(0, 'CM', { x: -3, z: 6 })], [at(1, 'LCM', { x: -3, z: 5 })]), true, { x: 5, z: 0 }, 1.7);
     expect(marked.purpose).toBe('down');
+  });
+
+  it('aims a header at goal from where the ball will be met, not from where the cross still is', () => {
+    // The cross is still out on the wing when the striker decides; he will meet it at the penalty spot.
+    const pic = picture({ x: PITCH.halfLength - 2, z: -14 }, [], [at(1, 'GK', { x: PITCH.halfLength - 1, z: 0 })]);
+    const h = chooseHeader(pic, true, { x: PITCH.halfLength - 11, z: 0 }, 1.8);
+    expect(h.purpose).toBe('shot');
+    // Towards the goal mouth: the sideways part stays within the posts over 11 m.
+    expect(Math.abs((h.velocity.z / h.velocity.x) * 11)).toBeLessThan(PITCH.goalHalfWidth);
   });
 });
