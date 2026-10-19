@@ -651,6 +651,68 @@ Die Tore stiegen auf den Seeds 1–24 von 2,8 auf 3,8, auf 25–48 blieben sie g
 
 Bewertung: Die Passquote liegt mit 76 % im realen Bereich (75–85 %). Offen bleiben lange Bälle über 30 m (≈ 46 %, real ≈ 50–60 %) und mehr Pässe als real (≈ 1360 statt ≈ 1000/90).
 
+### Lange Bälle: Schussphysik für hohe Bälle – Analyse, noch keine Übernahme (19.10.2026)
+
+Diagnose (8 Seeds, alle Pässe ab 25 m): Hohe Bälle kamen zu ≈ 47 % an und landeten im Median 10–15 m neben dem Ziel. Ursache ist der Schuss, nicht die Flugberechnung: Nur ≈ 40 % starteten innerhalb ±0,05 rad des geplanten Winkels (0,42 rad), 17 % mit weniger als 60 % des geplanten Tempos.
+
+Zwei Fehler in `legs.ts`, beide im Startlabor (`lofted-strike.test.ts`, fünf Lagen ohne Fehler) belegt:
+
+1. **Waagerechter Schuh.** Die Planung nimmt an, dass sich der Schuh entlang der Kontaktnormale bewegt. Er schwang aber waagerecht, glitt bei hohen Bällen über den Ball und Reibung drückte ihn flach. **Gebaut:** Ab 0,3 rad kommt der Schuh flach heran und steigt auf den letzten 8 cm entlang der Normale durch den Ball.
+2. **Schuh hinkt dem Körper nach.** Er wurde relativ zur Körperposition *vor* dem Teilschritt gesetzt und lag bei einem laufenden Spieler einen Teilschritt zurück (2 cm bei 5 m/s). **Gebaut:** Er wird auf die Körperposition am Ende des Teilschritts gesetzt.
+
+Labor: vorher 0,36–0,50 rad und bis zu 20 statt 25 m/s, mit beiden Korrekturen 25 m/s bei 0,414–0,445 rad in allen fünf Lagen. Im Spiel bleibt die Streuung aus dem zufälligen Ausführungsfehler (≈ 0,05 rad je cm Kontakthöhe): hohe Bälle ab 30 m 45 → 48 %.
+
+| pro 90 min | main | nur steigender Schuh (48 Seeds) | nur Nachlauf-Korrektur (Seeds 1–24) | beide (48 Seeds) |
+| --- | --- | --- | --- | --- |
+| Schüsse | 22,4 | 21,3 | 17,3 | 18,3 |
+| Tore (aus Schüssen) | 3,7 (2,4) | 5,6 (3,8) | 4,3 (2,8) | 4,0 (2,6) |
+| Eigentore | 1,2 | 1,6 | 1,5 | 1,7 |
+| Einwürfe | 62 | 54 | 56 | 56 |
+
+Die Schüsse fehlen nicht durch Luftschläge (45 von 48 bzw. 27 von 30 Schusschwüngen treffen den Ball). Mit der Nachlauf-Korrektur wird öfter gedribbelt (Dribbelschwünge +19 %, mehr Fehltritte) und seltener geschossen. Der steigende Schuh macht hohe Bälle und Flanken präzise, die Tore steigen auf 5,6/90.
+
+Bewertung: Beide Korrekturen sind physikalisch richtig, aber Dribbeln, Schussauswahl und Torwart sind auf den fehlerhaften Schuss kalibriert. Übernahme erst zusammen mit dieser Nachkalibrierung (Branch `claude/12th-man-long-balls`).
+
+**Nachkalibrierung.** Diagnose (8 Seeds) mit beiden Korrekturen:
+- Die Schussauswahl selbst ist unverändert, xG und Entscheidungen nahe am Tor sind gleich.
+- Der Angriff kommt seltener in Schussnähe: Ballentscheidungen 0–25 m vor dem Tor −31 %, dafür mehr Dribblings und Pässe bei 25–35 m.
+
+Der nachhängende Schuh hatte wie ein zusätzlicher Schussfehler proportional zum Lauftempo gewirkt (2 cm bei 5 m/s), in jedem Schuss, Pass, Tackling und Dribbling. Ohne ihn treffen Verteidiger beim Stochern und Angreifer beim Abschluss genauer. **Neu:** Das eigene Lauftempo ist ein bewusster Teil des Ausführungsfehlers (`PACE_NOISE` in `execution.ts`: 8 m/s zählen wie der Grundfehler). Mit 4 m/s fiel die Torquote auf 2,6 %.
+
+| pro 90 min (48 Seeds) | main | beide Korrekturen | + Tempoanteil |
+| --- | --- | --- | --- |
+| Schüsse | 22,4 | 18,3 | 21,4 |
+| Tore aus Schüssen (Quote) | 2,4 (10,7 %) | 2,6 (14 %) | 2,7 (12,6 %) |
+| Eigentore | 1,2 | 1,7 | 1,65 (0,9 / 2,4 je Seed-Hälfte) |
+| Einwürfe | 62 | 56 | 55 |
+| Fouls | 22,8 | – | 19,5 (16,7 / 22,3) |
+| Passquote | 76 % | 76,5 % | 76,5 % |
+
+Bewertung: Schüsse und Torquote sind wieder nahe an `main` und am realen Wert, Einwürfe besser. Offen und Hindernis für die Übernahme: Eigentore (1,65/90, real ≈ 0,1 pro Partie) schwanken stark zwischen den Seed-Hälften und treiben die Tore auf 4,4/90. Sie lagen schon auf `main` zu hoch.
+
+**Eigentore.** Protokoll aller Eigentore (24 Seeds, je die letzten sechs Berührungen):
+- **Drei von fünf** waren Rückpässe aus 15–20 m mit 10–15 m/s auf einer Linie direkt ins Tor. Der Torwart lenkte sie mit dem Körper ins Netz oder erreichte sie nicht. Echte Verteidiger spielen zum Torwart seitlich am Pfosten vorbei, ein Fehler gibt dann Ecke statt Tor.
+- **Eines** war ein Schuss, den der Torwart mit dem Körper ins Tor lenkte. Der Schiedsrichter wertete jede letzte Berührung der Verteidiger als Eigentor; statistisch ist das ein Tor des Schützen.
+- **Eines** war ein Abpraller eines Blocks mit 33 m/s, nicht behoben.
+
+**Neu:**
+- `rollsIntoOwnGoal` in `options.ts`: Ein Pass zum eigenen Torwart, der bei einem Fehler noch zwischen den Pfosten (± 1,5 m) über die Linie rollen würde, ist keine Option mehr.
+  - Für alle Pässe Richtung eigenes Tor angewandt, nahm die Regel auch sichere Rückpässe im Mittelfeld weg: Schüsse 17/90.
+- **Schiedsrichter:** Lenkt die verteidigende Mannschaft den Ball nur mit Körper oder Händen ins Tor, innerhalb von 1,5 s nach einer Berührung der Angreifer, zählt das als deren Tor (`DEFLECTION_WINDOW`).
+- Tests: `options.test.ts` (Rückpass auf das Tor, Rückpass seitlich) und `referee.test.ts` schlagen auf dem alten Stand fehl.
+
+| pro 90 min (48 Seeds) | main | + Tempoanteil | + Eigentor-Korrekturen (Regel nur zum Torwart) |
+| --- | --- | --- | --- |
+| Eigentore | 1,2 | 1,65 | **0,4** |
+| Tore (aus Schüssen) | 3,7 (2,4) | 4,4 (2,7) | **3,1** (2,55) |
+| Schüsse | 22,4 | 21,4 | 19,3 (21,0 / 17,6) |
+| Torquote | 10,7 % | 12,6 % | 13 % |
+| Einwürfe | 62 | 55 | 55 |
+| Fouls | 22,8 | 19,5 | 20,4 |
+| Passquote | 76 % | 76,5 % | 75,5 % |
+
+Bewertung: Tore (3,1) und Eigentore (0,4) sind erstmals nahe am realen Wert (≈ 2,7 bzw. ≈ 0,1). Weiter offen: Schüsse 19/90 (real ≈ 25) bei leicht hoher Torquote.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität** (48 Seeds, Stand 19.10.2026): Im Zielbereich sind Passquote ≈ 76 %, Fouls ≈ 23/90, Elfmeter ≈ 0,4/90 und Torschüsse ≈ 22/90. Leicht darüber liegen die Tore (≈ 3,5/90, real ≈ 2,7). Noch nicht realistisch: Pässe ≈ 1360/90 (real ≈ 1000), Einwürfe ≈ 62/90 (real ≈ 45), Eigentore ≈ 1/90, Schüsse nach Kombination ≈ 3/90, lange Bälle über 30 m ≈ 46 %, keine Kopfballtore (siehe §6).

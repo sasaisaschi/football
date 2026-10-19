@@ -30,9 +30,16 @@ const NO_OFFSIDE_FROM: ReadonlySet<RestartKind> = new Set(['throw-in', 'corner',
  * 3.2 gives 23 fouls and 0.4 penalties per 90, 3.5 only 16.
  */
 const FOUL_FROM_BEHIND = 3.2;
+/**
+ * A ball the defending side only deflected (body, hands) within this time of the attackers' last touch is their goal,
+ * not an own goal: a keeper parrying a shot into his net does not score for the opponents (s).
+ */
+const DEFLECTION_WINDOW = 1.5;
 
 export class Referee {
   lastTouch: Touch | null = null;
+  /** Each team's latest touch, to credit a goal deflected in by the defending side to the attacker. */
+  private readonly lastTouchOf: [Touch | null, Touch | null] = [null, null];
   private offsideCandidates = new Set<number>();
   private offsidePasser = -1;
   /** Restart that the next touch by `team` puts into play. */
@@ -50,6 +57,7 @@ export class Referee {
   onBallContact(touch: Touch, half: 1 | 2, positions: Map<number, Vec2>): Decision[] {
     const out: Decision[] = [];
     this.lastBallContact.set(touch.player, touch.time);
+    this.lastTouchOf[touch.team] = touch;
     const profile = this.profiles[touch.player];
     if (this.keeperReleased !== null && touch.player !== this.keeperReleased) this.keeperReleased = null;
 
@@ -166,9 +174,11 @@ export class Referee {
     const side = goalCrossed(ball);
     if (side !== 0) {
       const team = (attackSign(0, half) === side ? 0 : 1) as TeamId;
-      const scorer = this.lastTouch?.player ?? null;
-      const ownGoal = this.lastTouch ? this.lastTouch.team !== team : false;
-      return { type: 'goal', team, scorer, ownGoal };
+      const last = this.lastTouch;
+      const attacker = this.lastTouchOf[team];
+      const deflected = !!last && last.team !== team && (last.part === 'body' || last.part === 'hands') && !!attacker && last.time - attacker.time < DEFLECTION_WINDOW;
+      if (deflected) return { type: 'goal', team, scorer: attacker!.player, ownGoal: false };
+      return { type: 'goal', team, scorer: last?.player ?? null, ownGoal: last ? last.team !== team : false };
     }
     const out = ballOut(ball);
     if (!out) return null;

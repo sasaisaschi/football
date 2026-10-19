@@ -43,9 +43,9 @@ describe('holding the ball', () => {
 
 describe('back-pass to the own keeper', () => {
   it('is never lofted, even where a ball over the top would look safer', () => {
-    const keeper = at(0, 'GK', { x: -48, z: 4 });
+    const keeper = at(0, 'GK', { x: -47, z: -8 });
     // An opponent stands in the ground lane; the lane over the top is free.
-    const pic = { ...picture([at(1, 'ST', { x: -38, z: 11 })], [keeper]), pos: { x: -29.4, z: 18 }, ball: { pos: { x: -29, y: 0.11, z: 18 }, vel: { x: 0, y: 0, z: 0 } } };
+    const pic = { ...picture([at(1, 'ST', { x: -38, z: 5 })], [keeper]), pos: { x: -29.4, z: 18 }, ball: { pos: { x: -29, y: 0.11, z: 18 }, vel: { x: 0, y: 0, z: 0 } } };
     const pass = evaluateOptions(pic).find(o => o.kind === 'pass' && o.target === keeper.id);
     expect(pass).toBeDefined();
     expect(pass!.action.kind === 'pass' && pass!.action.lofted).toBe(false);
@@ -72,5 +72,22 @@ describe('pass safety', () => {
     expect(pass.action.kind === 'pass' && pass.action.lofted).toBe(false);
     // Lane, accuracy over 20 m and the receiver's room together.
     expect(pass.success).toBeGreaterThan(0.4);
+  });
+});
+
+describe('passing near the own goal', () => {
+  /** The CM has the ball 17 m in front of his own goal (team 0 defends x = −52.5). */
+  function deep(keeper: Vec2): Picture {
+    const p = picture([at(1, 'ST', { x: -20, z: 15 })], [at(0, 'GK', keeper)]);
+    return { ...p, pos: { x: -34.4, z: 0 }, ball: { pos: { x: -35, y: 0.11, z: 0 }, vel: { x: 0, y: 0, z: 0 } } };
+  }
+  const toKeeper = (pic: Picture) => evaluateOptions(pic).some(o => o.kind === 'pass' && o.target === player(0, 'GK').id);
+
+  it('no back-pass on a line that rolls into the goal if the keeper misses it', () => {
+    expect(toKeeper(deep({ x: -49, z: 0.5 }))).toBe(false);
+  });
+
+  it('a back-pass to the keeper\'s side, wide of the posts, is still on', () => {
+    expect(toKeeper(deep({ x: -47, z: -11 }))).toBe(true);
   });
 });

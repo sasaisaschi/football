@@ -124,14 +124,20 @@ function touchApproach(body: PlayerBody, dir: Vec2, vel: Vec2, speed: number, in
 
 export type ExecutionContext = { pressure: number; profile: PlayerProfile; rng: Rng };
 
-/** Motor noise for one swing. Grows with pressure, relative ball speed, poor body shape and power. */
+/**
+ * Running pace (m/s) that adds as much motor noise as the base: striking on the run is less precise than from a
+ * stand. Until the boots followed the body exactly, a lagging boot did this by accident (2 cm at 5 m/s).
+ */
+const PACE_NOISE = 8;
+
+/** Motor noise for one swing. Grows with pressure, relative ball speed, own pace, poor body shape and power. */
 export function strikeError(ctx: ExecutionContext, body: PlayerBody, ballVel: Vec2, action: BallAction, bodyAngle: number): StrikeError {
   const a = ctx.profile.abilities;
   const skill = action.kind === 'shot' ? a.shooting : action.kind === 'pass' ? a.passing : a.technique;
   const v = body.velocity();
   const rel = Math.hypot(ballVel.x - v.x, ballVel.z - v.z);
   const power = action.kind === 'shot' || action.kind === 'clear' ? 0.7 : 'speed' in action ? action.speed / 30 : 0.2;
-  const factor = (1.45 - skill) * (1 + 1.4 * ctx.pressure * (1.3 - a.composure) + rel / 6 + bodyAngle * 1.1 + power);
+  const factor = (1.45 - skill) * (1 + 1.4 * ctx.pressure * (1.3 - a.composure) + rel / 6 + Math.hypot(v.x, v.z) / PACE_NOISE + bodyAngle * 1.1 + power);
   const tech = techniqueFor(action);
   const base = tech === 'inside' ? 0.006 : tech === 'instep' ? 0.011 : 0.016;
   const g = () => ctx.rng.gauss();
