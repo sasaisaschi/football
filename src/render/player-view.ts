@@ -9,6 +9,8 @@ import type { PlayerProfile, PlayerView, TeamProfile } from '../engine/types';
 const UP = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), knee = new THREE.Vector3();
+/** Sliding tackle: hip height on the turf and how far the trunk leans back (m, rad). */
+const SLIDE_HIP = 0.18, SLIDE_LEAN = 1.05;
 
 type Limb = { upper: THREE.Mesh; lower: THREE.Mesh; end: THREE.Mesh | null; l1: number; l2: number };
 
@@ -82,6 +84,13 @@ export class PlayerFigure {
     const forward = Math.sin(view.heading) * view.velocity.x + Math.cos(view.heading) * view.velocity.z;
     const dive = this.profile.role === 'GK' && Math.abs(right) > 3.2 ? Math.sign(right) * Math.min(1.2, (Math.abs(right) - 3.2) * 0.9) : 0;
     this.body.rotation.set(Math.min(0.25, forward * 0.025), 0, -dive);
+    // Sliding tackle: the trunk leans back about the hip, which sinks towards the turf; the legs follow the boots.
+    const hipY = this.hip - (this.hip - SLIDE_HIP) * view.lying;
+    if (view.lying > 0) {
+      const a = SLIDE_LEAN * view.lying;
+      this.body.rotation.set(-a, 0, 0);
+      this.body.position.set(0, hipY - this.hip * Math.cos(a), this.hip * Math.sin(a));
+    } else this.body.position.set(0, 0, 0);
     if (view.upperBody) {
       // Header or chest control: the trunk bends so that forehead or chest is where the physical contact part is.
       this.root.updateMatrixWorld(true);
@@ -92,10 +101,10 @@ export class PlayerFigure {
     this.root.updateMatrixWorld(true);
     for (const side of [0, 1] as const) {
       const s = side === 1 ? 1 : -1;
-      const hipLocal = tmp.set(-s * this.hipOffset, this.hip, 0);
+      const hipLocal = tmp.set(-s * this.hipOffset, hipY, 0);
       const foot = tmp2.set(view.boots[side].x, view.boots[side].y, view.boots[side].z);
       this.root.worldToLocal(foot);
-      if (view.swingingBoot !== side && speed > 0.4) {
+      if (view.swingingBoot !== side && speed > 0.4 && view.lying === 0) {
         // Visual stride only.
         const phase = this.gait + (side ? Math.PI : 0);
         const stride = Math.min(0.45, speed * 0.06);

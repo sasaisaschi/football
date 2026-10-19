@@ -14,6 +14,7 @@ import { chooseHeader, CONTESTED } from './heading';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { offBallCommand } from './off-ball';
 import { chooseThrow, throwInStand } from './throw-in';
+import { slideDirection } from './slide';
 import { Perception, type Truth } from './perception';
 import { offsideLineU, toTeam } from './shape';
 
@@ -46,6 +47,8 @@ const HEADER_SET = 0.35;
 const JOCKEY_CLOSE = 1.5;
 /** Sideways distance from the carrier at which a recovering defender runs alongside him (m). */
 const SHOULDER_GAP = 1.1;
+/** Extra pace of the lunge into a sliding tackle over the run (m/s). */
+const SLIDE_LUNGE = 0.5;
 /** Pace the chest sends the ball on with, towards where the player faces: it drops a stride ahead (m/s). */
 const CHEST_DROP_PACE = 1;
 
@@ -141,7 +144,7 @@ export class PlayerBrain {
     const order = this.userIntent;
     if (order?.type === 'move' && order.action.kind === 'tactical-foul') return out;
     // Until the contact the body is committed to the run the kick was planned for.
-    if (this.legs.committed() || this.head.committed() || this.chest.committed()) return out;
+    if (this.legs.committed() || this.head.committed() || this.chest.committed() || this.body.sliding()) return out;
     return { ...out, command: this.controlledApproach(out.command, ctx) };
   }
 
@@ -179,6 +182,8 @@ export class PlayerBrain {
     if (aim) this.head.refine(ctx.ball, aim);
     const chestAim = this.chest.aim();
     if (chestAim) this.chest.refine(ctx.ball, chestAim);
+    // In a sliding tackle, on the ground or getting up: nothing to decide until he stands again.
+    if (this.body.sliding()) { this.committedToBall = false; return { command: { target: self, speed: 0 }, effort: 0, swing: null }; }
     if (this.legs.committed() || this.head.committed() || this.chest.committed()) {
       // Up to the contact the body keeps the pace the leg (or the header) was planned for.
       const v = this.body.velocity();
@@ -307,6 +312,17 @@ export class PlayerBrain {
     const intercept = PlayerBrain.interceptTime(self, this.body.limits.maxSpeed, ball);
     // A receiver whose team played the ball last still controls it a stride ahead of him: jockey, do not charge in.
     const carrier = this.opponentInControl(ctx, ball, ctx.possession !== null && ctx.possession !== this.profile.team ? CARRIER_REACH : 1.1);
+    if (carrier && !ctx.restart && this.profile.role !== 'GK' && !this.legs.busy()) {
+      const cv = this.perception.others.get(carrier.id)?.vel ?? { x: 0, z: 0 };
+      const dir = slideDirection(self, this.body.velocity(), ball, carrier, cv, (-ctx.sign) as 1 | -1);
+      if (dir) {
+        // Sliding tackle: the body goes down along the run, the leg nearer the ball stretches out to it.
+        this.body.startSlide(dir, this.body.speed() + SLIDE_LUNGE);
+        this.legs.startSlide(this.legs.sideTowards(ball.pos.x, ball.pos.z));
+        this.intent = null;
+        return { command: { target: self, speed: 0 }, effort: 0, swing: { action: { kind: 'tackle', direction: dir, speed: this.body.speed() }, source: 'ai' } };
+      }
+    }
     if (carrier && !ctx.restart) {
       // Jockey: stay goal-side of the carrier at arm's length. Step in when his touch exposes the ball (it is
       // off his foot and about as near to me as to him), or close in front of the own goal where delaying no

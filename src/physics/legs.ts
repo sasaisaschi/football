@@ -28,6 +28,11 @@ export const MAX_BOOT_SPEED = 24;
 export const KICK_HIP_DROP = 0.1;
 /** How far the boot gives with the ball after a cushioning contact (m). */
 const CUSHION_GIVE = 0.08;
+/**
+ * Sliding tackle: the leading boot lies on the turf this far ahead of the body axis along the slide, the other one
+ * tucked further back (m). Both move with the sliding body; the leading one is what meets the ball.
+ */
+const SLIDE_REACH = 0.95, SLIDE_TUCK = 0.5;
 /** Boot travel past the planned contact point after which the swing no longer needs the planned body pace (m). */
 const CONTACT_MARGIN = 0.1;
 /**
@@ -137,8 +142,17 @@ export class Legs {
     return right >= 0 ? 1 : 0;
   }
 
+  /** Side of the leading boot in a sliding tackle, while the body is down. */
+  private slideSide: Side | null = null;
+
   busy(): boolean {
-    return this.swing !== null;
+    return this.swing !== null || this.slideSide !== null;
+  }
+
+  /** Stretches the leg on `side` out along the slide the body has just started. */
+  startSlide(side: Side): void {
+    this.swing = null;
+    this.slideSide = side;
   }
 
   /**
@@ -294,14 +308,20 @@ export class Legs {
     this.swing = { plan, phase: 'windup', t: 0, from: { ...this.boots[plan.side].rel } };
   }
 
-  /** Boot speed of an active wind-up/strike (0 otherwise); used to size physics substeps. */
+  /** Boot speed of an active wind-up/strike or slide (0 otherwise); used to size physics substeps. */
   strikeSpeedNow(): number {
+    if (this.slideSide !== null) return this.owner.speed() + 2;
     const s = this.swing;
     return s && (s.phase === 'windup' || s.phase === 'strike') ? s.plan.strikeSpeed : 0;
   }
 
   /** Advances the swing and stages the next kinematic boot poses. Call before every physics (sub)step. */
   update(dt: number): void {
+    if (this.slideSide !== null) {
+      const dir = this.owner.slideDirection();
+      if (dir && this.owner.down()) { this.stageSlide(dir, this.slideSide, dt); return; }
+      this.slideSide = null;
+    }
     const swing = this.swing;
     for (const side of [0, 1] as const) {
       if (swing && swing.plan.side === side) continue;
@@ -334,6 +354,19 @@ export class Legs {
     const boot = this.boots[plan.side];
     boot.rel = rel;
     this.stage(boot, rel, plan.axis, dt);
+  }
+
+  /** Both boots on the turf along the slide: the leading one stretched out ahead, the other tucked behind it. */
+  private stageSlide(dir: { x: number; z: number }, lead: Side, dt: number): void {
+    const s = lead === 1 ? 1 : -1;
+    const right = { x: -dir.z, z: dir.x };
+    for (const side of [0, 1] as const) {
+      const boot = this.boots[side];
+      const reach = side === lead ? SLIDE_REACH : SLIDE_TUCK;
+      const across = (side === lead ? 0.08 : -0.18) * s;
+      boot.rel = { x: dir.x * reach + right.x * across, y: BOOT.radius, z: dir.z * reach + right.z * across };
+      this.stage(boot, boot.rel, { x: dir.x, y: 0, z: dir.z }, dt);
+    }
   }
 
   bootWorld(side: Side): Vec3 {

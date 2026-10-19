@@ -20,7 +20,8 @@ export type Decision =
   | { type: 'foul'; offender: number; victim: number; spot: Vec2; penalty: boolean; card: 'none' | 'yellow' | 'red'; reason: string; advantage: boolean }
   | { type: 'in-play'; kind: RestartKind; taker: number };
 
-export type PlayerState = { pos: Vec2; vel: Vec2; heading: number; hasTacticalFoulIntent: boolean };
+/** `sliding`: in a sliding tackle (on the ground, legs stretched out). */
+export type PlayerState = { pos: Vec2; vel: Vec2; heading: number; hasTacticalFoulIntent: boolean; sliding?: boolean };
 
 const NO_OFFSIDE_FROM: ReadonlySet<RestartKind> = new Set(['throw-in', 'corner', 'goal-kick']);
 
@@ -35,6 +36,12 @@ const FOUL_FROM_BEHIND = 3.2;
  * not an own goal: a keeper parrying a shot into his net does not score for the opponents (s).
  */
 const DEFLECTION_WINDOW = 1.5;
+/**
+ * Sliding tackles (Law 12): one that wins the ball first is fair unless it comes from behind or with excessive
+ * force. Reaching the man without the ball from this closing speed is reckless (yellow); from behind with
+ * excessive force it endangers the opponent (red), m/s.
+ */
+const SLIDE_RECKLESS = 5, SLIDE_EXCESSIVE = 7;
 
 export class Referee {
   lastTouch: Touch | null = null;
@@ -135,16 +142,18 @@ export class Referee {
     const tactical = os.hasTacticalFoulIntent;
     if (!victimOnBall && !tactical && keeperHolding !== victim) return null;
     const playedBallFirst = now - (this.lastBallContact.get(offender) ?? -9) < 0.35;
-    if (playedBallFirst && closingSpeed < 6 && !tactical) return null;
+    const sliding = !!os.sliding;
+    if (playedBallFirst && closingSpeed < 6 && !tactical && !sliding) return null;
     // From behind: the challenger arrives from the victim's back half.
     const hx = Math.sin(vs.heading), hz = Math.cos(vs.heading);
     const ox = os.pos.x - vs.pos.x, oz = os.pos.z - vs.pos.z, od = Math.hypot(ox, oz) || 1;
     const fromBehind = (ox * hx + oz * hz) / od < -0.5;
+    if (sliding && playedBallFirst && !fromBehind && closingSpeed < SLIDE_EXCESSIVE) return null;
     // Two players going for the same ball is a contest, not a foul, unless it is clumsy, fast or from behind.
     const contest = Math.hypot(ball.x - os.pos.x, ball.z - os.pos.z) < 1.6;
     // A brush from behind while both go about their game is played on; a challenge that arrives with force is not.
     const threshold = fromBehind ? FOUL_FROM_BEHIND : contest ? 5.6 : 4;
-    const careless = closingSpeed >= threshold || tactical || keeperHolding === victim;
+    const careless = sliding || closingSpeed >= threshold || tactical || keeperHolding === victim;
     if (!careless) return null;
 
     const offenderTeam = this.profiles[offender].team;
@@ -163,6 +172,8 @@ export class Referee {
     let card: 'none' | 'yellow' | 'red' = 'none';
     let reason = 'Foulspiel';
     if (closingSpeed > 6.5) { card = 'yellow'; reason = 'rücksichtsloses Einsteigen'; }
+    if (sliding && !playedBallFirst && closingSpeed >= SLIDE_RECKLESS) { card = 'yellow'; reason = 'rücksichtslose Grätsche'; }
+    if (sliding && fromBehind && closingSpeed >= SLIDE_EXCESSIVE) { card = 'red'; reason = 'Grätsche von hinten mit übermäßiger Härte'; }
     if (dogso && !(penalty && playedBallFirst)) { card = 'red'; reason = 'Verhinderung einer offensichtlichen Torchance'; }
     else if (tactical || (heading && toGoal < 45)) { card = card === 'none' ? 'yellow' : card; reason = tactical ? 'taktisches Foul' : 'Unterbinden eines aussichtsreichen Angriffs'; }
     if (card === 'yellow' && this.yellow.has(offender)) card = 'red';

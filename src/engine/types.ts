@@ -164,6 +164,8 @@ export type PlayerView = {
   hands: Vec3 | null;
   /** Forehead (header) or chest (chest control) while the player is playing the ball with it. */
   upperBody: { part: 'head' | 'chest'; position: Vec3 } | null;
+  /** Sliding tackle: 0 standing … 1 down on the turf. */
+  lying: number;
   booked: 'none' | 'yellow' | 'red';
   sentOff: boolean;
 };

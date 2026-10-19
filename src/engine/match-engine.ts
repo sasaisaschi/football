@@ -218,7 +218,7 @@ export class MatchEngine {
         this.emit({ type: 'swing', player: p.id, action: out.swing.action.kind, source: out.swing.source });
       }
       const move = this.brains[p.id].userIntent;
-      states.set(p.id, { pos: body.position(), vel: body.velocity(), heading: body.heading, hasTacticalFoulIntent: move?.type === 'move' && move.action.kind === 'tactical-foul' });
+      states.set(p.id, { pos: body.position(), vel: body.velocity(), heading: body.heading, hasTacticalFoulIntent: move?.type === 'move' && move.action.kind === 'tactical-foul', sliding: body.down() });
     }
     const contacts = this.physics.step();
     this.handleContacts(contacts, states);
@@ -444,6 +444,7 @@ export class MatchEngine {
           swingingBoot: legs.swing ? legs.swing.plan.side : -1,
           hands: keeper ? keeper.hands.world3() : this.throwHands.thrower() === body ? this.throwHands.world3() : null,
           upperBody: this.upperBodyView(p.id),
+          lying: body.lying(),
           booked: this.referee.sentOff.has(p.id) ? 'red' : this.referee.yellow.has(p.id) ? 'yellow' : 'none',
           sentOff: this.referee.sentOff.has(p.id),
         };

@@ -164,6 +164,7 @@ function lerpPlayer(a: PlayerView, b: PlayerView, t: number): PlayerView {
     heading: a.heading + dh * t,
     boots: [lerp3(a.boots[0], b.boots[0], t), lerp3(a.boots[1], b.boots[1], t)],
     hands: a.hands && b.hands ? lerp3(a.hands, b.hands, t) : b.hands,
+    lying: a.lying + (b.lying - a.lying) * t,
     upperBody: a.upperBody && b.upperBody && a.upperBody.part === b.upperBody.part ? { part: b.upperBody.part, position: lerp3(a.upperBody.position, b.upperBody.position, t) } : b.upperBody,
   };
 }

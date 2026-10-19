@@ -89,6 +89,30 @@ describe('Law 12 – fouls and misconduct', () => {
     const d = ref.onBodyContact(def, att, 4, 10, 1, { x: -9.6, y: 0.11, z: 0 }, states, null);
     expect(d).toMatchObject({ type: 'foul', offender: def, victim: att, penalty: false });
   });
+  describe('sliding tackles', () => {
+    const slider = (pos: Vec2, vel: Vec2, heading: number): PlayerState => ({ ...state(pos, vel, heading), sliding: true });
+    // The attacker runs along +X with the ball; the defender slides in.
+    const setUp = (wonBall: boolean) => {
+      const ref = new Referee(roster);
+      ref.pendingRestart = null;
+      ref.onBallContact(touch(att, 0, 0, 'boot', 9.6), 1, positions());
+      if (wonBall) ref.onBallContact(touch(def, 0.4, 0.3, 'boot', 9.85), 1, positions());
+      return ref;
+    };
+    const ball = { x: 0.6, y: 0.11, z: 0.4 };
+    it('from the side, winning the ball first: fair', () => {
+      const states = new Map([[att, state({ x: 0, z: 0 }, { x: 4, z: 0 }, Math.PI / 2)], [def, slider({ x: 0, z: 0.9 }, { x: 0, z: -5.5 }, Math.PI)]]);
+      expect(setUp(true).onBodyContact(def, att, 5.5, 10, 1, ball, states, null)).toBeNull();
+    });
+    it('reaching the man instead of the ball: a reckless foul, booked', () => {
+      const states = new Map([[att, state({ x: 0, z: 0 }, { x: 4, z: 0 }, Math.PI / 2)], [def, slider({ x: 0, z: 0.9 }, { x: 0, z: -5.5 }, Math.PI)]]);
+      expect(setUp(false).onBodyContact(def, att, 5.5, 10, 1, ball, states, null)).toMatchObject({ type: 'foul', offender: def, card: 'yellow', reason: 'rücksichtslose Grätsche' });
+    });
+    it('from behind with excessive force: sent off, even if the ball was touched', () => {
+      const states = new Map([[att, state({ x: 0, z: 0 }, { x: 4, z: 0 }, Math.PI / 2)], [def, slider({ x: -0.9, z: 0 }, { x: 11, z: 0 }, Math.PI / 2)]]);
+      expect(setUp(true).onBodyContact(def, att, 7.5, 10, 1, ball, states, null)).toMatchObject({ type: 'foul', offender: def, card: 'red' });
+    });
+  });
   it('a light brush from behind is played on', () => {
     const ref = new Referee(roster);
     ref.lastTouch = touch(att, -10, 0, 'boot', 9.5);
