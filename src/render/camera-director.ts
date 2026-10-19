@@ -10,6 +10,16 @@ export type Shot = 'main' | 'close' | 'behind-goal' | 'decision' | 'wide';
  * (a decision moment frames the focus player, a goal cuts behind the goal, then wide on the celebration).
  * The camera never shows something that did not happen; it only chooses how to look at it.
  */
+/**
+ * How far the main camera's look point follows the ball across the pitch. The gantry stands behind the near
+ * touchline (z = +34) and looks down on it at a steep angle: following with 0.55 everywhere, play at the near line
+ * (throw-ins, corners) lay 24° below the image centre, outside the 18° half field of view. Towards the near line the
+ * look point follows more, up to 0.85 (the touchline 10° below the centre, clear of the status line).
+ */
+export function nearSideFollow(z: number): number {
+  return 0.55 + 0.3 * Math.max(0, Math.min(1, (z - 10) / 24));
+}
+
 export class CameraDirector {
   shot: Shot = 'main';
   manual: Shot | null = null;
@@ -57,7 +67,7 @@ export class CameraDirector {
       case 'main': {
         const lead = { x: b.x + v.x * 0.6, z: b.z + v.z * 0.4 };
         this.target.set(lead.x * 0.82, 21, STANDS.z + 4);
-        this.look.set(lead.x, 0, lead.z * 0.55);
+        this.look.set(lead.x, 0, lead.z * nearSideFollow(lead.z));
         break;
       }
       case 'close': {

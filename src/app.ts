@@ -7,6 +7,7 @@ import type { DecisionSource, MatchEvent, MatchSnapshot, PlayerView, TeamId } fr
 import { PHYSICS_DT } from './physics/world';
 import { createBallView } from './render/ball-view';
 import { CameraDirector } from './render/camera-director';
+import { atStake, CALM_SECONDS } from './render/time-lapse';
 import { PlayerFigure } from './render/player-view';
 import type { StadiumView } from './render/stadium-view';
 import { commentaryFor } from './ui/commentary';
@@ -61,7 +62,7 @@ export class MatchApp {
     overlay.append(this.hud.el, this.panel.el);
     this.prev = this.curr = this.engine.snapshot();
     this.engine.onEvent(e => this.onEvent(e));
-    this.hud.setStatus(`${TEAMS[0].name} gegen ${TEAMS[1].name} – du entscheidest für ${TEAMS[options.userTeam].name}.`);
+    this.hud.setStatus(`${TEAMS[0].name} gegen ${TEAMS[1].name} – du entscheidest für ${TEAMS[options.userTeam].name}.`, 0, STATUS_SECONDS);
   }
 
   private resolve(optionId: string, by: DecisionSource): void {
@@ -70,7 +71,8 @@ export class MatchApp {
     const option = m.options.find(o => o.id === optionId)!;
     this.engine.resolveMoment(optionId, by);
     this.pendingOutcome = option.label;
-    this.hud.setStatus(by === 'user' ? `Deine Entscheidung: ${option.label} – jetzt müssen die Spieler es umsetzen.` : by === 'delegated' ? `Du überlässt es den Spielern (${option.label}).` : `Zeit abgelaufen – die Spieler entscheiden selbst (${option.label}).`);
+    // Shown until the outcome replaces it, at most PENDING_SECONDS.
+    this.hud.setStatus(by === 'user' ? `Deine Entscheidung: ${option.label} – jetzt müssen die Spieler es umsetzen.` : by === 'delegated' ? `Du überlässt es den Spielern (${option.label}).` : `Zeit abgelaufen – die Spieler entscheiden selbst (${option.label}).`, this.wall, PENDING_SECONDS);
   }
 
   private onEvent(e: MatchEvent): void {
@@ -78,22 +80,21 @@ export class MatchApp {
     this.audio.onEvent(e, this.options.userTeam);
     const line = commentaryFor(e, this.engine);
     if (line) this.hud.log(line, this.hud.clockText(this.engine.snapshot()));
-    if (e.type === 'moment' && this.engine.moment) this.panel.show(this.engine.moment, this.wall);
+    if (e.type === 'moment' && this.engine.moment) { this.hud.clearStatus(); this.panel.show(this.engine.moment, this.wall); }
+    if (CALM_BREAKERS.has(e.type) || (e.type === 'swing' && e.action !== 'pass' && e.action !== 'dribble' && e.action !== 'control')) this.lastDanger = this.wall;
     if (e.type === 'goal') { this.celebrateUntil = this.wall + 6; this.celebrateTeam = e.team; }
     if (this.pendingOutcome && (e.type === 'goal' || e.type === 'catch' || e.type === 'out' || e.type === 'foul' || e.type === 'offside' || (e.type === 'touch' && this.engine.profiles[e.player].team !== this.options.userTeam))) {
       const result = e.type === 'goal' ? (e.team === this.options.userTeam ? 'Tor!' : 'Gegentor.') : e.type === 'catch' ? 'Der Torwart hält.' : e.type === 'out' ? 'Der Ball ist im Aus.' : e.type === 'foul' ? 'Der Schiedsrichter pfeift.' : e.type === 'offside' ? 'Abseits.' : 'Der Gegner ist am Ball.';
-      this.hud.setStatus(`Nach „${this.pendingOutcome}“: ${result}`);
+      this.hud.setStatus(`Nach „${this.pendingOutcome}“: ${result}`, this.wall, STATUS_SECONDS);
       this.pendingOutcome = null;
     }
     if (e.type === 'full-time') this.showFullTime();
   }
 
-  /** Time-lapse only when nothing is at stake: ball in the middle third, no danger in the last seconds. */
+  /** Time-lapse only in really quiet play, and not for a few seconds after anything notable (see time-lapse.ts). */
   private chooseTimeScale(s: MatchSnapshot): number {
-    const danger = Math.abs(s.ball.position.x) > 22 || s.phase === 'decision' || this.wall < this.celebrateUntil;
-    if (danger) this.lastDanger = this.wall;
-    if (s.phase === 'stopped' && this.wall - this.lastDanger > 2) return 3;
-    return this.wall - this.lastDanger > 3 && s.phase === 'in-play' ? 3 : 1;
+    if (atStake(s, this.engine.profiles) || this.wall < this.celebrateUntil) this.lastDanger = this.wall;
+    return this.wall - this.lastDanger > CALM_SECONDS ? 3 : 1;
   }
 
   frame(dt: number): void {
@@ -123,7 +124,7 @@ export class MatchApp {
     const celebrate = this.wall < this.celebrateUntil ? (this.celebrateTeam === 0 ? 1 : -1) : 0;
     this.stadium.update(this.wall, excitement, celebrate);
     this.audio.update(s, this.options.userTeam);
-    this.hud.update(s, this.panel.open ? 1 : this.timeScale);
+    this.hud.update(s, this.panel.open ? 1 : this.timeScale, this.wall);
   }
 
   private showFullTime(): void {
@@ -150,6 +151,11 @@ export class MatchApp {
     this.scene.remove(this.ball.mesh);
   }
 }
+
+/** Wall seconds a status line stays, and a pending decision's line at most until its outcome replaces it. */
+const STATUS_SECONDS = 6, PENDING_SECONDS = 12;
+/** Events after which play runs at normal pace for a few seconds (shots, headers, tackles and throws via their swing). */
+const CALM_BREAKERS = new Set<MatchEvent['type']>(['foul', 'offside', 'out', 'restart', 'in-play', 'goal', 'catch', 'advantage']);
 
 function lerp3(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }, t: number) {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
