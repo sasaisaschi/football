@@ -11,6 +11,11 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), knee = new THREE.Vector3();
 /** Sliding tackle: hip height on the turf and how far the trunk leans back (m, rad). */
 const SLIDE_HIP = 0.18, SLIDE_LEAN = 1.05;
+/** The drawn chest's surface in front of the body axis (torso radius, m). */
+const CHEST_FRONT = 0.21;
+/** Most a header bends the trunk forward; the rest of the reach is neck and a step (rad). Up to 0.8 the players in a duel bowed like a scrum. */
+const HEADER_LEAN = 0.45;
+const trunk = new THREE.Quaternion(), euler = new THREE.Euler();
 
 type Limb = { upper: THREE.Mesh; lower: THREE.Mesh; end: THREE.Mesh | null; l1: number; l2: number };
 
@@ -83,20 +88,29 @@ export class PlayerFigure {
     const right = Math.cos(view.heading) * view.velocity.x - Math.sin(view.heading) * view.velocity.z;
     const forward = Math.sin(view.heading) * view.velocity.x + Math.cos(view.heading) * view.velocity.z;
     const dive = this.profile.role === 'GK' && Math.abs(right) > 3.2 ? Math.sign(right) * Math.min(1.2, (Math.abs(right) - 3.2) * 0.9) : 0;
-    this.body.rotation.set(Math.min(0.25, forward * 0.025), 0, -dive);
-    // Sliding tackle: the trunk leans back about the hip, which sinks towards the turf; the legs follow the boots.
+    // Trunk posture: a rotation of the upper body about a pivot. Running lean and a keeper's dive turn about the
+    // feet; header, chest control and sliding tackle about the hip, which stays on the legs (in a slide it sinks to
+    // the turf). Shoulders and hanging arms turn with the trunk, so the figure stays in one piece.
+    let rx = Math.min(0.25, forward * 0.025), rz = -dive, pivot = 0;
     const hipY = this.hip - (this.hip - SLIDE_HIP) * view.lying;
-    if (view.lying > 0) {
-      const a = SLIDE_LEAN * view.lying;
-      this.body.rotation.set(-a, 0, 0);
-      this.body.position.set(0, hipY - this.hip * Math.cos(a), this.hip * Math.sin(a));
-    } else this.body.position.set(0, 0, 0);
+    if (view.lying > 0) { rx = -SLIDE_LEAN * view.lying; rz = 0; pivot = this.hip; }
     if (view.upperBody) {
-      // Header or chest control: the trunk bends so that forehead or chest is where the physical contact part is.
+      // Bent so that forehead or chest is where the physical contact part is: towards the forehead for a header;
+      // for a chest control only slightly, and backwards as the chest gives with the ball.
       this.root.updateMatrixWorld(true);
       const p = this.root.worldToLocal(tmp.set(view.upperBody.position.x, view.upperBody.position.y, view.upperBody.position.z));
-      this.body.rotation.set(Math.max(-0.6, Math.min(0.9, Math.atan2(p.z, p.y))), 0, Math.max(-0.5, Math.min(0.5, -Math.atan2(p.x, p.y))));
+      const up = p.y - this.hip;
+      const chest = view.upperBody.part === 'chest';
+      rx = chest ? Math.max(-0.35, Math.min(0.15, Math.atan2(p.z - CHEST_FRONT, up))) : Math.max(-0.4, Math.min(HEADER_LEAN, Math.atan2(p.z, up)));
+      rz = Math.max(-0.4, Math.min(0.4, -Math.atan2(p.x, up)));
+      pivot = this.hip;
     }
+    trunk.setFromEuler(euler.set(rx, 0, rz));
+    // Offset so that the pivot point (0, pivot, 0) of the trunk ends up at (0, pivot, 0), lowered to hipY in a slide.
+    const pivotLocal = tmp.set(0, pivot, 0);
+    this.body.quaternion.copy(trunk);
+    this.body.position.copy(pivotLocal).sub(pivotLocal.clone().applyQuaternion(trunk));
+    if (view.lying > 0) this.body.position.y += hipY - this.hip;
     this.gait += dt * (2 + speed * 1.15);
     this.root.updateMatrixWorld(true);
     for (const side of [0, 1] as const) {
@@ -116,7 +130,7 @@ export class PlayerFigure {
     const shoulderY = this.profile.heightM * 0.79;
     for (const side of [0, 1] as const) {
       const s = side === 1 ? 1 : -1;
-      const shoulder = tmp.set(-s * 0.24, shoulderY, 0);
+      const shoulder = tmp.set(-s * 0.24, shoulderY, 0).applyQuaternion(trunk).add(this.body.position);
       let handTarget: THREE.Vector3;
       if (view.hands) {
         handTarget = tmp2.set(view.hands.x, view.hands.y, view.hands.z);
@@ -124,7 +138,7 @@ export class PlayerFigure {
         handTarget.x += -s * 0.08;
       } else {
         const swing = Math.sin(this.gait + (side ? 0 : Math.PI)) * Math.min(0.35, speed * 0.05);
-        handTarget = tmp2.set(-s * 0.32, shoulderY - 0.62, swing + 0.05);
+        handTarget = tmp2.set(-s * 0.32, shoulderY - 0.62, swing + 0.05).applyQuaternion(trunk).add(this.body.position);
       }
       solve(this.arms[side], shoulder, handTarget, -1);
     }
