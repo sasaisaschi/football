@@ -58,6 +58,10 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 | Physikwelt: Ball (Drag-Crisis, Magnus, Rollwiderstand), Tore, Netze, Banden, Tribünenfront, 22 Körper | Implementiert, getestet | `physics/*` |
 | Physische Fußkontakte (Pass, Schuss, Dribbling, Klärung, Ballannahme), Luftlöcher | Implementiert, getestet | `physics/legs.ts`, `ai/execution.ts` |
 | Torwart: Reaktionszeit, Reichweite, Hechtsprung, Fangen als Rapier-Gelenk, Abwurf, Fußspiel bei Rückpass | Implementiert, getestet | `physics/hands.ts`, `ai/keeper.ts` |
+| Kopfball mit echtem Sprung (Körper hebt ab), sichtbar in der Figur; Kopfballtore | Implementiert, getestet | `physics/head.ts`, `ai/heading.ts`, `render/player-view.ts` |
+| Brustannahme (Brust gibt nach, Ball fällt vor die Füße) | Implementiert, getestet | `physics/head.ts` (`CHEST_PART`), `ai/brain.ts` |
+| Einwurf mit beiden Händen von hinten über den Kopf (Regel 15) | Implementiert, getestet | `physics/throw-hands.ts`, `ai/throw-in.ts`, `rules/referee.ts` |
+| Grätsche: liegende Körperkapsel, gestrecktes Bein trifft den Ball, eigene Foulbewertung | Implementiert, getestet | `physics/body.ts`, `physics/legs.ts`, `ai/slide.ts`, `rules/referee.ts` |
 | Wahrnehmung (Blickfeld, Schulterblick, Rauschen, Latenz) | Implementiert, indirekt getestet | `ai/perception.ts` |
 | Positionsspiel 4-3-3, Ballgewinner dezentral, Jockeying, Pressing, Deckung, Ausweichen, Bremsen vor Körpern | Implementiert, getestet (Zonen-Test) | `ai/shape.ts`, `ai/brain.ts` |
 | Schiedsrichter: Tor, Aus, Abseits (Regel-11-Ausnahmen, Seitenwechsel), Fouls, Karten inkl. Notbremse und Gelb-Rot, Elfmeter, Vorteil, Handspiel, Rückpass, 9,15 m | Implementiert, getestet | `rules/referee.ts`, `engine/restarts.ts` |
@@ -80,6 +84,7 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 | 17.10.2026 | Ballverluste: `npm run check` | `tsc` ohne Fehler, **6 Testdateien / 46 Tests bestanden** (neu: Drallkorrektur beim seitlichen Antippen), `vite build` erfolgreich |
 | 17.10.2026 | Ballverluste: `npm run test:browser` | `ok: true`, keine Konsolenfehler/-warnungen, Entscheidungsmoment erschienen, Entscheidung als `user` protokolliert |
 | 17.10.2026 | Ballverluste: `npm run sim -- --silent=false` (2 × 45 min, Seed 2026) und Mehr-Seed-Probe (6 Seeds × 2 × 10 min) | siehe §6 |
+| 19.10.2026 | Fußballmechaniken: `npm run check` | `tsc` ohne Fehler, **19 Testdateien / 99 Tests bestanden** (2 übersprungen: Langsimulation und Schusslabor, nur über eigene Befehle), `vite build` erfolgreich. Neu: Kopfballsprung, Kopfballtor, Einwurf, Brustannahme, Grätsche (Physik, Entscheidung, Schiedsrichter). Kein Browsertest (folgt als nächster Schritt) |
 
 **Testinhalte:** Feldmaße/Regel 9/10, Zufall reproduzierbar; Ballaufprall, Rollweg, keine Kraftakkumulation, Magnus-Richtung, Netz/Pfosten/Latte; Beschleunigungsgrenzen, 22 Körper stabil, bitgleiche Wiederholung; Fußkontakt (Nähe kickt nie, Richtung/Tempo, Spannstoß mit Lift, Richtungsabhängigkeit, Drallkorrektur beim seitlichen Antippen, Fehltreffer mit Drall, Luftloch, Reichweite, Ballannahme); Schiedsrichter (Abseits, Einwurf-Ausnahme, Seitenwechsel, Ecke/Abstoß/Einwurf/Tor/Eigentor, Foul von hinten, Zweikampf ≠ Foul, Notbremse = Rot + Elfmeter, taktisches Foul = Gelb, Gelb-Rot, Mitspieler-Kontakt, Handspiel außerhalb, Rückpass); vollständige Partie ohne ungültige Zustandsübergänge, gleicher Seed = gleiche Partie, kein kollektives Ballverfolgen, Torwart-Ergebnisse variieren, Ballfreigabe innerhalb von 6 s; Director (Moment friert ein, jede angebotene Option wird als echter Schwung ausgeführt, gleiche Lage + andere Entscheidung → anderer Verlauf, gleiche Entscheidung → unterschiedlicher Erfolg, Momente selten und mit Abstand); Quelltext „kein Magnetismus“.
 
@@ -597,7 +602,7 @@ Tests: `head.test.ts` (Ballrichtung ±0,25 rad, Tempo ±30 % für drei Ziele, da
 
 **Volle Partie (`npm run sim -- --silent=false`, Seed 2026):** **3 : 2** (4 Tore nach Schuss, 1 Eigentor). Torschüsse 7 / 6; Pässe 1489 / 61 %; Wechsel 1281; Fouls 27; Einwürfe 81; Rechenzeit 477 s (1,5 ms/Tick).
 
-Offen: In 24 Seeds fiel kein Kopfballtor (real ≈ 15 % der Tore). Die Spielerfigur springt und nickt in der Darstellung nicht sichtbar mit; das Rendern zeigt nur den Ball.
+Offen: In 24 Seeds fiel kein Kopfballtor (real ≈ 15 % der Tore). Die Spielerfigur springt und nickt in der Darstellung nicht sichtbar mit; das Rendern zeigt nur den Ball. *(Beides behoben, siehe „Fehlende Fußballmechaniken“.)*
 
 ### Fouls – Analyse, keine Übernahme (19.10.2026)
 
@@ -713,14 +718,54 @@ Bewertung: Schüsse und Torquote sind wieder nahe an `main` und am realen Wert, 
 
 Bewertung: Tore (3,1) und Eigentore (0,4) sind erstmals nahe am realen Wert (≈ 2,7 bzw. ≈ 0,1). Weiter offen: Schüsse 19/90 (real ≈ 25) bei leicht hoher Torquote.
 
+### Fehlende Fußballmechaniken: Kopfball, Einwurf, Brustannahme, Grätsche (19.10.2026)
+
+Auftrag: die vier fehlenden Grundmechaniken vor dem Browsertest umsetzen, mit der vorhandenen Rapier-Physik und KI, ohne geskriptete Ergebnisse. Gezielte Tests, keine Kalibrierungsserien.
+
+**Kopfball** (`physics/head.ts`, `ai/heading.ts`, `render/player-view.ts`)
+- **Echter Sprung:** Liegt der Kontakt über der Stehhöhe, hebt die Körperkapsel mit v₀ = √(2·g·h) so ab, dass der höchste Punkt mit dem Kontakt zusammenfällt. Schuhe und Figur gehen mit hoch, der Rumpf neigt sich zur Stirn. Test: `head.test.ts` (Körper verlässt den Boden, trifft den Ball oben, landet wieder).
+- **Kopfballtore:** Ein Kopfball aufs Tor wurde von der Ballposition zum Zeitpunkt der Entscheidung aus gezielt; die Flanke war dann noch auf dem Flügel, der Kopfball ging 50° neben das Tor. Jetzt wird vom geplanten Treffpunkt aus entschieden und 1,2 m innerhalb des Pfostens gezielt.
+- Test: `header-goal.test.ts`, Flanke von rechts zum Stürmer am Elfmeterpunkt. Das Tor fällt per Kopf und wird in der Statistik als Kopfballtor gezählt (`goalsFrom.head`).
+
+**Einwurf** (`physics/throw-hands.ts`, `ai/throw-in.ts`, `rules/referee.ts`)
+- Der Einwurf wurde mit dem Fuß ausgeführt.
+- **Ablauf jetzt:** Der Ausführende steht mit dem Körper hinter der Seitenlinie, Blick ins Feld. Kinematische Hände greifen den Ball mit einem echten Gelenk und heben ihn vor dem Körper an, dann über den Kopf nach hinten. Zum Wurf bewegen sie sich entlang der Wurfrichtung über den Kopf nach vorn. Beim Lösen des Gelenks hat der Ball das Tempo der Hände; seine Geschwindigkeit wird nie gesetzt.
+- **Schiedsrichter:** Erst das Loslassen gibt den Ball frei. Fuß- oder Körperkontakte vorher zählen nicht, der Wurf ist kein Handspiel. Der Einwurfpunkt liegt auf der Seitenlinie.
+- **Zwei Fehler im ersten Entwurf**, beide behoben:
+  - Der Ausführende lief von innen über den Ball, und der Schiedsrichter wertete diese Berührung als Einwurf.
+  - Der Ball wurde vom Boden direkt hinter den Kopf gehoben, klemmte zwischen Händen und Rumpf und löste sich aus dem Gelenk.
+- Test: `throw-in.test.ts` (über dem Kopf gehalten, erste Berührung mit den Händen, Körper hinter der Linie, Ball fliegt ins Feld).
+
+**Brustannahme** (`physics/head.ts` mit `CHEST_PART`, `ai/brain.ts`)
+- Dieselbe Kontaktklasse wie der Kopf, mit eigenen Werten: r = 0,15 m, vor dem Rumpf, gibt bis 7 m/s nach, Stoßzahl 0,3.
+- Eigener, ungestörter Ball in Brusthöhe: Brustannahme statt Abprall. Im Zweikampf, wenn der Kopf nicht hinkommt, ebenfalls.
+- Test: `chest.test.ts` (Ball mit 12 m/s, landet mit < 2,5 m/s waagerecht 0,2–1,5 m vor den Füßen; ohne Brust prallt er vom Rumpf ab).
+
+**Grätsche** (`physics/body.ts`, `physics/legs.ts`, `ai/slide.ts`, `rules/referee.ts`)
+- **Körper:** Ausfallschritt entlang des Laufs. Die Rumpfkapsel liegt dabei als niedrige Kapsel (Beine und Hüfte) längs der Grätsche am Boden, bremst auf dem Rasen (5 m/s²), bleibt kurz liegen und richtet sich auf.
+- **Bein:** Der vordere Schuh liegt 0,95 m voraus auf dem Rasen und trifft den Ball mit dem Tempo des Körpers. Der Gegner trifft auf die liegende Kapsel.
+- **Schiedsrichter:**
+  - Ball zuerst gespielt, von vorn oder der Seite: fair.
+  - Gegner ohne Ball getroffen: Foul, ab 5 m/s Gelb („rücksichtslose Grätsche“).
+  - Von hinten mit übermäßiger Härte (ab 7 m/s): Rot.
+- **Wann:** nur gegen einen Ballführer, der auf gleicher Höhe oder vorbei ist und aufs Tor zieht; nie von hinten, nie im eigenen Strafraum.
+  - Im ersten Entwurf (jeder Ballführer, der vorbeikam) grätschten die Verteidiger 120–250-mal pro 90 Minuten.
+  - Jetzt in zwei kurzen Partien ≈ 9/90 (real ≈ 10–15).
+- Tests: `slide.test.ts` (Physik: Bein trifft den Ball, Kapsel liegt am Boden, aufrecht danach; Körperkontakt mit dem Tempo der Grätsche), `ai/slide.test.ts` (wann), `referee.test.ts` (fair, Gelb, Rot).
+
+**Nutzung im Spiel** (eine Partie, 2 × 4 min): 9 Brustannahmen, 11 Kopfballkontakte mit Sprüngen, 3 Einwürfe, alle mit den Händen.
+
+Nicht gemessen: Auswirkungen auf Tore, Schüsse, Fouls und Einwürfe über viele Seeds. Das folgt nach dem Browsertest.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
-- **Spielqualität** (48 Seeds, Stand 19.10.2026): Im Zielbereich sind Passquote ≈ 76 %, Fouls ≈ 23/90, Elfmeter ≈ 0,4/90 und Torschüsse ≈ 22/90. Leicht darüber liegen die Tore (≈ 3,5/90, real ≈ 2,7). Noch nicht realistisch: Pässe ≈ 1360/90 (real ≈ 1000), Einwürfe ≈ 62/90 (real ≈ 45), Eigentore ≈ 1/90, Schüsse nach Kombination ≈ 3/90, lange Bälle über 30 m ≈ 46 %, keine Kopfballtore (siehe §6).
-- Der Körper ist eine aufrechte Kapsel (r = 0,27 m, Reibung 0); eine niedrigere Stoßzahl wurde gemessen und verworfen (§6). Ein streifender Ball behält seine Geschwindigkeit; der Torwart kippt beim Hechtsprung nicht mit dem ganzen Körper, nur die Hände reichen weiter.
+- **Spielqualität** (48 Seeds, Stand nach #29): Im Zielbereich sind Passquote ≈ 76 %, Fouls ≈ 20/90, Elfmeter ≈ 0,4/90, Tore ≈ 3,1/90 (real ≈ 2,7) und Eigentore ≈ 0,4/90. Noch nicht realistisch: Schüsse ≈ 19/90 (real ≈ 25) bei leicht hoher Torquote (13 %), Pässe ≈ 1360/90 (real ≈ 1000), Einwürfe ≈ 55/90 (real ≈ 45), lange Bälle über 30 m ≈ 46 % (siehe §6). Diese Werte stammen von vor Kopfballsprung, Brustannahme, Einwurf und Grätsche; deren Wirkung auf die Statistik ist noch nicht über viele Seeds gemessen.
+- Der Körper ist eine aufrechte Kapsel (r = 0,27 m, Reibung 0), in der Grätsche eine liegende; eine niedrigere Stoßzahl wurde gemessen und verworfen (§6). Ein streifender Ball behält seine Geschwindigkeit; der Torwart kippt beim Hechtsprung nicht mit dem ganzen Körper, nur die Hände reichen weiter.
 - Physik läuft mit ≥ 240 Hz (Rapier-Drallgrenze bei 60 Hz); ≈ 50 % mehr Rechenzeit pro Tick.
-- Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
-- Einwurf wird mit dem Fuß ausgeführt; Abseits nutzt Körpermittelpunkte und nur „spielt den Ball“ als Beteiligung; beim Abseits werden absichtliches Spiel und Abpraller nicht unterschieden (bei der Rückpassregel schon).
-- Fouls nur aus Körperkontakten; Schuh-gegen-Bein-Kontakte (Grätschen) gibt es nicht.
+- Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe nicht modelliert.
+- Kopf und Brust sind je eine Kontaktkugel; die Hände eines Feldspielers sind beim Einwurf ein gemeinsamer Körper mit einem Gelenk, sonst nur Darstellung.
+- Abseits nutzt Körpermittelpunkte und nur „spielt den Ball“ als Beteiligung; beim Abseits werden absichtliches Spiel und Abpraller nicht unterschieden (bei der Rückpassregel schon).
+- Fouls aus Körperkontakten. Bei der Grätsche trifft der Gegner auf die liegende Kapsel (Beine und Hüfte); Schuhe berühren weiterhin nur den Ball, Tritte auf den Fuß gibt es nicht.
 - Der laufende Spielrhythmus der Beine ist rein visuell (ruhende Schuh-Kollider bleiben unter der Hüfte); Kick-Beine folgen exakt der Physik.
 - Ballparameter sind Literaturwerte, keine eigene Messreihe.
 - Bei Kurzspielen zeigt die Uhr echte Simulationszeit (z. B. 2 × 5 min), nicht 90 Minuten.
@@ -741,11 +786,12 @@ Bewertung: Tore (3,1) und Eigentore (0,4) sind erstmals nahe am realen Wert (≈
 8. **Ballverluste** – Drallkorrektur der Schwungplanung, Standbeinbeugung, gerichtete erste Ballmitnahme, Abschirmen, Tackling, Begleittempo beim Stellen, Absichern vor dem Tor, Formation erst bei Ballkontrolle, Weg um den Ball, kalibrierte Pass-/Dribbelbewertung, Torwart verteilt nur, Regel 16 (gemessen über 6 Seeds und volle Partie).
 9. **Torwart** – Rückpassregel nur bei absichtlichem Zuspiel, Torwart verlässt die Linie nur als Erster am Ball, sprintet zurück; Körperdämpfung und Hände vor dem Körper gemessen und verworfen (6 Seeds, Schusslabor).
 10. **Ballbesitz** – Messwerkzeug `npm run probe`, Ursachenanalyse der Ballverluste, Anspielstationen, Körper ab dem Treffpunkt frei, Ballführer-Reichweite für Verteidiger, flacher Pass bevorzugt, Ballhalten/Abschirmen unter Druck, Verteidiger stellt mit Abstand und stochert nicht durch den Gegner, Torwart gegen Distanzschüsse, Schuss ab xG 0,04 (gemessen über 12 Seeds und Schusslabor).
+11. **Fußballmechaniken** – Kopfball mit echtem Sprung und Kopfballtore, Einwurf mit beiden Händen, Brustannahme, Grätsche mit liegender Kapsel und Foulbewertung (gezielte Tests, noch keine Mehr-Seed-Messung).
 
 ## 9. Nächste Schritte
 
-1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Kopfballtore und Brustannahme** – Kopfbälle aufs Tor treffen noch nicht; ohne Brustannahme prallen hohe Bälle unterhalb der Kopfhöhe weiter vom Rumpf ab; Kopfball in der Darstellung zeigen. (b) **Fouls** ≈ 23/90 nach angepasster Schiedsrichterschwelle (§6) – im Zielbereich. (c) **Passquote** ≈ 76 % (§6) – im Zielbereich; offen sind lange Bälle über 30 m und die Passzahl (≈ 1360 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
-2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
+1. **Vollständiger Browsertest** mit den neuen Mechaniken: Spielerlebnis bewerten (Sprünge, Einwurf, Brustannahme, Grätsche sichtbar und glaubwürdig?).
+2. Danach entscheiden, wo nachkalibriert wird (Messung mit `npm run probe`, 48 Seeds): Schüsse (≈ 19/90, real ≈ 25), Häufigkeit von Kopfballtoren, Grätschen und Fouls, Passzahl (≈ 1360 statt ≈ 1000/90), lange Bälle über 30 m.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
 5. Optionale KI-Rollen (Match Analyst, Pub Host) über Adapter; Physik und Spiel bleiben offline lauffähig.
