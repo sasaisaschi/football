@@ -24,6 +24,19 @@ describe('match statistics', () => {
     expect(s.shotsAfterBuildUp).toBe(0);
   });
 
+  it('a first-time pass completes the pass it was played from; an air swing is no pass', () => {
+    const [a, b, c] = [id(0, 'CM'), id(0, 'LCM'), id(0, 'ST')];
+    const s = matchStats([
+      swing(1, a, 'pass'), touch(1.1, a),
+      // b swings before the ball reaches him and plays it on with his first touch.
+      swing(2, b, 'pass'), touch(2.2, b), touch(3, c),
+      // c misses the ball with his swing and takes it on a moment later.
+      swing(4, c, 'pass'), touch(5, c),
+    ], roster);
+    expect(s.passes).toBe(2);
+    expect(s.passesCompleted).toBe(2);
+  });
+
   it('a shot after three completed passes in the move counts as built up, a shot after a ball win does not', () => {
     const [a, b, c] = [id(0, 'CM'), id(0, 'LCM'), id(0, 'ST')], cb = id(1, 'RCB');
     const pass = (t: number, from: number, to: number) => [swing(t, from, 'pass'), touch(t + 0.1, from), touch(t + 1, to)];

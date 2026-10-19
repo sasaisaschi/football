@@ -13,6 +13,7 @@ export type MatchStats = {
   shots: [number, number];
   /** Shots at the end of a move with at least three completed passes since the team won the ball. */
   shotsAfterBuildUp: number;
+  /** Passes struck (swing followed by the boot's contact); completed when a team-mate touches the ball next. */
   passes: number;
   passesCompleted: number;
   possessionChanges: number;
@@ -33,6 +34,9 @@ export type MatchStats = {
   keeperCatches: number;
 };
 
+/** Longest time from a pass swing to the boot's contact for the touch to be that pass (s), as for a deliberate touch. */
+const PASS_CONTACT = 0.7;
+
 export function matchStats(events: readonly MatchEvent[], profiles: readonly PlayerProfile[]): MatchStats {
   const team = (player: number) => profiles[player].team;
   const s: MatchStats = {
@@ -47,18 +51,26 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
   let spellStart = 0, spellSum = 0;
   let lastChange: { from: 0 | 1; time: number } | null = null;
   let openPass: { player: number } | null = null;
+  const kickedSwing = new Map<number, number>();
   let movePasses = 0;
   for (const ev of events) {
     switch (ev.type) {
       case 'swing':
         lastSwing.set(ev.player, { kind: ev.action, time: ev.time });
         if (ev.action === 'shot') { s.shots[team(ev.player)]++; if (movePasses >= 3) s.shotsAfterBuildUp++; }
-        if (ev.action === 'pass') { s.passes++; openPass = { player: ev.player }; }
         break;
       case 'touch': case 'catch': {
         if (openPass && ev.player !== openPass.player) {
           if (team(ev.player) === team(openPass.player)) { s.passesCompleted++; movePasses++; }
           openPass = null;
+        }
+        // A pass counts once the boot has struck the ball: an air swing is no pass, and a receiver's first-time pass
+        // swings before his touch, which first completes the pass he received.
+        const own = lastSwing.get(ev.player);
+        if (ev.type === 'touch' && ev.part === 'boot' && own?.kind === 'pass' && ev.time - own.time < PASS_CONTACT && kickedSwing.get(ev.player) !== own.time) {
+          kickedSwing.set(ev.player, own.time);
+          s.passes++;
+          openPass = { player: ev.player };
         }
         if (prev && team(prev.player) !== team(ev.player)) {
           s.possessionChanges++;

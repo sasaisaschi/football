@@ -629,9 +629,31 @@ Auf Entscheidung des Auftraggebers wurde die Foulschwelle für Kontakte von hint
 
 Angefragt waren 3,5 m/s; damit pfeift der Schiedsrichter nur noch 16 Fouls, deutlich unter dem realen Wert. 3,2 m/s trifft Fouls und Elfmeter fast genau und ist deshalb übernommen. Tests in `referee.test.ts`: Ein Kontakt von hinten mit 4 m/s ist ein Foul, ein leichter mit 3 m/s läuft weiter.
 
+### Passquote: Zählung korrigiert, längere flache Pässe härter (19.10.2026)
+
+Eine Diagnose jedes Passes (8 Seeds, 1316 Pässe: Ziel, Ausführung, wer den Ball als Nächster berührt) ergab, dass die bisher gemeldeten ≈ 60 % zur Hälfte ein Zählfehler waren:
+
+- **Direktpässe zählten als Fehlpass.** Ein Mitspieler, der den Ball direkt weiterspielt, holt aus, bevor er ihn berührt. Die Statistik ersetzte den offenen Pass schon beim Ausholen, sodass der angekommene Pass verloren ging (176 von 1316). Auch Luftschläge (Ausholen ohne Schuhkontakt) zählten als Pass.
+- **Korrektur in `match-stats.ts`:** Ein Pass zählt erst, wenn der Schuh den Ball innerhalb von 0,7 s nach dem Ausholen trifft. Die Berührung des Mitspielers schließt zuerst den angekommenen Pass ab. Am Spiel ändert sich nichts; dieselben Partien ergeben **74 % statt 60 %** und 3,9 statt 2,3 Schüsse nach Kombination. Test: Direktpass und Luftschlag in `match-stats.test.ts` (schlägt auf dem alten Stand fehl).
+
+Echte Schwäche: Pässe ab 15 m wurden fast alle hoch gespielt (15–30 m: 198 von 238) und kamen nur zu 50–62 % an. Grund: Jeder flache Pass war auf 3,5 m/s Ankunftstempo bemessen, ein 25-m-Pass rollte also langsam und galt in der Bewertung als leicht abzufangen. **Neu:** Ab 10 m steigt das Ankunftstempo um 0,15 m/s pro Meter, höchstens 7 m/s (`PASS_ARRIVAL_PER_M`, `PASS_ARRIVAL_MAX` in `options.ts`). Diagnose danach: 15–20 m 62 → 72 %, 20–30 m 50 → 66 %, hohe Bälle in diesem Bereich 198 → 125.
+
+| 48 Seeds (1–24 und 25–48), pro 90 min | Ausgang (korrigiert) | längere Pässe härter |
+| --- | --- | --- |
+| Passquote | 74 % | 76 % |
+| Pässe | 1334 | 1362 |
+| Schüsse (nach Kombination) | 20,7 (2,4) | 22,4 (3,2) |
+| Ballbesitzwechsel | 1226 | 1181 |
+| Tore (Eigentore) | 3,2 (0,9) | 3,7 (1,2) |
+| Einwürfe | 64 | 62 |
+
+Die Tore stiegen auf den Seeds 1–24 von 2,8 auf 3,8, auf 25–48 blieben sie gleich (3,6/3,6), also Rauschen. Gemessen und verworfen: Ein Gegner, dessen Beine in der Passlinie stehen, blockt ohne Reaktionszeit (bisher kostete er einen Pass nur ≈ 20 %, 50 von 96 verlorenen kurzen Pässen wurden in den ersten Metern geblockt). Kurze Pässe kamen in der Diagnose häufiger an (82 → 87 %), über 24 Seeds aber 75 statt 76 % und mehr Ballbesitzwechsel (1239 statt 1163).
+
+Bewertung: Die Passquote liegt mit 76 % im realen Bereich (75–85 %). Offen bleiben lange Bälle über 30 m (≈ 46 %, real ≈ 50–60 %) und mehr Pässe als real (≈ 1360 statt ≈ 1000/90).
+
 ## 7. Bekannte Grenzen / offene Punkte
 
-- **Spielqualität noch nicht realistisch** (12 Seeds, Stand nach #22): Passquote ≈ 59 % (Ziel 75–85 %), Pässe ≈ 1400/90 (real ≈ 1000), Einwürfe ≈ 61/90 (real ≈ 45), Fouls ≈ 31/90 (real ≈ 22), Elfmeter ≈ 1,1/90 (real ≈ 0,3), Eigentore ≈ 1/90, Schüsse nach Kombination selten (≈ 1–2/90). Im Zielbereich: Torschüsse ≈ 24/90, Tore ≈ 3,4/90, Torquote ≈ 11 % (siehe §6).
+- **Spielqualität** (48 Seeds, Stand 19.10.2026): Im Zielbereich sind Passquote ≈ 76 %, Fouls ≈ 23/90, Elfmeter ≈ 0,4/90 und Torschüsse ≈ 22/90. Leicht darüber liegen die Tore (≈ 3,5/90, real ≈ 2,7). Noch nicht realistisch: Pässe ≈ 1360/90 (real ≈ 1000), Einwürfe ≈ 62/90 (real ≈ 45), Eigentore ≈ 1/90, Schüsse nach Kombination ≈ 3/90, lange Bälle über 30 m ≈ 46 %, keine Kopfballtore (siehe §6).
 - Der Körper ist eine aufrechte Kapsel (r = 0,27 m, Reibung 0); eine niedrigere Stoßzahl wurde gemessen und verworfen (§6). Ein streifender Ball behält seine Geschwindigkeit; der Torwart kippt beim Hechtsprung nicht mit dem ganzen Körper, nur die Hände reichen weiter.
 - Physik läuft mit ≥ 240 Hz (Rapier-Drallgrenze bei 60 Hz); ≈ 50 % mehr Rechenzeit pro Tick.
 - Kinematischer Schuh mit unbegrenzter Masse; Volleys über Hüfthöhe und Kopfbälle nicht modelliert.
@@ -660,7 +682,7 @@ Angefragt waren 3,5 m/s; damit pfeift der Schiedsrichter nur noch 16 Fouls, deut
 
 ## 9. Nächste Schritte
 
-1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Kopfballtore und Brustannahme** – Kopfbälle aufs Tor treffen noch nicht; ohne Brustannahme prallen hohe Bälle unterhalb der Kopfhöhe weiter vom Rumpf ab; Kopfball in der Darstellung zeigen. (b) **Fouls** ≈ 23/90 nach angepasster Schiedsrichterschwelle (§6) – im Zielbereich. (c) **Passquote** – weniger Pässe in umkämpften Lagen (≈ 1400 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
+1. Spielqualität (Messung mit `npm run probe -- --seeds 1-12`): (a) **Kopfballtore und Brustannahme** – Kopfbälle aufs Tor treffen noch nicht; ohne Brustannahme prallen hohe Bälle unterhalb der Kopfhöhe weiter vom Rumpf ab; Kopfball in der Darstellung zeigen. (b) **Fouls** ≈ 23/90 nach angepasster Schiedsrichterschwelle (§6) – im Zielbereich. (c) **Passquote** ≈ 76 % (§6) – im Zielbereich; offen sind lange Bälle über 30 m und die Passzahl (≈ 1360 statt ≈ 1000/90). (d) Eigentore (≈ 1/90) und Torwart bei Nahschüssen im Labor zu stark (92 %).
 2. Echte Einwürfe (Hände) und Grätschen als physische Schuh-Bein-Kontakte inkl. Foulbewertung.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
