@@ -1,7 +1,7 @@
 import type { BallAction, PlayerProfile, TeamInstruction, Vec2, Vec3 } from '../engine/types';
 import { PITCH } from '../physics/pitch-geometry';
 import { MAX_ELEVATION } from '../physics/legs';
-import { groundPassSpeed, loftedPassSpeed, loftedTime, rollTime } from './ball-model';
+import { groundPassSpeed, loftedPassSpeed, loftedTime, rollDistance, rollTime } from './ball-model';
 import { toTeam } from './shape';
 
 /** A player's picture of the moment, built from his own perception. */
@@ -35,6 +35,8 @@ const LOFT_MARGIN = 0.3;
  * Measured 0.01–0.04: 0.02 gave the fewest turnovers and the most shots after a passing move.
  */
 const POSSESSION_VALUE = 0.02;
+/** Room beside each post a pass towards the own goal must keep, so that a miss goes out for a corner (m). */
+const POST_MARGIN = 1.5;
 /** Lowest expected-goals value a player still shoots from. */
 const MIN_SHOT_XG = 0.04;
 /** Pressure (0…1, see pressureOn) from which holding the ball is an option. */
@@ -172,6 +174,10 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     if (u > pic.offsideLineU - 0.01 && u > toTeam(sign, from).u) continue; // receiver would be offside
     const td = Math.hypot(target.x - from.x, target.z - from.z);
     const ground = groundPassSpeed(td, Math.min(PASS_ARRIVAL_MAX, PASS_ARRIVAL + PASS_ARRIVAL_PER_M * Math.max(0, td - 10)));
+    // A back-pass to the keeper never goes on a line that rolls on into the goal if he misses it (traced: three of
+    // five own goals). Applied to every pass towards the own goal it also took away safe back-passes in midfield,
+    // where the keeper collects a missed ball: shots fell from 21 to 17 per 90.
+    if (m.profile.role === 'GK' && rollsIntoOwnGoal(sign, from, target, ground)) continue;
     const groundSafe = laneSafety(pic, from, target, ground, false, 0);
     const loftSpeed = loftedPassSpeed(td, Math.min(MAX_ELEVATION, 0.42));
     // A dropping ball is much harder to bring down than a rolling one (measured: about half are kept).
@@ -246,6 +252,16 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     note: 'klären',
   });
   return out.sort((a, b) => b.value - a.value);
+}
+
+/** Would a ground pass from `a` towards `b` at v0, missed by its receiver, still roll over the own goal line between the posts? */
+function rollsIntoOwnGoal(sign: 1 | -1, a: Vec2, b: Vec2, v0: number): boolean {
+  const lineX = -sign * PITCH.halfLength;
+  const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
+  if (d < 1e-6 || dx * -sign <= 0) return false;
+  const s = ((lineX - a.x) / dx) * d;
+  if (Math.abs(a.z + (dz / d) * s) > PITCH.goalHalfWidth + POST_MARGIN) return false;
+  return rollDistance(v0) > s;
 }
 
 /**

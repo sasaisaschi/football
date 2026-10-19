@@ -690,6 +690,29 @@ Der nachhängende Schuh hatte wie ein zusätzlicher Schussfehler proportional zu
 
 Bewertung: Schüsse und Torquote sind wieder nahe an `main` und am realen Wert, Einwürfe besser. Offen und Hindernis für die Übernahme: Eigentore (1,65/90, real ≈ 0,1 pro Partie) schwanken stark zwischen den Seed-Hälften und treiben die Tore auf 4,4/90. Sie lagen schon auf `main` zu hoch.
 
+**Eigentore.** Protokoll aller Eigentore (24 Seeds, je die letzten sechs Berührungen):
+- **Drei von fünf** waren Rückpässe aus 15–20 m mit 10–15 m/s auf einer Linie direkt ins Tor. Der Torwart lenkte sie mit dem Körper ins Netz oder erreichte sie nicht. Echte Verteidiger spielen zum Torwart seitlich am Pfosten vorbei, ein Fehler gibt dann Ecke statt Tor.
+- **Eines** war ein Schuss, den der Torwart mit dem Körper ins Tor lenkte. Der Schiedsrichter wertete jede letzte Berührung der Verteidiger als Eigentor; statistisch ist das ein Tor des Schützen.
+- **Eines** war ein Abpraller eines Blocks mit 33 m/s, nicht behoben.
+
+**Neu:**
+- `rollsIntoOwnGoal` in `options.ts`: Ein Pass zum eigenen Torwart, der bei einem Fehler noch zwischen den Pfosten (± 1,5 m) über die Linie rollen würde, ist keine Option mehr.
+  - Für alle Pässe Richtung eigenes Tor angewandt, nahm die Regel auch sichere Rückpässe im Mittelfeld weg: Schüsse 17/90.
+- **Schiedsrichter:** Lenkt die verteidigende Mannschaft den Ball nur mit Körper oder Händen ins Tor, innerhalb von 1,5 s nach einer Berührung der Angreifer, zählt das als deren Tor (`DEFLECTION_WINDOW`).
+- Tests: `options.test.ts` (Rückpass auf das Tor, Rückpass seitlich) und `referee.test.ts` schlagen auf dem alten Stand fehl.
+
+| pro 90 min (48 Seeds) | main | + Tempoanteil | + Eigentor-Korrekturen (Regel nur zum Torwart) |
+| --- | --- | --- | --- |
+| Eigentore | 1,2 | 1,65 | **0,4** |
+| Tore (aus Schüssen) | 3,7 (2,4) | 4,4 (2,7) | **3,1** (2,55) |
+| Schüsse | 22,4 | 21,4 | 19,3 (21,0 / 17,6) |
+| Torquote | 10,7 % | 12,6 % | 13 % |
+| Einwürfe | 62 | 55 | 55 |
+| Fouls | 22,8 | 19,5 | 20,4 |
+| Passquote | 76 % | 76,5 % | 75,5 % |
+
+Bewertung: Tore (3,1) und Eigentore (0,4) sind erstmals nahe am realen Wert (≈ 2,7 bzw. ≈ 0,1). Weiter offen: Schüsse 19/90 (real ≈ 25) bei leicht hoher Torquote.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität** (48 Seeds, Stand 19.10.2026): Im Zielbereich sind Passquote ≈ 76 %, Fouls ≈ 23/90, Elfmeter ≈ 0,4/90 und Torschüsse ≈ 22/90. Leicht darüber liegen die Tore (≈ 3,5/90, real ≈ 2,7). Noch nicht realistisch: Pässe ≈ 1360/90 (real ≈ 1000), Einwürfe ≈ 62/90 (real ≈ 45), Eigentore ≈ 1/90, Schüsse nach Kombination ≈ 3/90, lange Bälle über 30 m ≈ 46 %, keine Kopfballtore (siehe §6).

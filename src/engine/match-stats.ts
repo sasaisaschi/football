@@ -91,7 +91,11 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
         s.score[ev.team]++;
         if (ev.ownGoal) s.ownGoals++;
         if (ev.ownGoal || !prev) s.goalsFrom.own++;
-        else {
+        else if (team(prev.player) !== ev.team && ev.scorer !== null) {
+          // Deflected in by the defending side: credited to the attacker's last swing.
+          const sw = lastSwing.get(ev.scorer);
+          s.goalsFrom[sw && ev.time - sw.time < 3 ? sw.kind : 'none']++;
+        } else {
           const sw = lastSwing.get(prev.player);
           s.goalsFrom[prev.part !== 'boot' ? prev.part : sw && prev.time - sw.time < 1 ? sw.kind : 'none']++;
         }

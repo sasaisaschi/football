@@ -61,6 +61,20 @@ describe('Laws 9, 10, 16, 17 – ball out and goals', () => {
     expect(ref.checkBall({ x: PITCH.halfLength + r + 0.05, y: 1, z: 0 }, 1)).toMatchObject({ type: 'goal', team: 0, ownGoal: true });
     expect(ref.checkBall({ x: 0, y: r, z: -(PITCH.halfWidth + r + 0.05) }, 1)).toMatchObject({ kind: 'throw-in', team: 0 });
   });
+
+  it('a shot the keeper only deflects into his goal counts for the shooter, a back-pass he lets in is an own goal', () => {
+    const r = BALL_SPEC.radius;
+    const goal = { x: PITCH.halfLength + r + 0.05, y: 1, z: 0 };
+    const ref = new Referee(roster);
+    ref.pendingRestart = null;
+    ref.onBallContact(touch(id(0, 'ST'), 38, 2, 'boot', 10), 1, positions());
+    ref.onBallContact(touch(id(1, 'GK'), 51, 0.5, 'body', 10.6), 1, positions());
+    expect(ref.checkBall(goal, 1)).toMatchObject({ type: 'goal', team: 0, scorer: id(0, 'ST'), ownGoal: false });
+    // A back-pass the keeper lets in off his body: the attackers last touched the ball long before.
+    ref.onBallContact(touch(id(1, 'RCB'), 35, 3, 'boot', 20), 1, positions());
+    ref.onBallContact(touch(id(1, 'GK'), 50, 0.5, 'body', 21.5), 1, positions());
+    expect(ref.checkBall(goal, 1)).toMatchObject({ type: 'goal', team: 0, scorer: id(1, 'GK'), ownGoal: true });
+  });
 });
 
 describe('Law 12 – fouls and misconduct', () => {
