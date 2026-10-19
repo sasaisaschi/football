@@ -85,6 +85,8 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 | 17.10.2026 | Ballverluste: `npm run test:browser` | `ok: true`, keine Konsolenfehler/-warnungen, Entscheidungsmoment erschienen, Entscheidung als `user` protokolliert |
 | 17.10.2026 | Ballverluste: `npm run sim -- --silent=false` (2 × 45 min, Seed 2026) und Mehr-Seed-Probe (6 Seeds × 2 × 10 min) | siehe §6 |
 | 19.10.2026 | Fußballmechaniken: `npm run check` | `tsc` ohne Fehler, **19 Testdateien / 99 Tests bestanden** (2 übersprungen: Langsimulation und Schusslabor, nur über eigene Befehle), `vite build` erfolgreich. Neu: Kopfballsprung, Kopfballtor, Einwurf, Brustannahme, Grätsche (Physik, Entscheidung, Schiedsrichter). Kein Browsertest (folgt als nächster Schritt) |
+| 19.10.2026 | Browsertest nach #30: `npm run test:browser` (Chrome, Intel Iris Xe, D3D11) | `ok: true`, keine Konsolenfehler/-warnungen, Uhr läuft, Entscheidungsmoment erschienen, eingefroren, als `user` protokolliert. **55,7 FPS** vor, **59,3 FPS** nach den Korrekturen |
+| 19.10.2026 | Browser-Aufnahme der neuen Mechaniken (Seeds 11, 23; je 2 × 6 min; Vollbild und Nahaufnahme bei jedem Ereignis) | Kopfballsprünge, Brustannahmen, Einwürfe und Grätschen im laufenden Spiel aufgenommen, keine Laufzeitfehler. Gefunden und behoben: Einwurf-Endlosschleife, zerfallende Figur bei Rumpfneigung (§6) |
 
 **Testinhalte:** Feldmaße/Regel 9/10, Zufall reproduzierbar; Ballaufprall, Rollweg, keine Kraftakkumulation, Magnus-Richtung, Netz/Pfosten/Latte; Beschleunigungsgrenzen, 22 Körper stabil, bitgleiche Wiederholung; Fußkontakt (Nähe kickt nie, Richtung/Tempo, Spannstoß mit Lift, Richtungsabhängigkeit, Drallkorrektur beim seitlichen Antippen, Fehltreffer mit Drall, Luftloch, Reichweite, Ballannahme); Schiedsrichter (Abseits, Einwurf-Ausnahme, Seitenwechsel, Ecke/Abstoß/Einwurf/Tor/Eigentor, Foul von hinten, Zweikampf ≠ Foul, Notbremse = Rot + Elfmeter, taktisches Foul = Gelb, Gelb-Rot, Mitspieler-Kontakt, Handspiel außerhalb, Rückpass); vollständige Partie ohne ungültige Zustandsübergänge, gleicher Seed = gleiche Partie, kein kollektives Ballverfolgen, Torwart-Ergebnisse variieren, Ballfreigabe innerhalb von 6 s; Director (Moment friert ein, jede angebotene Option wird als echter Schwung ausgeführt, gleiche Lage + andere Entscheidung → anderer Verlauf, gleiche Entscheidung → unterschiedlicher Erfolg, Momente selten und mit Abstand); Quelltext „kein Magnetismus“.
 
@@ -757,6 +759,37 @@ Auftrag: die vier fehlenden Grundmechaniken vor dem Browsertest umsetzen, mit de
 
 Nicht gemessen: Auswirkungen auf Tore, Schüsse, Fouls und Einwürfe über viele Seeds. Das folgt nach dem Browsertest.
 
+### Browsertest und Spielerlebnis nach den neuen Mechaniken (19.10.2026)
+
+**Automatischer Browsertest** (`npm run test:browser`):
+- Keine Fehler, Uhr läuft, Entscheidungsmoment friert ein, Klick wird ausgeführt.
+- 55,7 FPS, nach den Korrekturen 59,3 FPS.
+
+**Aufnahme der Mechaniken:** Ein Hilfsskript (nicht eingecheckt) beobachtet das laufende Spiel in Chrome. Bei Kopfballsprung, Brustannahme, Einwurf und Grätsche hält es die Simulation kurz an und nimmt das Fernsehbild sowie zwei Nahaufnahmen auf.
+
+**Zwei Fehler gefunden und behoben:**
+1. **Einwurf-Endlosschleife.**
+   - Fehler: Ein Einwurf entlang der Linie verließ die Hände knapp außerhalb der Seitenlinie (|z| ≈ 34,1–34,2 m). Der Schiedsrichter gab sofort wieder Einwurf, die Mannschaften warfen sich den Ball minutenlang hin und her (Seed 23 ab Sekunde 24).
+   - Jetzt nach Regel 15: Der Ball ist erst im Spiel, wenn er das Feld betritt. Landet er draußen, ohne hineinzukommen, wird der Einwurf von derselben Mannschaft wiederholt.
+   - Danach 9–11 Einwürfe je 2 × 6 min (3 Seeds). Test in `referee.test.ts`.
+2. **Figur zerfiel bei Rumpfneigung.**
+   - Fehler: Bei Kopfball und Brustannahme kippte der Rumpf um den Bodenpunkt. Hüfte und Rumpf rutschten von den Beinen, die Arme hingen an den Schultern der aufrechten Haltung.
+   - Jetzt kippt der Rumpf um die Hüfte, Schultern und Arme gehen mit.
+   - Bei der Brustannahme lehnt der Spieler leicht zurück statt sich vorzubeugen. Der Kopfball neigt den Rumpf höchstens 0,45 rad; bis 0,8 sahen Kopfballduelle aus wie ein Gedränge.
+
+**Bewertung des Spielerlebnisses:**
+- **Grätsche:** gut erkennbar. Der Spieler liegt auf dem Rasen, das Bein ist zum Ball gestreckt.
+- **Einwurf:** in der Nahaufnahme glaubwürdig (Ball mit beiden Händen über dem Kopf, Füße auf der Linie, Blick ins Feld). Im Fernsehbild aber **nicht zu sehen**: Die Kamera zeigt die nahe Seitenlinie nicht (alle Werfer unterhalb des Bildrands), und ruhende Bälle laufen im Zeitraffer ×3.
+- **Kopfball:** Duelle sind sichtbar. Sprünge von 13–16 cm sind aus der Fernsehperspektive kaum zu erkennen.
+- **Brustannahme:** physikalisch vorhanden, im Fernsehbild kaum wahrnehmbar.
+- **Allgemein:**
+  - Die meiste Zeit läuft Zeitraffer ×3, auch bei Zweikämpfen im Mittelfeld.
+  - Eine Statusmeldung („Nach ‚Ordnung halten': Der Gegner ist am Ball.“) bleibt minutenlang stehen.
+  - In drei Partien zu 2 × 6 min fiel kein Tor.
+  - Nach einem Einwurf prallt der Ball meist vom Körper des Empfängers ab (13 von 24); die Brustannahme greift dabei selten.
+
+Diese Punkte sind nicht verändert worden. Sie sind Kandidaten für die Nachkalibrierung und die Darstellung (§9).
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität** (48 Seeds, Stand nach #29): Im Zielbereich sind Passquote ≈ 76 %, Fouls ≈ 20/90, Elfmeter ≈ 0,4/90, Tore ≈ 3,1/90 (real ≈ 2,7) und Eigentore ≈ 0,4/90. Noch nicht realistisch: Schüsse ≈ 19/90 (real ≈ 25) bei leicht hoher Torquote (13 %), Pässe ≈ 1360/90 (real ≈ 1000), Einwürfe ≈ 55/90 (real ≈ 45), lange Bälle über 30 m ≈ 46 % (siehe §6). Diese Werte stammen von vor Kopfballsprung, Brustannahme, Einwurf und Grätsche; deren Wirkung auf die Statistik ist noch nicht über viele Seeds gemessen.
@@ -790,8 +823,10 @@ Nicht gemessen: Auswirkungen auf Tore, Schüsse, Fouls und Einwürfe über viele
 
 ## 9. Nächste Schritte
 
-1. **Vollständiger Browsertest** mit den neuen Mechaniken: Spielerlebnis bewerten (Sprünge, Einwurf, Brustannahme, Grätsche sichtbar und glaubwürdig?).
-2. Danach entscheiden, wo nachkalibriert wird (Messung mit `npm run probe`, 48 Seeds): Schüsse (≈ 19/90, real ≈ 25), Häufigkeit von Kopfballtoren, Grätschen und Fouls, Passzahl (≈ 1360 statt ≈ 1000/90), lange Bälle über 30 m.
+1. Entscheiden, was aus dem Browsertest (§6) angegangen wird:
+   - **Darstellung:** Kamera zeigt die nahe Seitenlinie, kein Zeitraffer bei ruhendem Ball und Zweikämpfen, Statusmeldung veraltet, Kopfballsprung und Brustannahme aus der Fernsehperspektive kaum sichtbar.
+   - **Spiel:** Ballannahme nach dem Einwurf.
+2. Nachkalibrierung (Messung mit `npm run probe`, 48 Seeds): Schüsse (≈ 19/90, real ≈ 25), Tore (in drei kurzen Browserpartien keines), Häufigkeit von Kopfballtoren, Grätschen und Fouls, Passzahl (≈ 1360 statt ≈ 1000/90), lange Bälle über 30 m.
 3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
 5. Optionale KI-Rollen (Match Analyst, Pub Host) über Adapter; Physik und Spiel bleiben offline lauffähig.
