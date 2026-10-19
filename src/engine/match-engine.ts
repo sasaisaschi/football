@@ -4,7 +4,7 @@ import type { Truth } from '../ai/perception';
 import { PlayerBody } from '../physics/body';
 import { KeeperHands } from '../physics/hands';
 import { Legs } from '../physics/legs';
-import { Head } from '../physics/head';
+import { CHEST_PART, Head } from '../physics/head';
 import { ThrowHands } from '../physics/throw-hands';
 import { throwInStand } from '../ai/throw-in';
 import { PITCH, attackSign, BALL_SPEC } from '../physics/pitch-geometry';
@@ -34,6 +34,8 @@ export class MatchEngine {
   readonly bodies: PlayerBody[] = [];
   readonly legs: Legs[] = [];
   readonly heads: Head[] = [];
+  /** The chest of each player for chest control: the same planned-contact part as the forehead. */
+  readonly chests: Head[] = [];
   readonly brains: PlayerBrain[] = [];
   readonly keepers = new Map<number, KeeperSkill>();
   readonly referee: Referee;
@@ -73,7 +75,12 @@ export class MatchEngine {
       this.physics.registerCollider(head.collider, p.id, 'head');
       this.physics.registerKinematic(head);
       this.heads.push(head);
-      const brain = new PlayerBrain(p, body, legs, createRng(config.seed * 131 + p.id), head);
+      const chest = new Head(this.physics.world, body, CHEST_PART);
+      // A chest touch is a touch with the body (no handball, no deliberate kick).
+      this.physics.registerCollider(chest.collider, p.id, 'body');
+      this.physics.registerKinematic(chest);
+      this.chests.push(chest);
+      const brain = new PlayerBrain(p, body, legs, createRng(config.seed * 131 + p.id), head, chest);
       this.bodies.push(body);
       this.legs.push(legs);
       this.brains.push(brain);
@@ -113,6 +120,7 @@ export class MatchEngine {
       this.bodies[p.id].place(pos.x, pos.z, sign > 0 ? Math.PI / 2 : -Math.PI / 2);
       this.legs[p.id].snap();
       this.heads[p.id].reset();
+      this.chests[p.id].reset();
       this.keepers.get(p.id)?.hands.snap();
     }
     this.placeDeadBall(0, 0);
@@ -376,6 +384,7 @@ export class MatchEngine {
     body.collider.setEnabled(false);
     for (const b of this.legs[player].boots) b.collider.setEnabled(false);
     this.heads[player].reset();
+    this.chests[player].reset();
     // He walks off: placed beside the pitch, outside the boards, where he no longer takes part.
     body.place(0, (PITCH.halfWidth + PITCH.runOff + 4) * (this.profiles[player].team === 0 ? 1 : -1), 0);
     body.body.setEnabled(false);
@@ -448,7 +457,9 @@ export class MatchEngine {
 
   private upperBodyView(id: number): PlayerView['upperBody'] {
     const head = this.heads[id].active();
-    return head ? { part: 'head', position: head } : null;
+    if (head) return { part: 'head', position: head };
+    const chest = this.chests[id].active();
+    return chest ? { part: 'chest', position: chest } : null;
   }
 
   teamName(team: TeamId): string {
