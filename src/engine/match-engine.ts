@@ -4,7 +4,9 @@ import type { Truth } from '../ai/perception';
 import { PlayerBody } from '../physics/body';
 import { KeeperHands } from '../physics/hands';
 import { Legs } from '../physics/legs';
-import { Head } from '../physics/head';
+import { CHEST_PART, Head } from '../physics/head';
+import { ThrowHands } from '../physics/throw-hands';
+import { throwInStand } from '../ai/throw-in';
 import { PITCH, attackSign, BALL_SPEC } from '../physics/pitch-geometry';
 import { PHYSICS_DT, PhysicsWorld, type Contact, type ContactPart } from '../physics/world';
 import { Referee, penaltySpot, restartDistance, type Decision, type PlayerState } from '../rules/referee';
@@ -13,7 +15,7 @@ import { createRng, type Rng } from './rng';
 import { createRoster, TEAMS } from './rosters';
 import { chooseTaker, PLACE_DELAY, restartReady, type RestartState } from './restarts';
 import type {
-  BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, RestartKind, TeamId, TeamInstruction, Vec2,
+  BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, PlayerView, RestartKind, TeamId, TeamInstruction, Vec2,
 } from './types';
 
 export type MatchConfig = { seed: number; halfMinutes: number; rosterSeed?: number };
@@ -32,9 +34,13 @@ export class MatchEngine {
   readonly bodies: PlayerBody[] = [];
   readonly legs: Legs[] = [];
   readonly heads: Head[] = [];
+  /** The chest of each player for chest control: the same planned-contact part as the forehead. */
+  readonly chests: Head[] = [];
   readonly brains: PlayerBrain[] = [];
   readonly keepers = new Map<number, KeeperSkill>();
   readonly referee: Referee;
+  /** The hands of whoever takes a throw-in. */
+  readonly throwHands: ThrowHands;
   readonly events: MatchEvent[] = [];
   readonly score: [number, number] = [0, 0];
   readonly rng: Rng;
@@ -69,7 +75,12 @@ export class MatchEngine {
       this.physics.registerCollider(head.collider, p.id, 'head');
       this.physics.registerKinematic(head);
       this.heads.push(head);
-      const brain = new PlayerBrain(p, body, legs, createRng(config.seed * 131 + p.id), head);
+      const chest = new Head(this.physics.world, body, CHEST_PART);
+      // A chest touch is a touch with the body (no handball, no deliberate kick).
+      this.physics.registerCollider(chest.collider, p.id, 'body');
+      this.physics.registerKinematic(chest);
+      this.chests.push(chest);
+      const brain = new PlayerBrain(p, body, legs, createRng(config.seed * 131 + p.id), head, chest);
       this.bodies.push(body);
       this.legs.push(legs);
       this.brains.push(brain);
@@ -81,6 +92,8 @@ export class MatchEngine {
       }
     }
     this.referee = new Referee(this.profiles);
+    this.throwHands = new ThrowHands(this.physics.world, this.physics.ball);
+    this.physics.registerKinematic(this.throwHands);
     this.setupKickoff(0);
   }
 
@@ -107,6 +120,7 @@ export class MatchEngine {
       this.bodies[p.id].place(pos.x, pos.z, sign > 0 ? Math.PI / 2 : -Math.PI / 2);
       this.legs[p.id].snap();
       this.heads[p.id].reset();
+      this.chests[p.id].reset();
       this.keepers.get(p.id)?.hands.snap();
     }
     this.placeDeadBall(0, 0);
@@ -118,6 +132,7 @@ export class MatchEngine {
   private beginRestart(kind: RestartKind, team: TeamId, spot: Vec2, delay: number): void {
     this.phase = this.phase === 'full-time' ? 'full-time' : 'stopped';
     const taker = chooseTaker(kind, team, spot, this.profiles, this.positions(), this.referee.sentOff);
+    this.throwHands.reset();
     this.restart = { kind, team, spot, placeAt: this.time + delay, placed: false, placedAt: 0, taker };
     for (const b of this.brains) { b.intent = null; b.userIntent = null; }
   }
@@ -125,6 +140,7 @@ export class MatchEngine {
   /** The referee's hand: a dead ball is put on the restart spot. Never used while the ball is in play. */
   private placeDeadBall(x: number, z: number): void {
     for (const k of this.keepers.values()) k.hands.release();
+    this.throwHands.reset();
     this.heldBy = null;
     const ball = this.physics.ball;
     ball.resetForces(true);
@@ -197,14 +213,16 @@ export class MatchEngine {
       const body = this.bodies[p.id];
       body.drive(out.command, PHYSICS_DT, out.effort);
       if (out.swing) {
+        if (out.swing.action.kind === 'throw') this.throwHands.throwBall(out.swing.action.velocity);
         this.lastSwing.set(p.id, { kind: out.swing.action.kind, time: this.time });
         this.emit({ type: 'swing', player: p.id, action: out.swing.action.kind, source: out.swing.source });
       }
       const move = this.brains[p.id].userIntent;
-      states.set(p.id, { pos: body.position(), vel: body.velocity(), heading: body.heading, hasTacticalFoulIntent: move?.type === 'move' && move.action.kind === 'tactical-foul' });
+      states.set(p.id, { pos: body.position(), vel: body.velocity(), heading: body.heading, hasTacticalFoulIntent: move?.type === 'move' && move.action.kind === 'tactical-foul', sliding: body.down() });
     }
     const contacts = this.physics.step();
     this.handleContacts(contacts, states);
+    if (this.throwHands.takeRelease()) this.releaseThrow();
     if (this.phase === 'in-play') this.apply(this.referee.checkBall(this.ballPos(), this.half));
     this.checkClock();
   }
@@ -234,6 +252,7 @@ export class MatchEngine {
       restart: r ? {
         kind: r.kind, team: r.team, taker: r.taker, spot: r.spot, minDistance: restartDistance(r.kind), ownHalfOnly: r.kind === 'kickoff',
         ready: r.placed && restartReady(r, this.profiles, this.positions(), t => this.sign(t), this.time, this.referee.sentOff),
+        held: r.kind === 'throw-in' && this.throwHands.ready() && this.throwHands.thrower() === this.bodies[r.taker],
       } : null,
       handsAllowed: this.phase === 'in-play' && this.referee.keeperReleased !== p.id && !this.isBackPass(p.team),
       ballHeldBy: this.heldBy,
@@ -268,8 +287,24 @@ export class MatchEngine {
     } else if (r.placed) {
       const b = this.physics.ball.translation();
       // Knocked away before being played: the referee puts it back.
-      if (Math.hypot(b.x - r.spot.x, b.z - r.spot.z) > 0.8 && this.referee.pendingRestart) this.placeDeadBall(r.spot.x, r.spot.z);
+      if (Math.hypot(b.x - r.spot.x, b.z - r.spot.z) > 0.8 && this.referee.pendingRestart && !this.throwHands.busy()) this.placeDeadBall(r.spot.x, r.spot.z);
+      // Throw-in: once the taker stands behind the line, his hands take the ball.
+      if (r.kind === 'throw-in' && !this.throwHands.busy()) {
+        const { stand, infield } = throwInStand(r.spot);
+        const p = this.bodies[r.taker].position();
+        if (Math.hypot(p.x - stand.x, p.z - stand.z) < 0.4) this.throwHands.begin(this.bodies[r.taker], infield);
+      }
     }
+  }
+
+  /** The ball has left the thrower's hands: for the referee that is the throw-in's touch (Law 15). */
+  private releaseThrow(): void {
+    const r = this.restart;
+    if (!r) return;
+    const b = this.ballPos(), v = this.physics.ball.linvel();
+    this.emit({ type: 'touch', player: r.taker, part: 'hands', ballSpeed: Math.hypot(v.x, v.y, v.z), position: b });
+    const decisions = this.referee.onBallContact({ player: r.taker, team: r.team, part: 'hands', time: this.time, position: b, deliberate: false }, this.half, this.positions());
+    for (const d of decisions) this.apply(d);
   }
 
   private handleContacts(contacts: Contact[], states: Map<number, PlayerState>): void {
@@ -328,7 +363,8 @@ export class MatchEngine {
         return;
       case 'restart':
         if (d.reason === 'out') this.emit({ type: 'out', restart: d.kind, team: d.team, position: d.spot });
-        this.beginRestart(d.kind, d.team, clampSpot(d.spot), PLACE_DELAY[d.kind]);
+        // A throw-in is taken from the touchline itself; every other restart spot lies inside the pitch.
+        this.beginRestart(d.kind, d.team, d.kind === 'throw-in' ? { x: clampSpot(d.spot).x, z: d.spot.z } : clampSpot(d.spot), PLACE_DELAY[d.kind]);
         return;
       case 'foul': {
         this.emit({ type: 'foul', offender: d.offender, victim: d.victim, position: d.spot, penalty: d.penalty, card: d.card, reason: d.reason });
@@ -348,6 +384,7 @@ export class MatchEngine {
     body.collider.setEnabled(false);
     for (const b of this.legs[player].boots) b.collider.setEnabled(false);
     this.heads[player].reset();
+    this.chests[player].reset();
     // He walks off: placed beside the pitch, outside the boards, where he no longer takes part.
     body.place(0, (PITCH.halfWidth + PITCH.runOff + 4) * (this.profiles[player].team === 0 ? 1 : -1), 0);
     body.body.setEnabled(false);
@@ -405,7 +442,9 @@ export class MatchEngine {
           heading: body.heading,
           boots: [legs.bootWorld(0), legs.bootWorld(1)],
           swingingBoot: legs.swing ? legs.swing.plan.side : -1,
-          hands: keeper ? keeper.hands.world3() : null,
+          hands: keeper ? keeper.hands.world3() : this.throwHands.thrower() === body ? this.throwHands.world3() : null,
+          upperBody: this.upperBodyView(p.id),
+          lying: body.lying(),
           booked: this.referee.sentOff.has(p.id) ? 'red' : this.referee.yellow.has(p.id) ? 'yellow' : 'none',
           sentOff: this.referee.sentOff.has(p.id),
         };
@@ -415,6 +454,13 @@ export class MatchEngine {
       restart: this.restart ? { kind: this.restart.kind, team: this.restart.team, position: this.restart.spot } : null,
       moment: this.moment,
     };
+  }
+
+  private upperBodyView(id: number): PlayerView['upperBody'] {
+    const head = this.heads[id].active();
+    if (head) return { part: 'head', position: head };
+    const chest = this.chests[id].active();
+    return chest ? { part: 'chest', position: chest } : null;
   }
 
   teamName(team: TeamId): string {

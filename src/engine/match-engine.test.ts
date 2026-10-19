@@ -44,8 +44,8 @@ describe('autonomous 11 v 11 match', () => {
         for (const p of e.snapshot().players) {
           if (p.sentOff) continue;
           expect(Math.hypot(p.velocity.x, p.velocity.z)).toBeLessThan(11);
-          // Bodies stay on the turf (a capsule may ride up a few cm over the ball, never fly).
-          expect(Math.abs(p.position.y - e.bodies[p.id].height / 2)).toBeLessThan(0.3);
+          // Bodies stay on the turf: a header jump lifts them up to 35 cm, a capsule may ride a few cm over the ball, they never fly.
+          expect(Math.abs(p.position.y - e.bodies[p.id].height / 2)).toBeLessThan(0.42);
         }
       }
     }

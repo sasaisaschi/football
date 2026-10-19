@@ -10,6 +10,11 @@ const HEADER_SHOT_RANGE = 14;
 const CLEAR_PACE = 13, CLEAR_RISE = 0.6;
 /** Pace of a header at goal (m/s); the head adds little to a ball's own pace. */
 const HEADER_SHOT_PACE = 12;
+/**
+ * A header at goal is aimed this far inside the post (m). A forehead places the ball less precisely than a boot:
+ * aimed 0.7 m inside, crosses headed from the penalty spot went just wide of the far post.
+ */
+const HEADER_POST_MARGIN = 1.2;
 /** A team-mate this close is a target for a headed lay-off (m). */
 const LAY_OFF = { min: 5, max: 18 } as const;
 /** An opponent this close makes a ball in the air a contest: it is headed instead of waited for (m). */
@@ -21,9 +26,10 @@ export type HeaderChoice = { velocity: Vec3; purpose: 'clear' | 'shot' | 'lay-of
  * What a player does with a ball he meets with his head, from his own picture: clear it when the opponents played
  * it into our half, go for goal in their area, lay it off to a free team-mate nearby, or else head it down to his
  * feet. Returns the velocity the ball should leave his head with; the head and the contact decide the rest.
+ * Everything is judged from `at`, where the ball will be met: the header is chosen while the ball is still on its
+ * way, and aimed from where it was then a header at goal went 50° wide of it.
  */
-export function chooseHeader(pic: Picture, ownBall: boolean, contactHeight: number): HeaderChoice {
-  const at: Vec2 = { x: pic.ball.pos.x, z: pic.ball.pos.z };
+export function chooseHeader(pic: Picture, ownBall: boolean, at: Vec2, contactHeight: number): HeaderChoice {
   const sign = pic.sign;
   const u = toTeam(sign, at).u;
   const goalX = sign * PITCH.halfLength;
@@ -35,7 +41,7 @@ export function chooseHeader(pic: Picture, ownBall: boolean, contactHeight: numb
   if (Math.hypot(goalX - at.x, at.z) < HEADER_SHOT_RANGE) {
     const keeper = pic.opponents.find(o => o.profile.role === 'GK');
     const side = keeper && keeper.pos.z > at.z * 0.25 ? -1 : 1;
-    const aim = { x: goalX, z: side * (PITCH.goalHalfWidth - 0.7) };
+    const aim = { x: goalX, z: side * (PITCH.goalHalfWidth - HEADER_POST_MARGIN) };
     const d = Math.hypot(aim.x - at.x, aim.z - at.z), t = d / HEADER_SHOT_PACE;
     // Aimed down to about half a metre at the line: a header that bounces in front of the keeper.
     const vy = (0.5 - contactHeight + 0.5 * BALL_PHYSICS.gravity * t * t) / t;

@@ -75,7 +75,9 @@ export type BallAction =
   /** Without `touch` the ball is cushioned dead; with it, taken into a direction (directional first touch). */
   | { kind: 'control'; touch?: { direction: Vec2; speed: number } }
   /** A header that sends the ball off with this velocity (clearance, lay-off, header at goal, or down to the feet). */
-  | { kind: 'header'; velocity: Vec3 };
+  | { kind: 'header'; velocity: Vec3 }
+  /** Throw-in with both hands from behind and over the head (Law 15): the velocity the ball should leave with. */
+  | { kind: 'throw'; velocity: Vec3 };
 
 /** Off-ball behaviour a player commits to for a while. */
 export type MovementAction =
@@ -160,6 +162,10 @@ export type PlayerView = {
   boots: [Vec3, Vec3];
   swingingBoot: -1 | 0 | 1;
   hands: Vec3 | null;
+  /** Forehead (header) or chest (chest control) while the player is playing the ball with it. */
+  upperBody: { part: 'head' | 'chest'; position: Vec3 } | null;
+  /** Sliding tackle: 0 standing … 1 down on the turf. */
+  lying: number;
   booked: 'none' | 'yellow' | 'red';
   sentOff: boolean;
 };

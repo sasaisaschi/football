@@ -13,6 +13,8 @@ import { aerialIntercept, headerIntercept, isAirborne } from './aerial';
 import { chooseHeader, CONTESTED } from './heading';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { offBallCommand } from './off-ball';
+import { chooseThrow, throwInStand } from './throw-in';
+import { slideDirection } from './slide';
 import { Perception, type Truth } from './perception';
 import { offsideLineU, toTeam } from './shape';
 
@@ -26,7 +28,7 @@ export type BrainContext = {
   ball: RAPIER.RigidBody;
   profiles: PlayerProfile[];
   /** Set while the ball is dead: who takes the restart and where everybody must stay away from. */
-  restart: { kind: RestartKind; team: 0 | 1; taker: number; spot: Vec2; minDistance: number; ownHalfOnly: boolean; ready: boolean } | null;
+  restart: { kind: RestartKind; team: 0 | 1; taker: number; spot: Vec2; minDistance: number; ownHalfOnly: boolean; ready: boolean; held: boolean } | null;
   /** May the player use his hands? (keeper in own area, ball in play, not a back-pass) */
   handsAllowed: boolean;
   /** Keeper holding the ball in his hands, if any. Nobody may challenge him (Law 12). */
@@ -45,6 +47,10 @@ const HEADER_SET = 0.35;
 const JOCKEY_CLOSE = 1.5;
 /** Sideways distance from the carrier at which a recovering defender runs alongside him (m). */
 const SHOULDER_GAP = 1.1;
+/** Extra pace of the lunge into a sliding tackle over the run (m/s). */
+const SLIDE_LUNGE = 0.5;
+/** Pace the chest sends the ball on with, towards where the player faces: it drops a stride ahead (m/s). */
+const CHEST_DROP_PACE = 1;
 
 /**
  * One autonomous footballer. Decides from its own perception a few times per second: win the ball, play it,
@@ -58,7 +64,7 @@ export class PlayerBrain {
   private nextDecision = 0;
   lastOptions: EvaluatedOption[] = [];
 
-  constructor(readonly profile: PlayerProfile, readonly body: PlayerBody, readonly legs: Legs, private readonly rng: Rng, readonly head: Head) {
+  constructor(readonly profile: PlayerProfile, readonly body: PlayerBody, readonly legs: Legs, private readonly rng: Rng, readonly head: Head, readonly chest: Head) {
     this.perception = new Perception(profile, rng);
   }
 
@@ -138,7 +144,7 @@ export class PlayerBrain {
     const order = this.userIntent;
     if (order?.type === 'move' && order.action.kind === 'tactical-foul') return out;
     // Until the contact the body is committed to the run the kick was planned for.
-    if (this.legs.committed() || this.head.committed()) return out;
+    if (this.legs.committed() || this.head.committed() || this.chest.committed() || this.body.sliding()) return out;
     return { ...out, command: this.controlledApproach(out.command, ctx) };
   }
 
@@ -174,7 +180,11 @@ export class PlayerBrain {
     const ball = { pos: { ...believed.pos }, vel: { ...believed.vel }, spin: { ...believed.spin } };
     const aim = this.head.aim();
     if (aim) this.head.refine(ctx.ball, aim);
-    if (this.legs.committed() || this.head.committed()) {
+    const chestAim = this.chest.aim();
+    if (chestAim) this.chest.refine(ctx.ball, chestAim);
+    // In a sliding tackle, on the ground or getting up: nothing to decide until he stands again.
+    if (this.body.sliding()) { this.committedToBall = false; return { command: { target: self, speed: 0 }, effort: 0, swing: null }; }
+    if (this.legs.committed() || this.head.committed() || this.chest.committed()) {
       // Up to the contact the body keeps the pace the leg (or the header) was planned for.
       const v = this.body.velocity();
       return { command: { target: { x: self.x + v.x * 2, z: self.z + v.z * 2 }, speed: this.body.speed() }, effort: 1, swing: null };
@@ -230,23 +240,46 @@ export class PlayerBrain {
     const contested = pic.opponents.some(o => Math.hypot(o.pos.x - self.x, o.pos.z - self.z) < CONTESTED);
     const goalX = ctx.sign * PITCH.halfLength;
     const atGoal = Math.hypot(goalX - self.x, self.z) < 16;
-    if (ownBall && !contested && !atGoal) return null;
+    // My team's ball with nobody near: brought down with the chest if it arrives at chest height, else with the foot.
+    if (ownBall && !contested && !atGoal) return this.chestControl(ctx, ball);
     const forehead = this.body.height - 0.12;
     const meet = headerIntercept(self, this.body.limits.maxSpeed, ball.pos, ball.vel, forehead, ball.spin);
-    if (!meet) return null;
+    if (!meet) return this.chestControl(ctx, ball);
     if (!this.head.busy()) {
-      const choice = chooseHeader(pic, ownBall, forehead);
-      const plan = this.head.plan(ctx.ball, choice.velocity);
+      let choice = chooseHeader(pic, ownBall, meet.at, forehead);
+      let plan = this.head.plan(ctx.ball, choice.velocity);
       if (plan) {
+        // Judged once more from where the planned contact really is (the run-in point differs by a metre or two).
+        const again = chooseHeader(pic, ownBall, plan.contact, plan.contact.y);
+        const replanned = this.head.plan(ctx.ball, again.velocity);
+        if (replanned) { choice = again; plan = replanned; }
         this.head.start(plan, choice.velocity);
         this.intent = null;
         return { command: { target: self, speed: this.body.speed(), face: ball.pos }, effort: 1, swing: { action: { kind: 'header', velocity: choice.velocity }, source: 'ai' } };
       }
+      // Too low for the head: a ball arriving at chest height is taken down with the chest.
+      const chest = this.chestControl(ctx, ball);
+      if (chest) return chest;
     }
     // Stand just beyond the point on the ball's line, facing it, so it meets the forehead in front of the body.
     const h = Math.hypot(ball.vel.x, ball.vel.z) || 1;
     const stand = { x: meet.at.x + (ball.vel.x / h) * HEADER_SET, z: meet.at.z + (ball.vel.z / h) * HEADER_SET };
     return { command: { target: stand, speed: this.body.limits.maxSpeed, face: ball.pos }, effort: 1, swing: null };
+  }
+
+  /**
+   * Chest control: the chest goes out to meet the ball in front of the body and gives with it, so it drops a stride
+   * ahead of the feet. Null when the ball does not arrive at chest height within reach.
+   */
+  private chestControl(ctx: BrainContext, ball: { pos: Vec3 }): BrainOutput | null {
+    if (this.chest.busy() || this.head.busy() || this.legs.busy()) return null;
+    const f = this.body.facing();
+    const target = { x: f.x * CHEST_DROP_PACE, y: 0.5, z: f.z * CHEST_DROP_PACE };
+    const plan = this.chest.plan(ctx.ball, target);
+    if (!plan) return null;
+    this.chest.start(plan, target);
+    this.intent = null;
+    return { command: { target: this.body.position(), speed: this.body.speed(), face: ball.pos }, effort: 1, swing: { action: { kind: 'control' }, source: 'ai' } };
   }
 
   /** Off the ball, players run around each other instead of through each other. */
@@ -273,11 +306,23 @@ export class PlayerBrain {
   }
 
   private playBall(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): BrainOutput {
+    if (ctx.restart?.kind === 'throw-in') return this.takeThrowIn(ctx);
     const self = this.body.position();
     const distance = Math.hypot(ball.pos.x - self.x, ball.pos.z - self.z);
     const intercept = PlayerBrain.interceptTime(self, this.body.limits.maxSpeed, ball);
     // A receiver whose team played the ball last still controls it a stride ahead of him: jockey, do not charge in.
     const carrier = this.opponentInControl(ctx, ball, ctx.possession !== null && ctx.possession !== this.profile.team ? CARRIER_REACH : 1.1);
+    if (carrier && !ctx.restart && this.profile.role !== 'GK' && !this.legs.busy()) {
+      const cv = this.perception.others.get(carrier.id)?.vel ?? { x: 0, z: 0 };
+      const dir = slideDirection(self, this.body.velocity(), ball, carrier, cv, (-ctx.sign) as 1 | -1);
+      if (dir) {
+        // Sliding tackle: the body goes down along the run, the leg nearer the ball stretches out to it.
+        this.body.startSlide(dir, this.body.speed() + SLIDE_LUNGE);
+        this.legs.startSlide(this.legs.sideTowards(ball.pos.x, ball.pos.z));
+        this.intent = null;
+        return { command: { target: self, speed: 0 }, effort: 0, swing: { action: { kind: 'tackle', direction: dir, speed: this.body.speed() }, source: 'ai' } };
+      }
+    }
     if (carrier && !ctx.restart) {
       // Jockey: stay goal-side of the carrier at arm's length. Step in when his touch exposes the ball (it is
       // off his foot and about as near to me as to him), or close in front of the own goal where delaying no
@@ -352,6 +397,25 @@ export class PlayerBrain {
     return { command, effort: 1, swing };
   }
 
+
+  /**
+   * Throw-in (Law 15): stand just behind the touchline facing the pitch; the hands pick the ball up and hold it
+   * behind the head; once the opponents are back, throw it to a team-mate in range.
+   */
+  private takeThrowIn(ctx: BrainContext): BrainOutput {
+    const r = ctx.restart!;
+    const { stand, infield } = throwInStand(r.spot);
+    const face = { x: stand.x + infield.x * 10, z: stand.z + infield.z * 10 };
+    const self = this.body.position();
+    // Coming from the pitch he walks round the ball, not over it, to get behind the line.
+    const inside = (self.z - r.spot.z) * infield.z > -0.2 && Math.abs(self.x - r.spot.x) < 0.9;
+    const side = self.x >= r.spot.x ? 1 : -1;
+    const target = inside ? { x: r.spot.x + side * 1, z: stand.z } : stand;
+    const command: BodyCommand = { target, speed: this.body.limits.maxSpeed * 0.6, face };
+    if (!r.held || !r.ready) return { command, effort: 1, swing: null };
+    const velocity = chooseThrow(this.picture(ctx), this.body.height);
+    return { command, effort: 1, swing: { action: { kind: 'throw', velocity }, source: 'ai' } };
+  }
 
   /** Closest opponent I can see within `range`, if any. */
   private nearestOpponent(ctx: BrainContext, range: number): Vec2 | null {

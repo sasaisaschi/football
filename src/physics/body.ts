@@ -26,6 +26,12 @@ export function motorLimits(p: PlayerProfile): MotorLimits {
   };
 }
 
+/**
+ * Sliding tackle: a lunge along the run, decelerating on the grass, a moment on the ground, then getting up (s, m/s²).
+ * While down the body is a low capsule lying along the slide: legs and hips at ground height.
+ */
+const SLIDE = { decel: 5, maxTime: 0.9, down: 0.45, rise: 0.35, radius: 0.14 } as const;
+
 export type BodyCommand = {
   target: Vec2;
   /** Desired cruising speed; braking towards the target follows v² = 2·a·d. */
@@ -46,6 +52,7 @@ export class PlayerBody {
   readonly height: number;
   readonly mass: number;
   heading: number;
+  private slideState: { dir: Vec2; t: number; phase: 'slide' | 'down' | 'rise' } | null = null;
 
   constructor(world: RAPIER.World, profile: PlayerProfile, x: number, z: number, heading: number) {
     this.limits = motorLimits(profile);
@@ -95,6 +102,7 @@ export class PlayerBody {
    * `effort` (0…1) scales the limits, e.g. while the boot is mid-swing.
    */
   drive(cmd: BodyCommand, dt: number, effort = 1): void {
+    if (this.slideState) { this.slideStep(dt); return; }
     const L = this.limits;
     const p = this.body.translation();
     const v = this.body.linvel();
@@ -137,8 +145,71 @@ export class PlayerBody {
     this.heading += Math.max(-turn, Math.min(turn, delta));
   }
 
+  /**
+   * Starts a sliding tackle along `dir` at `speed` (never faster than the player can run). The torso capsule lies
+   * down along the slide: what an opponent runs into is the sliding legs and hips.
+   */
+  startSlide(dir: Vec2, speed: number): void {
+    const n = Math.hypot(dir.x, dir.z) || 1, d = { x: dir.x / n, z: dir.z / n };
+    const v = Math.min(speed, this.limits.maxSpeed);
+    this.body.setLinvel({ x: d.x * v, y: 0, z: d.z * v }, true);
+    this.heading = Math.atan2(d.x, d.z);
+    // Capsule axis (local Y) turned onto the slide direction: 90° about the horizontal axis across it.
+    const s = Math.SQRT1_2;
+    this.collider.setRadius(SLIDE.radius);
+    this.collider.setHalfHeight(this.height * 0.36 - SLIDE.radius);
+    this.collider.setRotationWrtParent({ x: d.z * s, y: 0, z: -d.x * s, w: s });
+    this.collider.setTranslationWrtParent({ x: d.x * 0.2, y: -(this.height / 2 - SLIDE.radius), z: d.z * 0.2 });
+    this.slideState = { dir: d, t: 0, phase: 'slide' };
+  }
+
+  /** In a sliding tackle, on the ground after it or getting up: the player cannot act. */
+  sliding(): boolean {
+    return this.slideState !== null;
+  }
+
+  /** On the ground: sliding or lying after the slide (the legs are stretched out along it). */
+  down(): boolean {
+    return this.slideState !== null && this.slideState.phase !== 'rise';
+  }
+
+  /** Direction of the current slide, if any. */
+  slideDirection(): Vec2 | null {
+    return this.slideState?.dir ?? null;
+  }
+
+  /** How far down the player is, 0 standing … 1 lying (for the presentation). */
+  lying(): number {
+    const s = this.slideState;
+    if (!s) return 0;
+    if (s.phase === 'slide') return Math.min(1, s.t / 0.15);
+    if (s.phase === 'down') return 1;
+    return Math.max(0, 1 - s.t / SLIDE.rise);
+  }
+
+  /** Sliding on the grass: only friction acts, then he lies, then gets up. */
+  private slideStep(dt: number): void {
+    const s = this.slideState!;
+    s.t += dt;
+    const v = this.body.linvel();
+    const speed = Math.hypot(v.x, v.z);
+    const k = speed > 1e-3 ? Math.max(0, speed - SLIDE.decel * dt) / speed : 0;
+    this.body.applyImpulse({ x: (v.x * k - v.x) * this.mass, y: 0, z: (v.z * k - v.z) * this.mass }, true);
+    if (s.phase === 'slide' && (speed < 0.5 || s.t > SLIDE.maxTime)) { s.phase = 'down'; s.t = 0; }
+    else if (s.phase === 'down' && s.t > SLIDE.down) { this.standUp(); s.phase = 'rise'; s.t = 0; }
+    else if (s.phase === 'rise' && s.t > SLIDE.rise) this.slideState = null;
+  }
+
+  private standUp(): void {
+    this.collider.setRadius(this.radius);
+    this.collider.setHalfHeight(this.height / 2 - this.radius);
+    this.collider.setRotationWrtParent({ x: 0, y: 0, z: 0, w: 1 });
+    this.collider.setTranslationWrtParent({ x: 0, y: 0, z: 0 });
+  }
+
   /** Used only by the referee/engine to line players up while the ball is dead (kickoff set-up, reset). */
   place(x: number, z: number, heading: number): void {
+    if (this.slideState) { this.standUp(); this.slideState = null; }
     this.body.setTranslation({ x, y: this.height / 2, z }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.heading = heading;
