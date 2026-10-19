@@ -45,6 +45,11 @@ const SLIDE_RECKLESS = 5, SLIDE_EXCESSIVE = 7;
 
 export class Referee {
   lastTouch: Touch | null = null;
+  /**
+   * A throw-in that has left the hands but not yet entered the pitch (Law 15): it is not out again while it flies in
+   * from above the touchline, and is retaken by the same team if it lands outside.
+   */
+  private throwInEntering: { team: TeamId; spot: Vec2 } | null = null;
   /** Each team's latest touch, to credit a goal deflected in by the defending side to the attacker. */
   private readonly lastTouchOf: [Touch | null, Touch | null] = [null, null];
   private offsideCandidates = new Set<number>();
@@ -65,6 +70,7 @@ export class Referee {
     const out: Decision[] = [];
     this.lastBallContact.set(touch.player, touch.time);
     this.lastTouchOf[touch.team] = touch;
+    this.throwInEntering = null;
     const profile = this.profiles[touch.player];
     if (this.keeperReleased !== null && touch.player !== this.keeperReleased) this.keeperReleased = null;
 
@@ -90,6 +96,7 @@ export class Referee {
       if (throwIn && touch.part !== 'hands') return out;
       const kind = this.pendingRestart.kind;
       this.pendingRestart = null;
+      if (kind === 'throw-in') this.throwInEntering = { team: touch.team, spot: { x: touch.position.x, z: Math.sign(touch.position.z) * (PITCH.halfWidth - BALL_SPEC.radius) } };
       out.push({ type: 'in-play', kind, taker: touch.player });
       this.lastTouch = touch;
       this.snapshotOffside(touch, half, positions, kind);
@@ -196,6 +203,15 @@ export class Referee {
       return { type: 'goal', team, scorer: last?.player ?? null, ownGoal: last ? last.team !== team : false };
     }
     const out = ballOut(ball);
+    const entering = this.throwInEntering;
+    if (entering) {
+      if (!out) this.throwInEntering = null;
+      else if (out.line === 'touch') {
+        if (ball.y > BALL_SPEC.radius + 0.05) return null;
+        this.throwInEntering = null;
+        return { type: 'restart', kind: 'throw-in', team: entering.team, spot: entering.spot, reason: 'out' };
+      }
+    }
     if (!out) return null;
     const lastTeam = this.lastTouch?.team ?? 0;
     const other = (1 - lastTeam) as TeamId;
