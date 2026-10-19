@@ -673,6 +673,23 @@ Die Schüsse fehlen nicht durch Luftschläge (45 von 48 bzw. 27 von 30 Schusschw
 
 Bewertung: Beide Korrekturen sind physikalisch richtig, aber Dribbeln, Schussauswahl und Torwart sind auf den fehlerhaften Schuss kalibriert. Übernahme erst zusammen mit dieser Nachkalibrierung (Branch `claude/12th-man-long-balls`).
 
+**Nachkalibrierung.** Diagnose (8 Seeds) mit beiden Korrekturen:
+- Die Schussauswahl selbst ist unverändert, xG und Entscheidungen nahe am Tor sind gleich.
+- Der Angriff kommt seltener in Schussnähe: Ballentscheidungen 0–25 m vor dem Tor −31 %, dafür mehr Dribblings und Pässe bei 25–35 m.
+
+Der nachhängende Schuh hatte wie ein zusätzlicher Schussfehler proportional zum Lauftempo gewirkt (2 cm bei 5 m/s), in jedem Schuss, Pass, Tackling und Dribbling. Ohne ihn treffen Verteidiger beim Stochern und Angreifer beim Abschluss genauer. **Neu:** Das eigene Lauftempo ist ein bewusster Teil des Ausführungsfehlers (`PACE_NOISE` in `execution.ts`: 8 m/s zählen wie der Grundfehler). Mit 4 m/s fiel die Torquote auf 2,6 %.
+
+| pro 90 min (48 Seeds) | main | beide Korrekturen | + Tempoanteil |
+| --- | --- | --- | --- |
+| Schüsse | 22,4 | 18,3 | 21,4 |
+| Tore aus Schüssen (Quote) | 2,4 (10,7 %) | 2,6 (14 %) | 2,7 (12,6 %) |
+| Eigentore | 1,2 | 1,7 | 1,65 (0,9 / 2,4 je Seed-Hälfte) |
+| Einwürfe | 62 | 56 | 55 |
+| Fouls | 22,8 | – | 19,5 (16,7 / 22,3) |
+| Passquote | 76 % | 76,5 % | 76,5 % |
+
+Bewertung: Schüsse und Torquote sind wieder nahe an `main` und am realen Wert, Einwürfe besser. Offen und Hindernis für die Übernahme: Eigentore (1,65/90, real ≈ 0,1 pro Partie) schwanken stark zwischen den Seed-Hälften und treiben die Tore auf 4,4/90. Sie lagen schon auf `main` zu hoch.
+
 ## 7. Bekannte Grenzen / offene Punkte
 
 - **Spielqualität** (48 Seeds, Stand 19.10.2026): Im Zielbereich sind Passquote ≈ 76 %, Fouls ≈ 23/90, Elfmeter ≈ 0,4/90 und Torschüsse ≈ 22/90. Leicht darüber liegen die Tore (≈ 3,5/90, real ≈ 2,7). Noch nicht realistisch: Pässe ≈ 1360/90 (real ≈ 1000), Einwürfe ≈ 62/90 (real ≈ 45), Eigentore ≈ 1/90, Schüsse nach Kombination ≈ 3/90, lange Bälle über 30 m ≈ 46 %, keine Kopfballtore (siehe §6).
