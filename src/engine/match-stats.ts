@@ -41,9 +41,9 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
   const team = (player: number) => profiles[player].team;
   const s: MatchStats = {
     score: [0, 0], ownGoals: 0,
-    goalsFrom: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, header: 0, head: 0, body: 0, hands: 0, none: 0, own: 0 },
+    goalsFrom: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, header: 0, throw: 0, head: 0, body: 0, hands: 0, none: 0, own: 0 },
     shots: [0, 0], shotsAfterBuildUp: 0, passes: 0, passesCompleted: 0, possessionChanges: 0,
-    lossesAfter: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, header: 0, head: 0, body: 0, hands: 0, none: 0 },
+    lossesAfter: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, header: 0, throw: 0, head: 0, body: 0, hands: 0, none: 0 },
     pingPong: 0, meanSpell: 0, fouls: 0, yellow: 0, red: 0, penalties: 0, offsides: 0, corners: 0, throwIns: 0, goalKicks: 0, keeperCatches: 0,
   };
   const lastSwing = new Map<number, { kind: BallAction['kind']; time: number }>();

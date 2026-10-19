@@ -1,14 +1,14 @@
 import type { PlayerProfile, RestartKind, TeamId, Vec2, Vec3 } from '../engine/types';
-import { PITCH, attackSign, ballOut, goalCrossed, inPenaltyArea } from '../physics/pitch-geometry';
+import { BALL_SPEC, PITCH, attackSign, ballOut, goalCrossed, inPenaltyArea } from '../physics/pitch-geometry';
 
 /**
  * Independent rules authority. It only reads what happened (ball contacts, body contacts, ball position)
  * and decides the legal state: goals, out of play, offside, fouls, cards and restarts. It never changes a
  * trajectory; the engine merely places a dead ball where the referee says the game restarts.
  *
- * Simplifications (documented in PROJECT_REPORT.md): throw-ins are taken with the foot; offside involvement
- * is "plays the ball"; deliberate play vs. deflection is not distinguished; fouls are judged from body
- * contacts (closing speed, who challenged, whether the ball was played first).
+ * Simplifications (documented in PROJECT_REPORT.md): offside involvement is "plays the ball"; deliberate play
+ * vs. deflection is not distinguished; fouls are judged from body contacts (closing speed, who challenged,
+ * whether the ball was played first).
  */
 
 /** `deliberate`: the boot played the ball on purpose (a pass, dribble or first touch), not a block, deflection or poke. */
@@ -61,7 +61,9 @@ export class Referee {
     const profile = this.profiles[touch.player];
     if (this.keeperReleased !== null && touch.player !== this.keeperReleased) this.keeperReleased = null;
 
-    if (touch.part === 'hands') {
+    // Law 15: the throw-in is taken with the hands; the ball is in play once it leaves them.
+    const throwIn = this.pendingRestart?.kind === 'throw-in' && this.pendingRestart.team === touch.team;
+    if (touch.part === 'hands' && !throwIn) {
       const goalSide = (-attackSign(touch.team, half)) as 1 | -1;
       if (profile.role !== 'GK' || !inPenaltyArea(touch.position.x, touch.position.z, goalSide)) {
         out.push({ type: 'restart', kind: 'free-kick', team: (1 - touch.team) as TeamId, spot: { x: touch.position.x, z: touch.position.z }, reason: 'handball' });
@@ -77,6 +79,8 @@ export class Referee {
 
     if (this.pendingRestart) {
       if (this.pendingRestart.team !== touch.team) return out;
+      // A throw-in is taken only by throwing: a foot or body that touches the ball before does not restart play.
+      if (throwIn && touch.part !== 'hands') return out;
       const kind = this.pendingRestart.kind;
       this.pendingRestart = null;
       out.push({ type: 'in-play', kind, taker: touch.player });
@@ -186,7 +190,8 @@ export class Referee {
     const other = (1 - lastTeam) as TeamId;
     if (out.line === 'touch') {
       const x = Math.max(-PITCH.halfLength + 0.5, Math.min(PITCH.halfLength - 0.5, ball.x));
-      return { type: 'restart', kind: 'throw-in', team: other, spot: { x, z: out.side * (PITCH.halfWidth - 0.6) }, reason: 'out' };
+      // Law 15: from where the ball left the pitch, on the touchline; the thrower stands behind it.
+      return { type: 'restart', kind: 'throw-in', team: other, spot: { x, z: out.side * (PITCH.halfWidth - BALL_SPEC.radius) }, reason: 'out' };
     }
     const defending = (attackSign(0, half) === out.side ? 1 : 0) as TeamId;
     const zSide = ball.z >= 0 ? 1 : -1;

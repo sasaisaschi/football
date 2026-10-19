@@ -13,6 +13,7 @@ import { aerialIntercept, headerIntercept, isAirborne } from './aerial';
 import { chooseHeader, CONTESTED } from './heading';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { offBallCommand } from './off-ball';
+import { chooseThrow, throwInStand } from './throw-in';
 import { Perception, type Truth } from './perception';
 import { offsideLineU, toTeam } from './shape';
 
@@ -26,7 +27,7 @@ export type BrainContext = {
   ball: RAPIER.RigidBody;
   profiles: PlayerProfile[];
   /** Set while the ball is dead: who takes the restart and where everybody must stay away from. */
-  restart: { kind: RestartKind; team: 0 | 1; taker: number; spot: Vec2; minDistance: number; ownHalfOnly: boolean; ready: boolean } | null;
+  restart: { kind: RestartKind; team: 0 | 1; taker: number; spot: Vec2; minDistance: number; ownHalfOnly: boolean; ready: boolean; held: boolean } | null;
   /** May the player use his hands? (keeper in own area, ball in play, not a back-pass) */
   handsAllowed: boolean;
   /** Keeper holding the ball in his hands, if any. Nobody may challenge him (Law 12). */
@@ -277,6 +278,7 @@ export class PlayerBrain {
   }
 
   private playBall(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): BrainOutput {
+    if (ctx.restart?.kind === 'throw-in') return this.takeThrowIn(ctx);
     const self = this.body.position();
     const distance = Math.hypot(ball.pos.x - self.x, ball.pos.z - self.z);
     const intercept = PlayerBrain.interceptTime(self, this.body.limits.maxSpeed, ball);
@@ -356,6 +358,25 @@ export class PlayerBrain {
     return { command, effort: 1, swing };
   }
 
+
+  /**
+   * Throw-in (Law 15): stand just behind the touchline facing the pitch; the hands pick the ball up and hold it
+   * behind the head; once the opponents are back, throw it to a team-mate in range.
+   */
+  private takeThrowIn(ctx: BrainContext): BrainOutput {
+    const r = ctx.restart!;
+    const { stand, infield } = throwInStand(r.spot);
+    const face = { x: stand.x + infield.x * 10, z: stand.z + infield.z * 10 };
+    const self = this.body.position();
+    // Coming from the pitch he walks round the ball, not over it, to get behind the line.
+    const inside = (self.z - r.spot.z) * infield.z > -0.2 && Math.abs(self.x - r.spot.x) < 0.9;
+    const side = self.x >= r.spot.x ? 1 : -1;
+    const target = inside ? { x: r.spot.x + side * 1, z: stand.z } : stand;
+    const command: BodyCommand = { target, speed: this.body.limits.maxSpeed * 0.6, face };
+    if (!r.held || !r.ready) return { command, effort: 1, swing: null };
+    const velocity = chooseThrow(this.picture(ctx), this.body.height);
+    return { command, effort: 1, swing: { action: { kind: 'throw', velocity }, source: 'ai' } };
+  }
 
   /** Closest opponent I can see within `range`, if any. */
   private nearestOpponent(ctx: BrainContext, range: number): Vec2 | null {

@@ -31,11 +31,13 @@ describe('Law 11 – offside', () => {
     ref.onBallContact(touch(id(0, 'CM'), -20, 0), 1, pos);
     expect(ref.onBallContact(touch(id(0, 'ST'), 20, 2, 'boot', 2), 1, pos)).toEqual([]);
   });
-  it('there is no offside directly from a throw-in, and the restart is reported as taken', () => {
+  it('a throw-in is taken only with the hands, there is no offside directly from it, and it is reported as taken', () => {
     const ref = new Referee(roster);
     ref.awaitRestart('throw-in', 0);
     const pos = positions({ [id(0, 'LB')]: { x: 5, z: 33.4 }, [id(0, 'ST')]: { x: 30, z: 2 } });
-    expect(ref.onBallContact(touch(id(0, 'LB'), 5, 33.4), 1, pos)[0]).toMatchObject({ type: 'in-play', kind: 'throw-in' });
+    // A foot on the ball before the throw is no throw-in, and no handball either when he then throws it.
+    expect(ref.onBallContact(touch(id(0, 'LB'), 5, 33.4), 1, pos)).toEqual([]);
+    expect(ref.onBallContact(touch(id(0, 'LB'), 5, 33.4, 'hands'), 1, pos)[0]).toMatchObject({ type: 'in-play', kind: 'throw-in' });
     expect(ref.onBallContact(touch(id(0, 'ST'), 30, 2, 'boot', 2), 1, pos)).toEqual([]);
   });
   it('switches the attacking direction in the second half', () => {
