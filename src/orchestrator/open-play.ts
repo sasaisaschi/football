@@ -1,0 +1,199 @@
+import { evaluateOptions, threatAt, type EvaluatedOption } from '../ai/options';
+import { DEFENDERS, offsideLineU, shapeTarget, toTeam } from '../ai/shape';
+import type { MatchEngine } from '../engine/match-engine';
+import type { DecisionOption, MomentKind, OptionVisual, PlayerIntent, TeamId, TeamInstruction, Vec2 } from '../engine/types';
+import { PITCH } from '../physics/pitch-geometry';
+import { brainContext, carrier, dist, participantsFor, playerName, type MomentDraft } from './common';
+
+/** A pass or take-on the player could realistically pull off (estimated chance of success); a shot is offered whenever the player would consider it. */
+const MIN_SUCCESS = 0.3;
+/** Threat at stake for an attacking moment (≈ 27 m central): expected threat of the ball's position or the shot's chance. */
+const STAKES = 0.02;
+/** Options within this much expected threat (goal probability) of the best one make a real dilemma. */
+const DILEMMA_GAP = 0.05;
+/** A ball lost after holding it at least this long (s) is a real loss of possession, not a ricochet. */
+const SPELL_FOR_COUNTER_PRESS = 4;
+
+/** What the orchestrator remembers about possession, for transitions. */
+export type PossessionTrack = { possessionChangedAt: number; lostSpell: number };
+
+/** The user's player has the ball near the opponents' box and faces a real choice between alternatives. */
+export function attackingMoment(e: MatchEngine, team: TeamId): MomentDraft | null {
+  const c = carrier(e, team);
+  if (c === null || e.legs[c].busy()) return null; // too late: the swing is already under way
+  const sign = e.sign(team);
+  const ball = e.ballPos();
+  if (toTeam(sign, { x: ball.x, z: ball.z }).u < 0.42) return null;
+  const brain = e.brains[c];
+  const pic = brain.picture(brainContext(e, c));
+  const options = evaluateOptions(pic).filter(o => o.kind !== 'clear');
+  const shot = options.find(o => o.kind === 'shot');
+  const passes = options.filter(o => o.kind === 'pass').slice(0, 2);
+  const dribble = options.find(o => o.kind === 'dribble');
+  // Only options a player could realistically pull off; their values may be negative (a risk of losing the ball),
+  // so a dilemma is judged by how close they are, not by a ratio or a fixed floor that shifts with the AI's
+  // value model.
+  const candidates = [shot, ...passes, dribble].filter((o): o is EvaluatedOption => !!o && (o.kind === 'shot' || o.success >= MIN_SUCCESS));
+  if (candidates.length < 2) return null;
+  const best = Math.max(...candidates.map(o => o.value));
+  // Relevant: there is real threat at stake and at least two options are close enough to be a dilemma.
+  if (Math.max(threatAt(sign, { x: ball.x, z: ball.z }), shot?.success ?? 0) < STAKES) return null;
+  const contenders = candidates.filter(o => o.value >= best - DILEMMA_GAP).slice(0, 4);
+  if (contenders.length < 2) return null;
+  const from = { x: ball.x, z: ball.z };
+  const decisionOptions: DecisionOption[] = contenders.map((o, i) => ({
+    id: `${o.kind}-${i}`,
+    label: o.kind === 'shot' ? 'Selbst abschließen' : o.kind === 'pass' ? `Pass auf ${playerName(e, o.target!)}` : 'Gegenspieler ausspielen',
+    detail: o.note,
+    effect: { type: 'player', player: c, intent: { type: 'ball', action: o.action, source: 'user', decidedAt: e.time } satisfies PlayerIntent },
+    outlook: outlook(o),
+    visual: ballVisual(c, from, o),
+  }));
+  const aiChoice = brain.chooseAction(brainContext(e, c));
+  const fallback = decisionOptions.find(d => d.effect.type === 'player' && d.effect.intent.type === 'ball' && d.effect.intent.action.kind === aiChoice.kind) ?? decisionOptions[0];
+  const kind: MomentKind = shot ? 'finish-or-pass' : 'take-on';
+  const keeper = e.profiles.find(p => p.team !== team && p.role === 'GK' && !e.referee.sentOff.has(p.id));
+  return {
+    kind, category: 'attack', title: shot ? 'Abschluss oder Ablage?' : 'Durchsetzen oder abspielen?',
+    situation: `${playerName(e, c)} hat den Ball ${Math.round(Math.hypot(sign * PITCH.halfLength - ball.x, ball.z))} m vor dem Tor.`,
+    focusPlayer: c, options: decisionOptions, defaultOptionId: fallback.id,
+    participants: participantsFor(e, team, c, decisionOptions, shot && keeper ? [keeper.id] : []),
+  };
+}
+
+/** The overlay of a ball option: where the ball is meant to go from the ball's current position. */
+export function ballVisual(actor: number, from: Vec2, o: EvaluatedOption): OptionVisual {
+  const a = o.action;
+  if (a.kind === 'pass') return { actor, ball: { to: a.aim, kind: a.lofted ? 'lofted' : 'ground', receiver: a.receiver } };
+  if (a.kind === 'shot') return { actor, ball: { to: { x: a.aim.x, z: a.aim.z }, kind: 'shot' } };
+  if (a.kind === 'dribble') return { actor, ball: { to: { x: from.x + a.direction.x * 6, z: from.z + a.direction.z * 6 }, kind: 'dribble' } };
+  return { actor };
+}
+
+/** Where the defensive line (mean of the back four) stands under an instruction, from the real shape model. */
+export function lineUnder(e: MatchEngine, team: TeamId, instruction: TeamInstruction, inPossession: boolean): number {
+  const sign = e.sign(team);
+  const b = e.ballPos();
+  const opponents = e.profiles.filter(p => p.team !== team && !e.referee.sentOff.has(p.id)).map(p => e.bodies[p.id].position());
+  const xs = e.profiles.filter(p => p.team === team && DEFENDERS.has(p.role) && !e.referee.sentOff.has(p.id))
+    .map(p => shapeTarget(p.role, { sign, ball: { x: b.x, z: b.z }, inPossession, instruction, offsideLineU: offsideLineU(sign, opponents) }).x);
+  return xs.reduce((a, x) => a + x, 0) / Math.max(1, xs.length);
+}
+
+/** Possession just changed in midfield: counter boldly / secure the ball, or counter-press / drop off. */
+export function transitionMoment(e: MatchEngine, team: TeamId, track: PossessionTrack): MomentDraft | null {
+  if (e.time - track.possessionChangedAt > 0.8) return null;
+  const touch = e.referee.lastTouch;
+  if (!touch) return null;
+  const ball = e.ballPos();
+  const sign = e.sign(team);
+  const u = toTeam(sign, { x: ball.x, z: ball.z }).u;
+  const ahead = (t: TeamId) => e.profiles.filter(p => !e.referee.sentOff.has(p.id) && p.team === t && sign * (e.bodies[p.id].position().x - ball.x) > 0).length;
+  const base = e.instructions[team];
+  const instr = (over: Partial<TeamInstruction>): TeamInstruction => ({ ...base, ...over });
+  const line = (i: TeamInstruction, own: boolean): OptionVisual['line'] => ({ team, from: lineUnder(e, team, base, own), to: lineUnder(e, team, i, own) });
+  if (touch.team === team && u > -0.6 && u < 0.05 && e.time - e.halfStartedAt > 20) {
+    // A real counter: won in our half, the ball carrier is moving forward and the opponents are outnumbered
+    // or level ahead of the ball.
+    const attackers = ahead(team), defenders = ahead((1 - team) as TeamId);
+    const carrierV = e.bodies[touch.player].velocity();
+    if (attackers < 2 || defenders > attackers + 1 || sign * carrierV.x < 1.5) return null;
+    const counter = instr({ risk: 0.95, lineHeight: 0.5, press: 'high' }), secure = instr({ risk: 0.15, lineHeight: 0 });
+    const options: DecisionOption[] = [
+      { id: 'counter', label: 'Schnell kontern', detail: 'Risiko hoch, Stürmer laufen tief', effect: { type: 'team', team, instruction: counter, seconds: 15 }, outlook: `${attackers} gegen ${defenders} vor dem Ball`, visual: { actor: touch.player, line: line(counter, true), zone: { x: ball.x + sign * 25, z: ball.z * 0.5, r: 9 } } },
+      { id: 'secure', label: 'Ball sichern', detail: 'Tempo raus, Mannschaft nachrücken lassen', effect: { type: 'team', team, instruction: secure, seconds: 15 }, outlook: 'weniger Ballverlustrisiko, Gegner formiert sich', visual: { actor: touch.player, line: line(secure, true) } },
+    ];
+    return {
+      kind: 'counter-attack', category: 'transition', title: 'Ballgewinn – Konter?', situation: `Ballgewinn ${Math.round((u + 1) * 52.5)} m vor dem eigenen Tor.`,
+      focusPlayer: touch.player, options, defaultOptionId: base.risk > 0.6 ? 'counter' : 'secure', participants: participantsFor(e, team, touch.player, options),
+    };
+  }
+  // A real loss: we had the ball for a while and the opponent now has it under control, not a ricochet.
+  if (touch.team !== team && u > 0.15 && e.time - e.halfStartedAt > 20 && track.lostSpell >= SPELL_FOR_COUNTER_PRESS && carrier(e, touch.team) !== null) {
+    const press = instr({ press: 'high', lineHeight: 0.7 }), drop = instr({ press: 'low', lineHeight: -0.6 });
+    const options: DecisionOption[] = [
+      { id: 'gegenpress', label: 'Sofort gegenpressen', detail: 'Hoch pressen, Linie rückt auf', effect: { type: 'team', team, instruction: press, seconds: 10 }, outlook: 'schnelle Rückeroberung möglich, Raum hinter der Abwehr', visual: { actor: touch.player, line: line(press, false), zone: { x: ball.x, z: ball.z, r: 8 } } },
+      { id: 'drop', label: 'Fallen lassen', detail: 'Kompakt hinter den Ball', effect: { type: 'team', team, instruction: drop, seconds: 10 }, outlook: 'sicherer, Gegner baut ruhig auf', visual: { actor: touch.player, line: line(drop, false) } },
+    ];
+    const ours = e.profiles.filter(p => p.team === team && p.role !== 'GK' && !e.referee.sentOff.has(p.id)).sort((a, b) => dist(e.bodies[a.id].position(), ball) - dist(e.bodies[b.id].position(), ball))[0];
+    return {
+      kind: 'counter-press', category: 'transition', title: 'Ballverlust in der gegnerischen Hälfte', situation: 'Der Gegner hat den Ball gerade erobert.',
+      focusPlayer: touch.player, options, defaultOptionId: base.press === 'high' ? 'gegenpress' : 'drop', participants: participantsFor(e, team, touch.player, options, ours ? [ours.id] : []),
+    };
+  }
+  return null;
+}
+
+/** An opponent is through on the user's goal with at most one defender left. */
+export function breakawayMoment(e: MatchEngine, team: TeamId): MomentDraft | null {
+  const opp = (1 - team) as TeamId;
+  const c = carrier(e, opp);
+  if (c === null) return null;
+  const sign = e.sign(team);
+  const cp = e.bodies[c].position(), v = e.bodies[c].velocity();
+  const u = toTeam(sign, cp).u;
+  if (u > -0.25 || sign * v.x > -2.5) return null; // must be in our half and running at our goal
+  const defenders = e.profiles.filter(p => p.team === team && p.role !== 'GK' && !e.referee.sentOff.has(p.id));
+  const goalSide = defenders.filter(p => sign * e.bodies[p.id].position().x < sign * cp.x);
+  if (goalSide.length > 1) return null;
+  const chaser = defenders.map(p => ({ id: p.id, d: dist(e.bodies[p.id].position(), cp) })).sort((a, b) => a.d - b.d)[0];
+  if (!chaser || chaser.d > 6) return null;
+  const path = { x: cp.x + v.x * 0.8, z: cp.z + v.z * 0.8 };
+  const options: DecisionOption[] = [
+    { id: 'chase', label: 'Fair verfolgen', detail: `${playerName(e, chaser.id)} läuft mit, Torwart bleibt im Tor`, effect: { type: 'none' }, outlook: 'Torchance für den Gegner bleibt', visual: { actor: chaser.id, runs: [{ player: chaser.id, to: path }] } },
+    {
+      id: 'tactical-foul', label: 'Taktisches Foul', detail: `${playerName(e, chaser.id)} stellt sich in den Laufweg`,
+      effect: { type: 'player', player: chaser.id, intent: { type: 'move', action: { kind: 'tactical-foul', target: c }, source: 'user', decidedAt: e.time, until: e.time + 2.5 } },
+      outlook: goalSide.length === 0 ? 'als Notbremse droht Rot' : 'Gelbe Karte wahrscheinlich, Erfolg nicht sicher',
+      visual: { actor: chaser.id, runs: [{ player: chaser.id, to: { x: cp.x + v.x * 0.35, z: cp.z + v.z * 0.35 } }], zone: { x: cp.x, z: cp.z, r: 1.5 } },
+    },
+  ];
+  const keeper = e.profiles.find(p => p.team === team && p.role === 'GK');
+  return {
+    kind: 'breakaway-defence', category: 'defence', title: 'Gegner läuft allein aufs Tor', situation: `${playerName(e, c)} ist durch, nur noch ${goalSide.length} Verteidiger dahinter.`,
+    focusPlayer: chaser.id, options, defaultOptionId: 'chase', participants: participantsFor(e, team, chaser.id, options, keeper ? [keeper.id, c] : [c]),
+  };
+}
+
+/**
+ * An opponent has the ball close to the user's penalty area with defenders around him:
+ * press the carrier, block the shooting lane, or let the defence organise itself.
+ */
+export function boxDefenceMoment(e: MatchEngine, team: TeamId): MomentDraft | null {
+  const c = carrier(e, (1 - team) as TeamId);
+  if (c === null) return null;
+  const sign = e.sign(team);
+  const cp = e.bodies[c].position();
+  const goalX = -sign * PITCH.halfLength;
+  const toGoal = Math.hypot(goalX - cp.x, cp.z);
+  if (toGoal > 30 || Math.abs(cp.z) > 24) return null;
+  const nearest = e.profiles
+    .filter(p => p.team === team && p.role !== 'GK' && !e.referee.sentOff.has(p.id))
+    .map(p => ({ id: p.id, dist: dist(e.bodies[p.id].position(), cp) }))
+    .sort((a, b) => a.dist - b.dist)[0];
+  if (!nearest || nearest.dist > 7 || nearest.dist < 1.2) return null;
+  const order = (kind: 'press' | 'block-lane' | 'jockey'): DecisionOption['effect'] =>
+    ({ type: 'player', player: nearest.id, intent: { type: 'move', action: { kind, target: c }, source: 'user', decidedAt: e.time, until: e.time + 3 } });
+  // The points the box-defence orders run to (box-orders.ts): the ball itself, 1.8 m in front of it on the line to
+  // goal, 3.5 m goal-side of the carrier.
+  const b = e.ballPos();
+  const gx = goalX - b.x, gz = -b.z, gd = Math.hypot(gx, gz) || 1;
+  const towardsGoal = (m: number) => ({ x: b.x + (gx / gd) * m, z: b.z + (gz / gd) * m });
+  const run = (to: Vec2): OptionVisual => ({ actor: nearest.id, runs: [{ player: nearest.id, to }] });
+  const options: DecisionOption[] = [
+    { id: 'press', label: 'Zustellen', detail: `${playerName(e, nearest.id)} läuft den Ballführenden an und geht in den Zweikampf`, effect: order('press'), outlook: 'kann den Ball erobern – oder wird überlaufen', visual: run({ x: b.x, z: b.z }) },
+    { id: 'block', label: 'Schussbahn blocken', detail: `${playerName(e, nearest.id)} stellt sich zwischen Ball und Tor`, effect: order('block-lane'), outlook: 'erschwert den Abschluss, lässt Zeit für einen Pass', visual: { ...run(towardsGoal(1.8)), ball: { to: { x: goalX, z: 0 }, kind: 'shot' } } },
+    { id: 'hold', label: 'Ordnung halten', detail: `${playerName(e, nearest.id)} bleibt torseitig auf Abstand und verzögert`, effect: order('jockey'), outlook: 'schwer zu überlaufen, der Gegner hat aber Zeit zum Abschluss', visual: run(towardsGoal(3.5)) },
+  ];
+  return {
+    kind: 'box-defence', category: 'defence', title: 'Gefahr vor dem eigenen Strafraum', situation: `${playerName(e, c)} hat den Ball ${Math.round(toGoal)} m vor unserem Tor.`,
+    focusPlayer: nearest.id, options, defaultOptionId: 'hold', participants: participantsFor(e, team, nearest.id, options, [c]),
+  };
+}
+
+export function outlook(o: EvaluatedOption): string {
+  if (o.kind === 'shot') return `Abschlusschance etwa ${Math.round(o.success * 100)} % – Torwart und Verteidiger können blocken`;
+  if (o.kind === 'pass') return `Pass kommt nach Einschätzung zu ${Math.round(o.success * 100)} % an`;
+  return `Durchkommen etwa ${Math.round(o.success * 100)} % – sonst Ballverlust`;
+}
+

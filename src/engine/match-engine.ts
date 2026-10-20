@@ -52,6 +52,8 @@ export class MatchEngine {
   restart: RestartState | null = null;
   moment: DecisionMoment | null = null;
   director: Director | null = null;
+  /** Phase to return to once the open moment is settled: play goes on, or the restart it stopped is still to be taken. */
+  private momentResume: 'in-play' | 'stopped' = 'in-play';
   readonly instructions: [TeamInstruction, TeamInstruction] = [{ ...DEFAULT_INSTRUCTION }, { ...DEFAULT_INSTRUCTION }];
   private readonly baseInstructions: [TeamInstruction, TeamInstruction] = [{ ...DEFAULT_INSTRUCTION }, { ...DEFAULT_INSTRUCTION }];
   private readonly instructionUntil: [number, number] = [0, 0];
@@ -129,11 +131,11 @@ export class MatchEngine {
     this.emit({ type: 'kickoff', team, half: this.half });
   }
 
-  private beginRestart(kind: RestartKind, team: TeamId, spot: Vec2, delay: number): void {
+  private beginRestart(kind: RestartKind, team: TeamId, spot: Vec2, delay: number, direct = true): void {
     this.phase = this.phase === 'full-time' ? 'full-time' : 'stopped';
     const taker = chooseTaker(kind, team, spot, this.profiles, this.positions(), this.referee.sentOff);
     this.throwHands.reset();
-    this.restart = { kind, team, spot, placeAt: this.time + delay, placed: false, placedAt: 0, taker };
+    this.restart = { kind, team, spot, placeAt: this.time + delay, placed: false, placedAt: 0, taker, consulted: false, direct };
     for (const b of this.brains) { b.intent = null; b.userIntent = null; }
   }
 
@@ -181,16 +183,22 @@ export class MatchEngine {
     this.brains[player].userIntent = intent;
   }
 
+  /**
+   * Settles the open moment exactly once. Play returns to the phase it was stopped in: a moment before a set piece
+   * leaves the restart as it was (still to be taken, by the same taker), an open-play moment goes on in play.
+   */
   resolveMoment(optionId: string, chosenBy: DecisionSource): void {
     const m = this.moment;
     if (!m || this.phase !== 'decision') throw new Error('No decision moment is open');
     const option = m.options.find(o => o.id === optionId);
     if (!option) throw new Error(`Unknown option ${optionId}`);
-    if (option.effect.type === 'player') this.setUserIntent(option.effect.player, option.effect.intent);
-    if (option.effect.type === 'team') this.setInstruction(option.effect.team, option.effect.instruction, option.effect.seconds, 'user');
+    const effect = option.effect;
+    if (effect.type === 'player') this.setUserIntent(effect.player, effect.intent);
+    if (effect.type === 'players') for (const o of effect.orders) this.setUserIntent(o.player, o.intent);
+    if (effect.type === 'team') this.setInstruction(effect.team, effect.instruction, effect.seconds, 'user');
     this.emit({ type: 'decision', momentId: m.id, optionId, chosenBy });
     this.moment = null;
-    this.phase = 'in-play';
+    this.phase = this.momentResume;
   }
 
   step(): void {
@@ -227,11 +235,19 @@ export class MatchEngine {
     this.checkClock();
   }
 
-  /** The director looks at the state before players commit to this tick's actions, so a decision can still matter. */
+  /**
+   * The orchestrator looks at the state before players commit to this tick's actions, so a decision can still
+   * matter: in play every tick, and once for every placed restart before it is taken (stopped → decision → stopped).
+   */
   private consultDirector(): boolean {
-    if (this.phase !== 'in-play' || !this.director) return false;
+    if (!this.director) return false;
+    const r = this.restart;
+    const beforeRestart = this.phase === 'stopped' && !!r && r.placed && !r.consulted;
+    if (this.phase !== 'in-play' && !beforeRestart) return false;
+    if (beforeRestart) r!.consulted = true;
     const moment = this.director(this);
     if (!moment) return false;
+    this.momentResume = beforeRestart ? 'stopped' : 'in-play';
     this.moment = moment;
     this.phase = 'decision';
     this.emit({ type: 'moment', momentId: moment.id, team: moment.team, kind: moment.kind });
@@ -256,6 +272,7 @@ export class MatchEngine {
       } : null,
       handsAllowed: this.phase === 'in-play' && this.referee.keeperReleased !== p.id && !this.isBackPass(p.team),
       ballHeldBy: this.heldBy,
+      sentOff: this.referee.sentOff,
     };
     const keeper = this.keepers.get(p.id);
     if (keeper) return keeper.think(ctx, () => brain.think(ctx));
@@ -359,12 +376,12 @@ export class MatchEngine {
       }
       case 'offside':
         this.emit({ type: 'offside', player: d.player, position: d.spot });
-        this.beginRestart('free-kick', (1 - this.profiles[d.player].team) as TeamId, d.spot, PLACE_DELAY['free-kick']);
+        this.beginRestart('free-kick', (1 - this.profiles[d.player].team) as TeamId, d.spot, PLACE_DELAY['free-kick'], false);
         return;
       case 'restart':
         if (d.reason === 'out') this.emit({ type: 'out', restart: d.kind, team: d.team, position: d.spot });
         // A throw-in is taken from the touchline itself; every other restart spot lies inside the pitch.
-        this.beginRestart(d.kind, d.team, d.kind === 'throw-in' ? { x: clampSpot(d.spot).x, z: d.spot.z } : clampSpot(d.spot), PLACE_DELAY[d.kind]);
+        this.beginRestart(d.kind, d.team, d.kind === 'throw-in' ? { x: clampSpot(d.spot).x, z: d.spot.z } : clampSpot(d.spot), PLACE_DELAY[d.kind], d.reason !== 'back-pass');
         return;
       case 'foul': {
         this.emit({ type: 'foul', offender: d.offender, victim: d.victim, position: d.spot, penalty: d.penalty, card: d.card, reason: d.reason });
@@ -451,7 +468,7 @@ export class MatchEngine {
       }),
       possession: this.possession(),
       lastTouch: this.referee.lastTouch?.player ?? null,
-      restart: this.restart ? { kind: this.restart.kind, team: this.restart.team, position: this.restart.spot } : null,
+      restart: this.restart ? { kind: this.restart.kind, team: this.restart.team, position: this.restart.spot, taker: this.restart.taker, placed: this.restart.placed } : null,
       moment: this.moment,
     };
   }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CrowdAudio } from './audio/crowd-audio';
-import { MomentDirector, DEFAULT_DIRECTOR } from './director/moment-director';
+import { Orchestrator, DEFAULT_ORCHESTRATOR } from './orchestrator/orchestrator';
 import { MatchEngine } from './engine/match-engine';
 import { TEAMS } from './engine/rosters';
 import type { DecisionSource, MatchEvent, MatchSnapshot, PlayerView, TeamId } from './engine/types';
@@ -22,7 +22,7 @@ export type AppOptions = { seed: number; halfMinutes: number; directorCooldown: 
  */
 export class MatchApp {
   readonly engine: MatchEngine;
-  private readonly director: MomentDirector;
+  private readonly director: Orchestrator;
   private readonly figures: PlayerFigure[];
   private readonly ball = createBallView();
   private readonly camera: CameraDirector;
@@ -48,7 +48,7 @@ export class MatchApp {
     private readonly options: AppOptions,
   ) {
     this.engine = new MatchEngine({ seed: options.seed, halfMinutes: options.halfMinutes });
-    this.director = new MomentDirector({ ...DEFAULT_DIRECTOR, userTeam: options.userTeam, cooldown: options.directorCooldown });
+    this.director = new Orchestrator({ ...DEFAULT_ORCHESTRATOR, userTeam: options.userTeam, cooldown: options.directorCooldown });
     this.engine.director = this.director.attach();
     this.figures = this.engine.profiles.map(p => {
       const f = new PlayerFigure(p, TEAMS[p.team]);

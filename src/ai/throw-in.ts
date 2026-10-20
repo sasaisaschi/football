@@ -27,21 +27,58 @@ export function throwInStand(spot: Vec2): { stand: Vec2; infield: Vec2 } {
 export function chooseThrow(pic: Picture, height: number): Vec3 {
   const from = { x: pic.ball.pos.x, z: pic.ball.pos.z };
   const h0 = height + RELEASE_ABOVE;
-  let best: { v: Vec3; score: number } | null = null;
+  const best = aiThrowTarget(pic, height);
+  if (best) return throwTo(from, best.target, h0)!;
+  const space = { x: Math.max(-PITCH.halfLength + 2, Math.min(PITCH.halfLength - 2, from.x + pic.sign * 8)), z: from.z - Math.sign(from.z) * 6 };
+  return throwTo(from, space, h0)!;
+}
+
+/** The receiver the thrower would pick himself: most room around him, a little credit for ground gained. */
+export function aiThrowTarget(pic: Picture, height: number): { id: number; target: Vec2; room: number; gain: number } | null {
+  let best: { id: number; target: Vec2; room: number; gain: number } | null = null, score = -Infinity;
+  for (const t of throwTargets(pic, height)) {
+    const s = t.room + 0.08 * t.gain;
+    if (s > score) { score = s; best = t; }
+  }
+  return best;
+}
+
+/**
+ * A throw to one chosen team-mate, led by his run like the AI's own choice. Out of range or too close, it goes as far as
+ * the arms allow (or the shortest worthwhile throw) in his direction: the decision stands, the execution may fall short.
+ */
+export function throwToMate(pic: Picture, height: number, receiver: number): Vec3 {
+  const from = { x: pic.ball.pos.x, z: pic.ball.pos.z };
+  const h0 = height + RELEASE_ABOVE;
+  const m = pic.mates.find(o => o.id === receiver);
+  if (!m) return chooseThrow(pic, height);
+  const target = { x: m.pos.x + m.vel.x * 0.8, z: m.pos.z + m.vel.z * 0.8 };
+  const exact = throwTo(from, target, h0);
+  if (exact) return exact;
+  const d = Math.hypot(target.x - from.x, target.z - from.z) || 1;
+  for (const k of [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]) {
+    const reach = d > MIN_THROW ? d * k : MIN_THROW + 0.5;
+    const v = throwTo(from, { x: from.x + ((target.x - from.x) / d) * reach, z: from.z + ((target.z - from.z) / d) * reach }, h0);
+    if (v) return v;
+  }
+  return chooseThrow(pic, height);
+}
+
+/** Throw-in receivers the thrower can reach from here, with the throw and the room around the receiver. */
+export function throwTargets(pic: Picture, height: number): { id: number; target: Vec2; room: number; gain: number }[] {
+  const from = { x: pic.ball.pos.x, z: pic.ball.pos.z };
+  const h0 = height + RELEASE_ABOVE;
+  const out: { id: number; target: Vec2; room: number; gain: number }[] = [];
   for (const m of pic.mates) {
     if (m.profile.role === 'GK') continue;
     const target = { x: m.pos.x + m.vel.x * 0.8, z: m.pos.z + m.vel.z * 0.8 };
     if (Math.abs(target.z) > PITCH.halfWidth - 1 || Math.abs(target.x) > PITCH.halfLength - 1) continue;
-    const v = throwTo(from, target, h0);
-    if (!v) continue;
+    if (!throwTo(from, target, h0)) continue;
     let room = 8;
     for (const o of pic.opponents) room = Math.min(room, Math.hypot(o.pos.x - target.x, o.pos.z - target.z));
-    const score = room + 0.08 * pic.sign * (target.x - from.x);
-    if (!best || score > best.score) best = { v, score };
+    out.push({ id: m.id, target, room, gain: pic.sign * (target.x - from.x) });
   }
-  if (best) return best.v;
-  const space = { x: Math.max(-PITCH.halfLength + 2, Math.min(PITCH.halfLength - 2, from.x + pic.sign * 8)), z: from.z - Math.sign(from.z) * 6 };
-  return throwTo(from, space, h0)!;
+  return out;
 }
 
 /** Velocity of a throw from height h0 that arrives at chest height at `to`; null if out of range. */

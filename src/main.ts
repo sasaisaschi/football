@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-simd-compat';
 import { MatchApp } from './app';
 import { CrowdAudio } from './audio/crowd-audio';
-import { DEFAULT_DIRECTOR } from './director/moment-director';
+import { DEFAULT_ORCHESTRATOR } from './orchestrator/orchestrator';
 import { createPitchView } from './render/pitch-view';
 import { createStadiumView } from './render/stadium-view';
 import { showStartScreen } from './ui/start-screen';
@@ -86,7 +86,7 @@ async function startMatch(halfMinutes: number): Promise<void> {
   app = new MatchApp(scene, camera, stadium, overlay, audio, {
     seed: num('seed', Math.floor(Math.random() * 1e9)),
     halfMinutes,
-    directorCooldown: num('cooldown', DEFAULT_DIRECTOR.cooldown),
+    directorCooldown: num('cooldown', DEFAULT_ORCHESTRATOR.cooldown),
     userTeam: 0,
   });
   // Read-only handle for the browser check script.
