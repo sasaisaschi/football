@@ -17,6 +17,7 @@ import { chooseThrow, throwInStand, throwToMate } from './throw-in';
 import { slideDirection } from './slide';
 import { chestControl, meetAtChest } from './chest';
 import { Perception, type Truth } from './perception';
+import type { PlayerMind } from './mind';
 import { offsideLineU, toTeam } from './shape';
 
 /** What the engine tells a brain each tick: things every player can see or knows from the rules. */
@@ -65,7 +66,7 @@ export class PlayerBrain {
   private nextDecision = 0;
   lastOptions: EvaluatedOption[] = [];
 
-  constructor(readonly profile: PlayerProfile, readonly body: PlayerBody, readonly legs: Legs, private readonly rng: Rng, readonly head: Head, readonly chest: Head) {
+  constructor(readonly profile: PlayerProfile, readonly body: PlayerBody, readonly legs: Legs, private readonly rng: Rng, readonly head: Head, readonly chest: Head, readonly mind: PlayerMind) {
     this.perception = new Perception(profile, rng);
   }
 
@@ -487,9 +488,10 @@ export class PlayerBrain {
     let best = options[0], bestScore = -Infinity;
     for (const o of options) {
       // The coach's risk setting trades safety for threat: bold teams value forward threat, cautious ones possession.
+      // How much of it a player takes on depends on his discipline; his character and form add their own lean.
       const forward = o.kind === 'shot' || (o.kind === 'pass' && 'aim' in o.action && ctx.sign * (o.action.aim.x - pic.ball.pos.x) > 8) || o.kind === 'dribble';
-      const riskBonus = (ctx.instruction.risk - 0.5) * (forward ? 0.01 : -0.005);
-      const score = o.value + riskBonus + this.rng.gauss() * noise;
+      const riskBonus = (ctx.instruction.risk - 0.5) * (forward ? 0.01 : -0.005) * this.mind.compliance();
+      const score = o.value + riskBonus + this.mind.bias(o.kind) + this.rng.gauss() * noise;
       if (score > bestScore) { bestScore = score; best = o; }
     }
     return best.action;

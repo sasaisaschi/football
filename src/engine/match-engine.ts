@@ -7,6 +7,7 @@ import { Legs } from '../physics/legs';
 import { CHEST_PART, Head } from '../physics/head';
 import { ThrowHands } from '../physics/throw-hands';
 import { throwInStand } from '../ai/throw-in';
+import { ExperienceTracker, PlayerMind } from '../ai/mind';
 import { PITCH, attackSign, BALL_SPEC } from '../physics/pitch-geometry';
 import { PHYSICS_DT, PhysicsWorld, type Contact, type ContactPart } from '../physics/world';
 import { Referee, penaltySpot, restartDistance, type Decision, type PlayerState } from '../rules/referee';
@@ -37,6 +38,9 @@ export class MatchEngine {
   /** The chest of each player for chest control: the same planned-contact part as the forehead. */
   readonly chests: Head[] = [];
   readonly brains: PlayerBrain[] = [];
+  /** Character and form of each player; updated only from this match's own events. */
+  readonly minds: PlayerMind[] = [];
+  private readonly experience: ExperienceTracker;
   readonly keepers = new Map<number, KeeperSkill>();
   readonly referee: Referee;
   /** The hands of whoever takes a throw-in. */
@@ -82,7 +86,9 @@ export class MatchEngine {
       this.physics.registerCollider(chest.collider, p.id, 'body');
       this.physics.registerKinematic(chest);
       this.chests.push(chest);
-      const brain = new PlayerBrain(p, body, legs, createRng(config.seed * 131 + p.id), head, chest);
+      const mind = new PlayerMind(p.traits);
+      this.minds.push(mind);
+      const brain = new PlayerBrain(p, body, legs, createRng(config.seed * 131 + p.id), head, chest, mind);
       this.bodies.push(body);
       this.legs.push(legs);
       this.brains.push(brain);
@@ -94,6 +100,7 @@ export class MatchEngine {
       }
     }
     this.referee = new Referee(this.profiles);
+    this.experience = new ExperienceTracker(this.profiles, this.minds);
     this.throwHands = new ThrowHands(this.physics.world, this.physics.ball);
     this.physics.registerKinematic(this.throwHands);
     this.setupKickoff(0);
@@ -432,6 +439,7 @@ export class MatchEngine {
 
   emit(e: EventInput): void {
     const event = { ...e, id: ++this.eventId, tick: this.tick, time: this.time } as MatchEvent;
+    this.experience?.onEvent(event);
     this.events.push(event);
     if (this.events.length > 5000) this.events.splice(0, 1000);
     for (const l of this.listeners) l(event);
@@ -470,6 +478,7 @@ export class MatchEngine {
       lastTouch: this.referee.lastTouch?.player ?? null,
       restart: this.restart ? { kind: this.restart.kind, team: this.restart.team, position: this.restart.spot, taker: this.restart.taker, placed: this.restart.placed } : null,
       moment: this.moment,
+      minds: this.minds.map(m => ({ confidence: m.confidence, recent: m.recent.map(r => ({ action: r.action, ok: r.ok })) })),
     };
   }
 

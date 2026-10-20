@@ -1,4 +1,4 @@
-import type { Abilities, PlayerProfile, Role, TeamId, TeamProfile } from './types';
+import type { Abilities, PlayerProfile, Role, TeamId, TeamProfile, Traits } from './types';
 import { createRng } from './rng';
 
 /** Two fictional clubs. No real players, clubs or likenesses are used. */
@@ -36,8 +36,20 @@ const TEMPLATE: Record<Role, Partial<Abilities>> = {
 
 const KEYS: (keyof Abilities)[] = ['pace', 'acceleration', 'agility', 'technique', 'passing', 'shooting', 'vision', 'composure', 'tackling', 'positioning', 'reflexes', 'handling'];
 
+/**
+ * Character tendencies by role (defenders disciplined, wide forwards adventurous); individual traits scatter around them
+ * from their own random stream, so the abilities of every roster stay exactly as before traits existed.
+ */
+const TRAIT_TEMPLATE: Partial<Record<Role, Partial<Traits>>> = {
+  RCB: { risk: 0.3, discipline: 0.7 }, LCB: { risk: 0.3, discipline: 0.7 }, GK: { risk: 0.25, discipline: 0.7 },
+  CM: { teamplay: 0.7 }, RCM: { teamplay: 0.65 }, LCM: { teamplay: 0.65 },
+  RW: { risk: 0.68, teamplay: 0.42 }, LW: { risk: 0.68, teamplay: 0.42 }, ST: { risk: 0.62, confidence: 0.6 },
+};
+
 export function createRoster(seed = 1): PlayerProfile[] {
   const rng = createRng(seed);
+  const character = createRng(seed * 7919 + 13);
+  const trait = (centre: number) => Math.max(0.05, Math.min(0.95, centre + character.gauss() * 0.15));
   const players: PlayerProfile[] = [];
   for (const team of [0, 1] as TeamId[]) {
     SHAPE.forEach((slot, i) => {
@@ -58,6 +70,10 @@ export function createRoster(seed = 1): PlayerProfile[] {
         heightM,
         massKg: 24 * heightM * heightM,
         abilities,
+        traits: (() => {
+          const t = TRAIT_TEMPLATE[slot.role] ?? {};
+          return { risk: trait(t.risk ?? 0.5), discipline: trait(t.discipline ?? 0.5), teamplay: trait(t.teamplay ?? 0.5), confidence: trait(t.confidence ?? 0.55) };
+        })(),
       });
     });
   }

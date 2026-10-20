@@ -35,6 +35,21 @@ export type Abilities = {
   handling: number;
 };
 
+/**
+ * Stable character traits, 0…1. They shift how a player weighs his options (and how much of the coach's risk setting he
+ * takes on), never how well he executes or what happens to the ball.
+ */
+export type Traits = {
+  /** Appetite for individual risk: shots and take-ons over safe options. */
+  risk: number;
+  /** How closely he follows the coach's instructions. */
+  discipline: number;
+  /** Team orientation: the pass over the solo action. */
+  teamplay: number;
+  /** Baseline self-confidence his form returns to. */
+  confidence: number;
+};
+
 export type PlayerProfile = {
   id: number;
   team: TeamId;
@@ -45,6 +60,7 @@ export type PlayerProfile = {
   heightM: number;
   massKg: number;
   abilities: Abilities;
+  traits: Traits;
 };
 
 export type TeamProfile = { id: TeamId; name: string; short: string; kit: string; shorts: string; keeperKit: string };
@@ -213,4 +229,6 @@ export type MatchSnapshot = {
   lastTouch: number | null;
   restart: { kind: RestartKind; team: TeamId; position: Vec2; taker: number; placed: boolean } | null;
   moment: DecisionMoment | null;
+  /** Each player's character and current form (confidence from his real actions in this match). */
+  minds: { confidence: number; recent: { action: 'pass' | 'dribble' | 'shot'; ok: boolean }[] }[];
 };
