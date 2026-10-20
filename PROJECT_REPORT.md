@@ -876,14 +876,14 @@ Insgesamt verdoppeln sich die Brustannahmen (31 → 65), und es gibt weniger Ein
 
 ## 10. Phase B – verbindliche Produktvision und Gesamt-Entwicklungsauftrag (beschlossen 20.10.2026)
 
-**Status:** **GEPLANT / VERBINDLICH, NICHT IMPLEMENTIERT.** Festlegung des Auftraggebers nach Review der sechs echten Browser-Screenshots (Start, Anstoß, TV-Spiel, Entscheidungsfenster, nach der Entscheidung, Ergebnis) und Prüfung des Stands auf \`main\` inklusive PR #32. Dieser Abschnitt hat bei Produktfragen Vorrang vor früheren, nur technisch formulierten UX-Annahmen. Vorhandene Mechaniken, Messungen und Architekturregeln aus §§1–9 bleiben erhalten, soweit unten nicht explizit präzisiert. **Kein Neubau der Physik.**
+**Status:** **GEPLANT / VERBINDLICH, NICHT IMPLEMENTIERT.** Festlegung des Auftraggebers nach Review der sechs echten Browser-Screenshots (Start, Anstoß, TV-Spiel, Entscheidungsfenster, nach der Entscheidung, Ergebnis) und Prüfung des Stands auf `main` inklusive PR #32. Dieser Abschnitt hat bei Produktfragen Vorrang vor früheren, nur technisch formulierten UX-Annahmen. Vorhandene Mechaniken, Messungen und Architekturregeln aus §§1–9 bleiben erhalten, soweit unten nicht explizit präzisiert. **Kein Neubau der Physik.**
 
 ### 10.1 Produktidentität – Was der Mensch tatsächlich spielt
 
 **THE 12TH MAN ist eine interaktive, agentenbasierte Fußball-Entscheidungssimulation.** Kein FIFA-/EA-FC-Ersatz, kein manuelles Steuern der 22 Spieler, keine bloße TV-Übertragung mit seltenen Popup-Fragen. Die autonome, zusammenhängende 11v11-Simulation ist die **Welt unter der Oberfläche**; das **Hauptprodukt** ist das Erleben von Entscheidungen, ihren Risiken, Überraschungen und kausalen Konsequenzen.
 
 - Der Benutzer ist der **zwölfte Mann**: Er trifft situationsbezogene taktische oder spielerische Entscheidungen, aber er kontrolliert keine Schüsse als Arcade-Eingabe und bestimmt niemals direkt Tore oder Resultate.
-- Der **Orchestrator** (neuer verbindlicher Produktbegriff; derzeitige Codeklasse \`MomentDirector\`) führt durch das Erlebnis: Er beobachtet den jeweils **aktuellen** Spielzustand, erkennt oder eröffnet **plausible Wahlgelegenheiten**, friert am richtigen Zeitpunkt ein, liefert verständliche, ausführbare Optionen und setzt den Lauf nach der Auswahl fort.
+- Der **Orchestrator** (neuer verbindlicher Produktbegriff; derzeitige Codeklasse `MomentDirector`) führt durch das Erlebnis: Er beobachtet den jeweils **aktuellen** Spielzustand, erkennt oder eröffnet **plausible Wahlgelegenheiten**, friert am richtigen Zeitpunkt ein, liefert verständliche, ausführbare Optionen und setzt den Lauf nach der Auswahl fort.
 - **Jede Entscheidung verändert potenziell den weiteren Verlauf**: Spielerabsichten, Räume, Ballkontakte, Gegnerreaktionen und spätere Entscheidungen entstehen **erst im Anschluss**. Auch eine vermeintlich banale Ecke oder ein Einwurf kann sich erst rückblickend als spielentscheidend erweisen. Umgekehrt darf eine als gefährlich inszenierte Chance scheitern.
 - **Entscheidung ≠ Ergebnis.** Füße, Hände, Körper, Ballphysik, individuelle Fähigkeiten, Gegner, Zufall innerhalb des Seed-Systems und Schiedsrichter entscheiden über die tatsächliche Ausführung. Keine Ball-Teleports, keine garantierten Erfolge, keine erfundenen Tore, keine heimlichen Zustandsüberschreibungen, um das gewünschte Dramaturgie-Ergebnis zu erzwingen.
 - **Produktprinzip:** „Autonome Simulation → Orchestrator → verständliche interaktive 3D-Situation → menschliche Entscheidung → reale Umsetzung und Konsequenz → fortgesetzte Simulation → nächste Situation“.
@@ -915,9 +915,9 @@ Die frühere Auswahl anhand ausschließlich gefährlicher Angriffslagen ist für
 - **Einwurf:** plausible kurze/lange/unterstützende Varianten bei korrektem Aufstellungs- und Einwurfzustand; Einwurf bleibt nach IFAB legal und physikalisch mit den Händen ausgeführt.
 - **Ecke:** kurze Ausführung, erster/zweiter Pfosten oder Rückraum **nur wenn** Empfänger, Positionen, Reichweite und vorhandene Mechanik die Variante real ermöglichen. Wenn dafür eine neue legitime Ausführungs-/Laufwegabsicht nötig ist, kontrolliert implementieren und testen; kein unsichtbares Verschieben.
 - **Freistoß/Elfmeter:** situationsgerechte, wirklich ausführbare Wahl; für Elfmeter keine fiktive Erfolgsgarantie. Wo keine echte Alternative möglich ist, **keinen** Schein-Dialog erzwingen.
-- **Trainer-/Halbzeitsituation:** taktische Ansage / Risiko / Pressing als vorhandener \`TeamInstruction\`-Mechanismus; Wechsel nur, wenn tatsächliche Ersatzspieler-, Regel- und Zustandslogik implementiert sind – sonst als **offene Erweiterung** deklarieren statt einen wirkungslosen Button anzubieten.
+- **Trainer-/Halbzeitsituation:** taktische Ansage / Risiko / Pressing als vorhandener `TeamInstruction`-Mechanismus; Wechsel nur, wenn tatsächliche Ersatzspieler-, Regel- und Zustandslogik implementiert sind – sonst als **offene Erweiterung** deklarieren statt einen wirkungslosen Button anzubieten.
 
-**Engine-Anbindung:** Der bestehende \`MatchEngine.consultDirector()\` läuft nur bei \`in-play\`, während Standards als \`stopped\`/\`restart\` behandelt werden. Für Standards braucht es eine **regelkonforme Entscheidungsvorstufe vor Ausführung** (z. B. \`stopped → decision → stopped/restart → in-play\`), bei der weder versehentlich die Wiederanstoßlogik gelöscht noch ein Spielzug doppelt ausgelöst wird. \`resolveMoment()\` darf nicht pauschal \`in-play\` setzen, wenn ein Standard noch gar nicht durchgeführt wurde. Das Datenmodell \`MomentKind\`, \`DecisionOption\`, \`DecisionSource\`, \`MatchSnapshot\` und die Regeln müssen dafür sauber erweitert werden. Eine konkrete Zustandsmaschine samt Unit-/Integrationstests ist Pflicht.
+**Engine-Anbindung:** Der bestehende `MatchEngine.consultDirector()` läuft nur bei `in-play`, während Standards als `stopped`/`restart` behandelt werden. Für Standards braucht es eine **regelkonforme Entscheidungsvorstufe vor Ausführung** (z. B. `stopped → decision → stopped/restart → in-play`), bei der weder versehentlich die Wiederanstoßlogik gelöscht noch ein Spielzug doppelt ausgelöst wird. `resolveMoment()` darf nicht pauschal `in-play` setzen, wenn ein Standard noch gar nicht durchgeführt wurde. Das Datenmodell `MomentKind`, `DecisionOption`, `DecisionSource`, `MatchSnapshot` und die Regeln müssen dafür sauber erweitert werden. Eine konkrete Zustandsmaschine samt Unit-/Integrationstests ist Pflicht.
 
 **Optionen ehrlich darstellen:** Risiko-/Erfolgsaussagen dürfen aus aktueller Bewertung stammen, aber keine Scheingenauigkeit oder falschen Versprechen vortäuschen. Default/Delegation muss der tatsächlichen plausiblen AI-Entscheidung entsprechen. Eine Option wird nur angezeigt, wenn sie nach aktuellem Zustand und Regeln ausführbar ist.
 
@@ -927,7 +927,7 @@ Die frühere Auswahl anhand ausschließlich gefährlicher Angriffslagen ist für
 
 **Aktueller visueller Stand ist als Endprodukt nicht akzeptiert.** Die sechs echten Screenshots zeigen eine funktionsfähige 3D-Prototypoberfläche, aber primitive Spielerfiguren, eine dominante Tribünenfläche, ungünstige Perspektiven und ein großflächiges Entscheidungspanel, das relevante Akteure verdeckt. **Phase B ist ohne substanzielle grafische Überarbeitung nicht abgeschlossen.**
 
-**Verbindliches visuelles Ziel:** moderne, kohärente, hochwertige **3D-Szenen** mit eigenen visuellen Qualitätsansprüchen (nicht ein EA-FC-Klon). Die Entscheidungssituation muss in **einem Blick** verständlich sein. Die bestehende Three.js-Engine, die 3D-Fußballwelt und die CI-Variablen bleiben Ausgangspunkt; keine ungebetene Komplettmigration, kein Tailwind. \`design_variables.css\` nur nach erforderlicher begründeter Abstimmung verändern.
+**Verbindliches visuelles Ziel:** moderne, kohärente, hochwertige **3D-Szenen** mit eigenen visuellen Qualitätsansprüchen (nicht ein EA-FC-Klon). Die Entscheidungssituation muss in **einem Blick** verständlich sein. Die bestehende Three.js-Engine, die 3D-Fußballwelt und die CI-Variablen bleiben Ausgangspunkt; keine ungebetene Komplettmigration, kein Tailwind. `design_variables.css` nur nach erforderlicher begründeter Abstimmung verändern.
 
 **Umsetzungsschwerpunkte:**
 1. **Spieler und Bewegung:** Die zylindrisch-kugelförmigen Platzhalter zu erkennbaren, angemessen proportionierten, hochwertiger beleuchteten und glaubwürdig animierten Fußballfiguren weiterentwickeln bzw. durch performant integrierbare, rechtlich verwendbare Modelle ersetzen. Echte Physikkontakte und die bestehende Körper-/Schuh-/Kopf-/Brust-/Grätschenlogik müssen zur sichtbaren Animation passen. Modell-/Asset-Herkunft und Lizenz dokumentieren; keine ungeklärten Premier-League-/Spieler-Likenesses voraussetzen.
@@ -940,7 +940,7 @@ Die frühere Auswahl anhand ausschließlich gefährlicher Angriffslagen ist für
 
 ### 10.5 Agenten: individuelle Spieler, keine zentrale Ergebnislenkung
 
-Die Engine besitzt bereits 22 individuelle Fähigkeitsprofile und dezentrale \`PlayerBrain\`-/\`Perception\`-Entscheidungen. Das sind **noch keine lernenden Persönlichkeiten**. Phase B soll eine **erste echte, testbare Grundlage** für Charaktere und Entwicklung enthalten; keine Behauptung vollautonomer selbstlernender LLM-Agenten ohne Implementierung.
+Die Engine besitzt bereits 22 individuelle Fähigkeitsprofile und dezentrale `PlayerBrain`-/`Perception`-Entscheidungen. Das sind **noch keine lernenden Persönlichkeiten**. Phase B soll eine **erste echte, testbare Grundlage** für Charaktere und Entwicklung enthalten; keine Behauptung vollautonomer selbstlernender LLM-Agenten ohne Implementierung.
 
 - Abgrenzbare **stabile Traits** (z. B. Risikofreude, Disziplin, Selbstvertrauen, Teamorientierung), jeweils mit begrenztem und dokumentiertem Einfluss auf reale Entscheidungen.
 - Eine **veränderliche, deterministisch aktualisierbare Erfahrungsebene** (z. B. jüngste gelungene/gescheiterte Ausführung, Reaktion auf Anweisungen), aus tatsächlichen Ereignissen. Das Speichermodell soll für spätere Persistenz/Spielerbeziehungen offen sein, ohne Remote-Service-Zwang.
@@ -952,28 +952,28 @@ Die Engine besitzt bereits 22 individuelle Fähigkeitsprofile und dezentrale \`P
 
 | Ist im Code (20.10.) | Phase-B-Arbeit |
 | --- | --- |
-| \`src/director/moment-director.ts\`: sechs \`MomentKind\`s, \`in-play\`-Bewertung, Gruppenlimits | Zum **Orchestrator** als Produktfunktion ausbauen; Standards, Diversität, Ausführbarkeit, moderne Entscheidungsregie |
-| \`src/engine/match-engine.ts\`: \`consultDirector()\` nur \`in-play\`; \`resolveMoment()\` führt immer zu \`in-play\` | Regelkonformen Stopp/Fortsetzungs-Ablauf auch **vor Standards** einbauen; keine Neustart-Doppelung |
-| \`src/engine/restarts.ts\`, \`src/ai/throw-in.ts\`, \`src/physics/throw-hands.ts\` | Legal ausführbare, wählbare Standards auf vorhandener Mechanik |
-| \`src/app.ts\`, \`src/render/time-lapse.ts\`: normal / ×3, Fokus auf laufendes TV-Bild | **Chronologische Hintergrund-Verdichtung** mit Orchestrator-Stopps; echte Nutzerzeit und Simulationszeit getrennt messen |
-| \`src/render/camera-director.ts\`, \`player-view.ts\`, \`stadium-view.ts\` | **Substanziell** bessere Figuren, Kamera, Materialsprache, Hervorhebungen und situatives Framing |
-| \`src/ui/decision-panel.ts/.css\`, \`hud.ts\`, \`start-screen.ts\` | Situationsorientiertes, platzsparendes, hochwertiges UI; echte Grafikwahl und Konsequenzfeedback |
-| \`src/ai/brain.ts\`, \`perception.ts\`, \`engine/rosters.ts\` | Charakter-/Erfahrungsgrundlage, die Entscheidungen **tatsächlich** beeinflusst |
-| \`scripts/browser-check.mjs\`, \`src/director/moment-director.test.ts\` | E2E-Kette einschließlich Ecke/Einwurf, Kamerasicht, Option, realer Fortsetzung, Restart- und Performancekontrolle |
+| `src/director/moment-director.ts`: sechs `MomentKind`s, `in-play`-Bewertung, Gruppenlimits | Zum **Orchestrator** als Produktfunktion ausbauen; Standards, Diversität, Ausführbarkeit, moderne Entscheidungsregie |
+| `src/engine/match-engine.ts`: `consultDirector()` nur `in-play`; `resolveMoment()` führt immer zu `in-play` | Regelkonformen Stopp/Fortsetzungs-Ablauf auch **vor Standards** einbauen; keine Neustart-Doppelung |
+| `src/engine/restarts.ts`, `src/ai/throw-in.ts`, `src/physics/throw-hands.ts` | Legal ausführbare, wählbare Standards auf vorhandener Mechanik |
+| `src/app.ts`, `src/render/time-lapse.ts`: normal / ×3, Fokus auf laufendes TV-Bild | **Chronologische Hintergrund-Verdichtung** mit Orchestrator-Stopps; echte Nutzerzeit und Simulationszeit getrennt messen |
+| `src/render/camera-director.ts`, `player-view.ts`, `stadium-view.ts` | **Substanziell** bessere Figuren, Kamera, Materialsprache, Hervorhebungen und situatives Framing |
+| `src/ui/decision-panel.ts/.css`, `hud.ts`, `start-screen.ts` | Situationsorientiertes, platzsparendes, hochwertiges UI; echte Grafikwahl und Konsequenzfeedback |
+| `src/ai/brain.ts`, `perception.ts`, `engine/rosters.ts` | Charakter-/Erfahrungsgrundlage, die Entscheidungen **tatsächlich** beeinflusst |
+| `scripts/browser-check.mjs`, `src/director/moment-director.test.ts` | E2E-Kette einschließlich Ecke/Einwurf, Kamerasicht, Option, realer Fortsetzung, Restart- und Performancekontrolle |
 
 **Unveränderliche Schutzplanken:** §§2–3 und Phase-A-Korrekturen aus §6 bleiben. Testbar: Single Writer, keine Ball-Teleports, IFAB-Regeln, keine geskripteten Tore, identische Seed- und Eingabefolge ⇒ identischer Verlauf, keine Regression der Körperannahme, nahen/fernen Seitenlinienkamera, Statusmeldungen oder der Zeitrafferguards. Kein ungefragter Austausch der Architektur oder Übernahme des Altprototyps.
 
 ### 10.7 Ein kompletter Phase-B-Auftrag (nicht drei isolierte Mini-Phasen)
 
-**Arbeitsmodus für Opus/Astra:** **Ein kohärenter, längerer Entwicklungsdurchlauf mit einem Phase-B-Branch und einem abschließenden PR**, statt die gesamte Vision in drei unverbundene Aufträge zu zerlegen. Interne überprüfbare Commits/Meilensteine sind erwünscht, aber **Abnahme als Ganzes**. Zuerst \`PROJECT_REPORT.md\` vollständig lesen und gegen \`main\` prüfen. Nach jedem großen Architektur-/UI-Schritt Tests und Browseraufnahme; weiterarbeiten, bis **alle** B-Kriterien umgesetzt, getestet und dokumentiert sind. Nicht in lange Planungsantworten ausweichen. Keine ungefragten Änderungen außerhalb Phase B.
+**Arbeitsmodus für Opus/Astra:** **Ein kohärenter, längerer Entwicklungsdurchlauf mit einem Phase-B-Branch und einem abschließenden PR**, statt die gesamte Vision in drei unverbundene Aufträge zu zerlegen. Interne überprüfbare Commits/Meilensteine sind erwünscht, aber **Abnahme als Ganzes**. Zuerst `PROJECT_REPORT.md` vollständig lesen und gegen `main` prüfen. Nach jedem großen Architektur-/UI-Schritt Tests und Browseraufnahme; weiterarbeiten, bis **alle** B-Kriterien umgesetzt, getestet und dokumentiert sind. Nicht in lange Planungsantworten ausweichen. Keine ungefragten Änderungen außerhalb Phase B.
 
 **Implementationsfolge innerhalb dieses einen Auftrags:**
-1. **Orchestrator-/Zustandsverträge und Tests:** Erweiterung \`MomentKind\`/\`MatchPhase\`/Restart-Handling; valide Optionsdaten einschließlich räumlicher Ziele für Overlays. Stopp vor Standards, richtige Rückkehr zu Restart und danach \`in-play\`.
+1. **Orchestrator-/Zustandsverträge und Tests:** Erweiterung `MomentKind`/`MatchPhase`/Restart-Handling; valide Optionsdaten einschließlich räumlicher Ziele für Overlays. Stopp vor Standards, richtige Rückkehr zu Restart und danach `in-play`.
 2. **Chronologische Verdichtung:** Simulationsfortschritt bis zur nächsten Entscheidung, ohne Zukunftsberechnung oder Tick-Skipping; messbare Performance und kontrollierbare Abbruchbedingungen.
 3. **Grafische Komplettintegration:** bessere Spielerfiguren/Animationen, Kamera, taktische 3D-Hilfen, neue platzsparende Entscheidungs-UI, Starterlebnis/Match/Outcome konsistent; nicht bloß ein neues CSS für das alte Dialogfenster.
-4. **Optionen & Konsequenzen:** Angriff, Abwehr, Einwurf, Ecke und mindestens eine weitere rechtlich/physikalisch korrekte Standardsituation; Rückmeldungen aus \`MatchEvent\`; differente physische Weiterverläufe.
+4. **Optionen & Konsequenzen:** Angriff, Abwehr, Einwurf, Ecke und mindestens eine weitere rechtlich/physikalisch korrekte Standardsituation; Rückmeldungen aus `MatchEvent`; differente physische Weiterverläufe.
 5. **Agentenfundament:** Traits und erste erfahrungsabhängige Auswirkungen mit Tests; strikte Trennung von Personalisierung und Physik.
-6. **End-to-End, Kalibrierung, Dokumentation:** Typcheck, Unit/Integration, Build, automatische **echte Browserläufe** mit Screenshots verschiedener Situationstypen; Mehr-Seed-Statistik ohne Überkalibrieren; \`PROJECT_REPORT.md\` mit tatsächlich gemessenen Fakten, Nicht-Erreichtem und PR-Übergabe aktualisieren.
+6. **End-to-End, Kalibrierung, Dokumentation:** Typcheck, Unit/Integration, Build, automatische **echte Browserläufe** mit Screenshots verschiedener Situationstypen; Mehr-Seed-Statistik ohne Überkalibrieren; `PROJECT_REPORT.md` mit tatsächlich gemessenen Fakten, Nicht-Erreichtem und PR-Übergabe aktualisieren.
 
 **Fertig erst, wenn mindestens die folgenden Nachweise vorliegen:**
 - [ ] Eine fortlaufende Partie eröffnet mit unterschiedlichen Seeds **Angriffs-/Abwehr- und Standardsituationen**, ohne sie in ein laufendes Match hineinzuerfinden; dokumentierte Häufigkeit. Wenn die Seed-Stichprobe einen Typ nicht erreicht, gezielter **echter** Zustandstest zusätzlich.
