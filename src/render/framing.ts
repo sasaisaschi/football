@@ -11,9 +11,10 @@ const TERRACE_RISE = 0.42 / 0.8, TERRACE_BASE = 1, TERRACE_DEPTH = 30 * 0.8;
 /** Underside of the stand roofs, which reach 4 m in front of the stands (m). */
 const ROOF_UNDERSIDE = TERRACE_BASE + 30 * 0.42 + 9 - 0.3, ROOF_REACH = 4;
 /** Clearance the camera keeps above the terraces, below the roofs and inside the back walls; highest point over the open pitch (m). */
-const CLEARANCE = 4, OPEN_SKY = 38;
+const CLEARANCE = 4, OPEN_SKY = 70;
 const AZIMUTHS = 16;
-const ELEVATIONS = [0.55, 0.68, 0.82];
+/** Camera elevations tried (rad); the steep ones are needed when only a narrow band of the screen is free. */
+const ELEVATIONS = [0.55, 0.68, 0.82, 1.0, 1.2];
 
 const camera = new THREE.PerspectiveCamera();
 const v = new THREE.Vector3();
@@ -56,6 +57,20 @@ function place(target: THREE.Vector3, azimuth: number, elevation: number, distan
  * (behind the actor) so that passing lanes open up instead of overlapping, and for the broadcast side.
  */
 export function frameMoment(points: readonly Vec3[], attackDir: 1 | -1, aspect: number, fovDeg: number, safe: SafeArea): Framing {
+  // On a small screen nothing may fit beside the interface with all margins: then the margins are given up first,
+  // never the area the interface itself covers.
+  return frameWithin(points, attackDir, aspect, fovDeg, safe)
+    ?? frameWithin(points, attackDir, aspect, fovDeg, { left: -0.99, right: Math.min(0.99, safe.right + 0.06), bottom: safe.bottom, top: 0.97 })
+    ?? fallback(points);
+}
+
+function fallback(points: readonly Vec3[]): Framing {
+  const target = new THREE.Box3().setFromPoints(points.map(p => new THREE.Vector3(p.x, p.y, p.z))).getCenter(new THREE.Vector3());
+  // Nothing fits: the broadcast gantry's position, as wide as the stadium allows.
+  return { position: new THREE.Vector3(target.x * 0.6, ROOF_UNDERSIDE - 2, STANDS.z + 2), target };
+}
+
+function frameWithin(points: readonly Vec3[], attackDir: 1 | -1, aspect: number, fovDeg: number, safe: SafeArea): Framing | null {
   camera.fov = fovDeg;
   camera.aspect = aspect;
   camera.near = 0.5;
@@ -83,15 +98,12 @@ export function frameMoment(points: readonly Vec3[], attackDir: 1 | -1, aspect: 
       if (p.y < 4 || !cameraAllowed(p)) continue;
       // Behind the actor looking up the pitch reads best; straight down the line of play from in front, worst.
       const along = -dirX * attackDir;
-      const score = hi * (1.25 - 0.25 * along) * (dirZ > 0 ? 0.92 : 1);
+      // Steep views read less like football: they only win when nothing flatter fits nearly as tight.
+      const score = hi * (1.25 - 0.25 * along) * (dirZ > 0 ? 0.92 : 1) * (elevation > 0.9 ? 1.35 : 1);
       if (!best || score < best.score) best = { score, position: p.clone() };
     }
   }
-  if (!best) {
-    // Nothing fits: the broadcast gantry's position, as wide as the stadium allows.
-    return { position: new THREE.Vector3(target.x * 0.6, ROOF_UNDERSIDE - 2, STANDS.z + 2), target };
-  }
-  return { position: best.position, target };
+  return best ? { position: best.position, target } : null;
 }
 
 /** Projects a point with a given camera framing (for tests and the overlap check of the interface). */

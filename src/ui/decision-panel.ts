@@ -61,9 +61,11 @@ export class DecisionPanel {
   /** Width the panel takes from the right edge (desktop) or height from the bottom (narrow), in CSS pixels. */
   footprint(): { right: number; bottom: number } {
     if (this.el.hidden) return { right: 0, bottom: 0 };
-    const r = this.el.getBoundingClientRect();
-    const narrow = r.width > window.innerWidth * 0.8;
-    return narrow ? { right: 0, bottom: window.innerHeight - r.top } : { right: window.innerWidth - r.left, bottom: 0 };
+    // Layout box, not the animated one: while sliding in, the panel is still offset by its entry animation.
+    const host = this.el.offsetParent as HTMLElement | null;
+    const w = host?.clientWidth ?? window.innerWidth, h = host?.clientHeight ?? window.innerHeight;
+    const narrow = this.el.offsetWidth > w * 0.8;
+    return narrow ? { right: 0, bottom: h - this.el.offsetTop } : { right: w - this.el.offsetLeft, bottom: 0 };
   }
 
   show(m: DecisionMoment, now: number, s: MatchSnapshot, profiles: PlayerProfile[]): void {

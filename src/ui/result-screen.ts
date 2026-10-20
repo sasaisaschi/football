@@ -16,9 +16,9 @@ export function showResult(host: HTMLElement, score: readonly [number, number], 
     <div class="result-card">
       <div class="result-kicker">Abpfiff</div>
       <div class="result-score"><span class="home"></span><b data-score></b><span class="away"></span></div>
+      <dl class="result-metrics" data-metrics></dl>
       <h3>Deine Entscheidungen</h3>
       <ol class="result-list" data-list></ol>
-      <dl class="result-metrics" data-metrics></dl>
       <button type="button" data-again>Neues Spiel</button>
     </div>`;
   el.querySelector('.home')!.textContent = TEAMS[0].name;

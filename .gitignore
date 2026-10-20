@@ -6,3 +6,4 @@ browser-check-output/
 .env.*
 !.env.example
 *.log
+browser-check-full/

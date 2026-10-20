@@ -49,8 +49,8 @@
 
 /* Narrow screens: a bottom sheet over the lower part of the picture; the camera keeps the scene above it. */
 @media (max-width: 820px) {
-  .decision { top: auto; left: var(--space-2); right: var(--space-2); bottom: var(--space-2); width: auto; max-height: 48vh; border-left: 1px solid var(--c-line); border-top: 3px solid var(--c-accent); animation-name: decision-up; }
-  .decision-actor { display: none; }
-  .decision-keys { display: none; }
+  .decision { top: auto; left: var(--space-2); right: var(--space-2); bottom: var(--space-2); width: auto; max-height: 40vh; gap: var(--space-2); padding: var(--space-3); border-left: 1px solid var(--c-line); border-top: 3px solid var(--c-accent); animation-name: decision-up; }
+  .decision-actor, .decision-keys, .decision-situation, .decision-detail { display: none; }
+  .decision-option { padding: var(--space-2); }
   @keyframes decision-up { from { opacity: 0; transform: translateY(24px); } }
 }

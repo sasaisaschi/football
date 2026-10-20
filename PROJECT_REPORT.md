@@ -1,6 +1,6 @@
 # THE 12TH MAN – Technical Report & Development Guide
 
-**Stand:** 20.10.2026 · Phase A (#32) auf `main` abgeschlossen; Phase B als verbindlicher Produkt- und Entwicklungsauftrag beschlossen. Frühere Messwerte bleiben historisch datiert; Phase B ist noch nicht implementiert.
+**Stand:** 20.10.2026 · Phase A (#32) auf `main` abgeschlossen; **Phase B implementiert auf Branch `claude/phase-b-arbeitsauftrag-8042ea` (PR, Abnahme offen)** – Ergebnisse, Messwerte und Nicht-Erreichtes in §10.9. Frühere Messwerte bleiben historisch datiert.
 **Rolle:** verbindliche Source of Truth für Architektur, tatsächlichen Stand, Versionen, Tests, Messwerte und nächste Schritte.
 **Kennzeichnung:** **Implementiert** = Code vorhanden · **Getestet** = durch tatsächlich ausgeführte Tests belegt · **Gemessen** = Zahl aus einem tatsächlichen Lauf · **Geplant** = nicht vorhanden · **Nicht geprüft** = vorhanden, ohne Nachweis.
 
@@ -34,13 +34,15 @@ src/
   physics/   B  Rapier-Welt, Feld/Tore/Netze/Banden/Tribünenfront, Ball, Körper, Schuhe, Torwarthände
   ai/        C  Wahrnehmung, Mannschaftsform, Optionsbewertung, Ausführung, Torwartspiel
   rules/     D  Schiedsrichter: Tor, Aus, Abseits, Fouls, Karten, Elfmeter, Vorteil, Handspiel, Rückpass
-  director/  E  Decisive Moment Director
-  ui/        F  Startbildschirm, HUD/Ticker, Entscheidungspanel, Kommentar aus Ereignissen (CSS neben TS)
-  render/    G  Stadion, Rasen, Spielerfiguren, Ball, TV-Regie
+  orchestrator/ E  Orchestrator: Ablaufsteuerung + Lageerkenner (open-play, set-pieces, coach)
+  sim/       E' Chronologischer SimRunner, Web Worker, Frame-Übertragung, Präsentationsregie (Playback)
+  ui/        F  Start, HUD/Verlauf, Entscheidungs-Seitenleiste, Konsequenzkarte, Ergebnis (CSS neben TS)
+  render/    G  Stadion, Rasen, Spielerfiguren, Ball, TV-Regie, Entscheidungs-Framing, Taktik-Overlays
   audio/     G  synthetisierter Stadionton aus echten Ereignissen
-  app.ts     Spielschleife: fester Physikschritt, Interpolation, Zeitraffer, Ereignisverteilung
+  app.ts     Browser-Sitzung: Worker-Client, Regie, Interpolation, Ereignisverteilung in Bildreihenfolge
   main.ts    Einstieg, Renderer, Licht, URL-Parameter
-scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
+scripts/browser-check.mjs   echter Browserlauf (npm run test:browser; CHECK_FULL=1: ganze Partie)
+scripts/probe.mjs           Mehr-Seed-Statistik (npm run probe; --orchestrator: Momentverteilung)
 ```
 
 **Verbindliche Regeln**
@@ -51,6 +53,7 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 5. **Fester Zeitschritt** 1/60 s, Teilschritte nur bei schnellen Schwüngen; Darstellung interpoliert, Kamera zeitbasiert.
 6. **Reproduzierbar:** jede Zufallsentscheidung über `engine/rng.ts` (Seed); gleicher Seed → gleiche Partie (getestet).
 7. **Keine erfundenen Ereignisse:** Kamera, Ton, Ticker und Kommentar reagieren nur auf `MatchEvent`s.
+8. **Chronologisch, nie vorbei am Moment (Phase B):** Die Engine läuft im Browser in einem Web Worker Tick für Tick; der Worker hält an jedem offenen Moment und rechnet erst nach der Entscheidung weiter. Das Bild läuft der Simulation hinterher (höchstens 90 s) und zeigt nur Berechnetes – schneller oder langsamer, nie erfunden.
 
 ## 4. Features & Status
 
@@ -68,9 +71,12 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 | Positionsspiel 4-3-3, Ballgewinner dezentral, Jockeying, Pressing, Deckung, Ausweichen, Bremsen vor Körpern | Implementiert, getestet (Zonen-Test) | `ai/shape.ts`, `ai/brain.ts` |
 | Schiedsrichter: Tor, Aus, Abseits (Regel-11-Ausnahmen, Seitenwechsel), Fouls, Karten inkl. Notbremse und Gelb-Rot, Elfmeter, Vorteil, Handspiel, Rückpass, 9,15 m | Implementiert, getestet | `rules/referee.ts`, `engine/restarts.ts` |
 | Vollständige autonome Partie (2 Halbzeiten) | Implementiert, getestet | `engine/match-engine.ts` |
-| Decisive Moment Director: Abschluss/Ablage, Durchsetzen, Konter, Gegenpressing, Durchbruch des Gegners, Gefahr vor dem eigenen Strafraum; „KI entscheiden lassen“ | Implementiert, getestet | `director/moment-director.ts` |
-| Entscheidungs-UI mit Countdown, Tasten 1–4, Rückmeldung zum Ausgang | Implementiert, im Browser getestet | `ui/decision-panel.*`, `app.ts` |
-| Stadion, Spielerfiguren mit IK an den Physikschuhen, TV-Regie, Ton, Ticker | Implementiert, im Browser geprüft | `render/*`, `audio/*`, `ui/*` |
+| Orchestrator: offenes Spiel (Abschluss/Ablage, Durchsetzen, Konter, Gegenpressing, Durchbruch, Strafraumgefahr), Standards vor der Ausführung (Einwurf, Ecke, Freistoß, Elfmeter), Halbzeitansprache; Kontingente, Reservierung, Verteilung über die Halbzeit | Implementiert, getestet (Phase B) | `orchestrator/*` |
+| Eckball-Laufwege (Strafraumbesetzung), Einwurf auf gewählten Empfänger, direkter/indirekter Freistoß, Elfmeter wird geschossen | Implementiert, getestet (Phase B) | `ai/corner-routine.ts`, `ai/throw-in.ts`, `engine/restarts.ts`, `ai/brain.ts` |
+| Agenten: Traits und Form aus echten Ereignissen | Implementiert, getestet (Phase B) | `ai/mind.ts` |
+| Chronologische Simulation im Web Worker, Präsentationsregie (live / verdichtet / angehalten) | Implementiert, getestet, im Browser gemessen (Phase B) | `sim/*`, `app.ts` |
+| Entscheidungs-Seitenleiste (Tastatur/Maus, Spielerform), Konsequenzkarte, Verlaufsleiste, Start/Ergebnis mit Chronik | Implementiert, im Browser getestet (Phase B) | `ui/*` |
+| Prozedurale Spielerfigur, Entscheidungs-Framing, taktische 3D-Overlays, Übersichtskamera | Implementiert, getestet, im Browser geprüft (Phase B) | `render/*` |
 
 ## 5. Testing Status (tatsächlich ausgeführt)
 

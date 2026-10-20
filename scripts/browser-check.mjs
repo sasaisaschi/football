@@ -5,7 +5,7 @@
 // consequence shown. Screenshots (before the decision, with a focused option, after the consequence) and a JSON report
 // go to browser-check-output/.
 // Usage: npm run test:browser   (env: CHROME_PATH, CHECK_SECONDS, CHECK_MOMENTS, CHECK_SOFTWARE_GL=1, CHECK_FULL=1,
-//        CHECK_VIEWPORT=1600x900, CHECK_URL_EXTRA="&seed=9")
+//        CHECK_VIEWPORT=1600x900, CHECK_SEED=7, CHECK_HALF=5, CHECK_COOLDOWN=25)
 //   CHECK_FULL=1 plays a full match (2 × 45 min) and hands every moment to the players after 2 s, to measure the
 //   session's wall-clock time, the worker's computing time and the simulated time.
 import { spawn } from 'node:child_process';
@@ -92,9 +92,11 @@ const layoutCheck = () => evaluate(`(()=>{
 try {
   await send('Runtime.enable');
   await send('Page.enable');
-  const half = full ? 45 : 5;
-  const extra = process.env.CHECK_URL_EXTRA ?? '';
-  await send('Page.navigate', { url: `http://localhost:${port}/?seed=7&half=${half}&cooldown=${full ? 75 : 25}&moments=${full ? 5 : 6}&timeout=${full ? 30 : 90}${extra}` });
+  const half = Number(process.env.CHECK_HALF ?? (full ? 45 : 5));
+  const seed = Number(process.env.CHECK_SEED ?? 7);
+  // Without an explicit spacing the app scales it with the half length, as for a user.
+  const cooldown = process.env.CHECK_COOLDOWN ? `&cooldown=${process.env.CHECK_COOLDOWN}` : full ? '' : '&cooldown=25';
+  await send('Page.navigate', { url: `http://localhost:${port}/?seed=${seed}&half=${half}${cooldown}&moments=${full ? 5 : 6}&timeout=${full ? 30 : 90}` });
   const waitFor = async (expr, seconds) => { for (let i = 0; i < seconds * 4; i++) { const v = await evaluate(expr); if (v) return v; await sleep(250); } return null; };
   report.checks.renderer = await evaluate("(()=>{const g=document.createElement('canvas').getContext('webgl2');const d=g&&g.getExtension('WEBGL_debug_renderer_info');return d?g.getParameter(d.UNMASKED_RENDERER_WEBGL):'unknown'})()");
   const startVisible = await waitFor("!!document.querySelector('.start-go')", 30);
@@ -168,7 +170,7 @@ try {
     }
     report.moments.push(entry);
     kinds.add(m.kind);
-    if (n >= wantMoments && kinds.size >= 3) break;
+    if (n >= wantMoments && kinds.size >= Math.min(3, wantMoments)) break;
   }
   report.checks.momentKinds = [...kinds];
   if (!full && report.moments.length === 0) fail('no decision moment appeared');

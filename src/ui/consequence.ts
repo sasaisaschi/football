@@ -18,7 +18,7 @@ export type ChronicleEntry = { clock: string; title: string; choice: string; by:
 export class ConsequenceCard {
   readonly el = document.createElement('section');
   readonly chronicle: ChronicleEntry[] = [];
-  private current: (ChronicleEntry & { team: TeamId; since: number; lastHolder: TeamId | null; opponentTouches: number; defending: boolean }) | null = null;
+  private current: (ChronicleEntry & { team: TeamId; since: number; lastHolder: TeamId | null; opponentTouches: number; defending: boolean; shot: boolean }) | null = null;
   private hideAt = 0;
   private readonly list: HTMLElement;
   private readonly head: HTMLElement;
@@ -37,7 +37,7 @@ export class ConsequenceCard {
     const option = m.options.find(o => o.id === optionId)!;
     const who = by === 'user' ? '' : by === 'delegated' ? ' (den Spielern überlassen)' : ' (Zeit abgelaufen)';
     const defending = possession !== null && possession !== m.team;
-    this.current = { clock, title: m.title, choice: option.label, by, lines: [], result: '', team: m.team, since: time, lastHolder: possession, opponentTouches: 0, defending };
+    this.current = { clock, title: m.title, choice: option.label, by, lines: [], result: '', team: m.team, since: time, lastHolder: possession, opponentTouches: 0, defending, shot: false };
     this.head.textContent = `${option.label}${who}`;
     this.list.replaceChildren();
     this.el.hidden = false;
@@ -70,6 +70,7 @@ export class ConsequenceCard {
     switch (e.type) {
       case 'swing':
         if (e.source === 'user' || (c.lines.length === 0 && teamOf(e.player) === c.team)) this.line(`${this.name(e.player)} ${SWING[e.action] ?? 'spielt den Ball'}.`);
+        if (teamOf(e.player) === c.team && e.action === 'shot') c.shot = true;
         else if (c.defending && e.action === 'shot') this.line(`${this.name(e.player)} (Gegner) schießt.`);
         return;
       case 'touch': {
@@ -79,6 +80,8 @@ export class ConsequenceCard {
           if (t === c.team) { this.line(`${this.name(e.player)} kommt an den Ball.`); this.finish(e.part === 'hands' ? 'Der Torwart hat den Ball.' : 'Ball erobert oder abgewehrt.'); }
           return;
         }
+        // Our shot met by the opponents: the keeper's save or a defender's block, named as such.
+        if (c.shot && t !== c.team) { this.finish(this.profiles[e.player].role === 'GK' ? `${this.name(e.player)} wehrt den Schuss ab.` : `Schuss geblockt von ${this.name(e.player)}.`); return; }
         if (t !== c.team) c.opponentTouches++;
         if (t !== c.lastHolder) this.line(t === c.team ? `Ball bei ${this.name(e.player)}.` : `${this.name(e.player)} (Gegner) ist am Ball.`);
         c.lastHolder = t;
