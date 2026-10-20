@@ -987,3 +987,38 @@ Die Engine besitzt bereits 22 individuelle Fähigkeitsprofile und dezentrale `Pl
 - [ ] **Ein Phase-B-PR** mit Screenshots, Testergebnissen, Architekturänderungen, bewusst nicht umgesetzten Wünschen und aktualisierter Source of Truth. **Kein Merge ohne Abnahme**.
 
 **Wichtige Klarstellung:** Phase B ist eine **Produkt- und Grafikphase** ebenso wie eine Orchestratorphase. Ein technisch vollständiger Matchsimulator mit kosmetisch überarbeitetem Popup ist **nicht** das beauftragte Ergebnis.
+
+### 10.8 Arbeitsplan Phase B (Opus, 20.10.2026)
+
+Ein Branch (`claude/phase-b-arbeitsauftrag-8042ea`), ein PR, interne Meilenstein-Commits. Nach jedem Meilenstein `npm run check`; ab B3 zusätzlich echter Browserlauf. Status der Punkte wird am Ende in §10.9 mit **Implementiert / Getestet / Gemessen / Offen** berichtet.
+
+**B1 – Orchestrator und Zustandsmaschine** (`src/orchestrator/*`, `engine/match-engine.ts`, `engine/types.ts`)
+- `MomentDirector` wird kontrolliert zum `Orchestrator`: Ablaufsteuerung (Prüftakt, Abklingzeit, Kontingente je Kategorie und Halbzeit, Vielfalt) getrennt von den Lageerkennern (`open-play.ts`: Angriff, Umschalten, Abwehr; `set-pieces.ts`: Einwurf, Ecke, Freistoß, Elfmeter; `coach.ts`: Halbzeitansprache).
+- Engine: `consultOrchestrator()` auch bei ruhendem Ball, **genau einmal pro platziertem Standard**, bevor der Ausführende den Ball spielt. `resolveMoment()` kehrt in die Phase vor dem Moment zurück (`stopped` mit unverändertem `restart` bzw. `in-play`) – kein doppelter Wiederanstoß, kein vorzeitiges `in-play`.
+- `DecisionOption.visual` (Akteur, Ballweg, Laufwege, Zielzone) und `DecisionMoment.category/participants` als Datengrundlage für Overlays und Kamera.
+- Standardoptionen nur aus vorhandener Mechanik: Einwurf (kurz / nach vorn / sichern – Wurf mit beiden Händen auf einen gewählten Mitspieler, Tempo erst beim Abwurf berechnet), Ecke (kurz / erster Pfosten / zweiter Pfosten / Rückraum, nur wenn ein Mitspieler die Zone real erreicht; neue legitime Laufwegabsicht für Strafraumbesetzung bei Ecken), Freistoß (direkt nur mit realer Abschlusschance, Pass, hoher Ball), Elfmeter (Schussziel links / Mitte / rechts, Torwart reagiert unverändert), Halbzeit (Teamanweisung für den Rest der Partie). Wechsel: **nicht** implementiert (keine Ersatzbank-Logik) → als offen deklariert.
+- Tests: Zustandsmaschine (Stopp vor Standard, Rückkehr zu Restart, genau ein `in-play`, kein Moment im Schwung), jede angebotene Standardoption wird physisch ausgeführt, verschiedene Optionen → verschiedene Folgezustände, Determinismus.
+
+**B2 – Agentenfundament** (`src/ai/mind.ts`)
+- Stabile Traits je Spieler aus dem Roster-Seed: Risikofreude, Disziplin, Teamorientierung, Grund-Selbstvertrauen.
+- Erfahrungsebene: Form/Selbstvertrauen, deterministisch aus echten Ereignissen (Pass angekommen/verloren, Dribbling behauptet/verloren, Schuss aufs Tor) fortgeschrieben; serialisierbar für spätere Persistenz.
+- Begrenzter, dokumentierter Einfluss nur auf die **Wahl** (Bewertungsbonus), nie auf Ausführung oder Ergebnis. Tests: gleiche Lage, andere Erfahrung → andere real ausgeführte Aktion; Reproduzierbarkeit.
+
+**B3 – Chronologische Verdichtung** (`src/sim/*`, `app.ts`)
+- Engine läuft in einem **Web Worker** chronologisch Tick für Tick (kein Tick-Skipping), hält an jedem offenen Moment an und rechnet nie daran vorbei. Hauptthread rendert aus einem Frame-Puffer (nur Vergangenheit der Simulation).
+- Präsentationsregie: ruhige Phasen im Zeitraffer (Taktikkamera), Aufbau der letzten Sekunden vor einem Moment, Tore/Schüsse und die Konsequenzphase nach einer Entscheidung in Echtzeit.
+- Messung getrennt: Nutzerzeit (Wanduhr), Rechenzeit des Workers, simulierte Zeit. Test des Runners in Node (hält an Momenten, Puffergrenze, gleiche Ticks wie direkte Engine).
+
+**B4 – Grafik** (`src/render/*`)
+- Neue prozedurale Spielerfigur (Rotationskörper-Torso, verjüngte Gliedmaßen, Trikot mit Ärmeln, Hose, Stutzen, geformte Schuhe, Haar, Rückennummer), weiterhin IK an Physikschuhen/-händen; keine fremden Assets (Lizenzfrage entfällt).
+- Licht/Material: Umgebungslicht (PMREM), besserer Rasen, gedämpfte Tribüne, Kameraführung, die das Feld statt der Ränge zeigt.
+- Entscheidungskamera mit Framing-Löser: Ball, Akteur, Ziele und nahe Gegner im freien Bildbereich (ohne Panel), Kamera im Stadioninneren; Test mit echter Projektion.
+- Taktische 3D-Overlays aus `DecisionOption.visual`: Akteur-/Zielringe, Pass-/Schuss-/Laufwege, Zonen, nummeriert passend zu den Tasten; Fokus wechselt mit Hover/Tastatur.
+
+**B5 – Oberfläche** (`src/ui/*`)
+- Entscheidungs-UI als schmale Seitenleiste (Desktop) bzw. Unterkante (schmal), Tastatur (1–4, Pfeile, Enter, 0) und Maus, Countdown, Delegation, Spielerform des Akteurs.
+- Konsequenzkarte aus beobachteten `MatchEvent`s, Verlaufsleiste mit Momenten/Toren, überarbeiteter Start- und Ergebnisbildschirm mit Entscheidungschronik.
+
+**B6 – Abnahme**
+- `scripts/browser-check.mjs` neu: mehrere Momenttypen mit Screenshots vor Entscheidung / bei Auswahl / nach Konsequenz, Prüfung horizontaler Scrollleiste und Panel-Überdeckung, FPS. Vollpartie-Lauf mit Delegation zur Zeitmessung.
+- Mehr-Seed-Probe (Regression der Spielstatistik durch Ecken-Laufwege und Agenten), Momentverteilung über Seeds und Halbzeiten, Bericht und PR.
