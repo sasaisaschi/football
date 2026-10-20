@@ -5,7 +5,7 @@
 // consequence shown. Screenshots (before the decision, with a focused option, after the consequence) and a JSON report
 // go to browser-check-output/.
 // Usage: npm run test:browser   (env: CHROME_PATH, CHECK_SECONDS, CHECK_MOMENTS, CHECK_SOFTWARE_GL=1, CHECK_FULL=1,
-//        CHECK_VIEWPORT=1600x900, CHECK_SEED=7, CHECK_HALF=5, CHECK_COOLDOWN=25)
+//        CHECK_VIEWPORT=1600x900, CHECK_SEED=7, CHECK_HALF=5, CHECK_COOLDOWN=25, CHECK_PREVIEW=1)
 //   CHECK_FULL=1 plays a full match (2 × 45 min) and hands every moment to the players after 2 s, to measure the
 //   session's wall-clock time, the worker's computing time and the simulated time.
 import { spawn } from 'node:child_process';
@@ -40,7 +40,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { browser: browserPath, viewport: `${vw}x${vh}`, checks: {}, moments: [], errors: [], warnings: [], notes: [] };
 const fail = msg => { report.errors.push(msg); };
 
-const vite = spawn(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), '--port', String(port), '--strictPort'], { cwd: root, stdio: 'pipe' });
+// CHECK_PREVIEW=1 serves the production build (run `npm run build` first) instead of the dev server.
+const viteArgs = process.env.CHECK_PREVIEW ? ['preview', '--port', String(port), '--strictPort'] : ['--port', String(port), '--strictPort'];
+const vite = spawn(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), ...viteArgs], { cwd: root, stdio: 'pipe' });
 let viteReady = false;
 vite.stdout.on('data', d => { if (String(d).includes('Local')) viteReady = true; });
 for (let i = 0; i < 300 && !viteReady; i++) await sleep(200); // first start may pre-bundle dependencies
