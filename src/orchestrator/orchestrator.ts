@@ -18,6 +18,11 @@ const KIND_LIMIT: Partial<Record<MomentKind, number>> = { 'throw-in': 1, 'free-k
 const RESERVED: readonly MomentCategory[] = ['attack', 'set-piece', 'defence'];
 /** From this share of the half on, reserved room is given up again (a category that did not come by then rarely will). */
 const RESERVE_UNTIL = 0.75;
+/**
+ * A set piece may follow another moment after a third of the usual spacing: corners mostly come straight out of an
+ * attack, and with the full spacing none of 8 matches × 2 × 15 min offered a single corner (measured).
+ */
+const SET_PIECE_SPACING = 1 / 3;
 
 export type OrchestratorConfig = {
   userTeam: TeamId;
@@ -69,7 +74,7 @@ export class Orchestrator {
     if (e.phase === 'stopped') return this.beforeRestart(e);
     if (e.time < this.nextCheck) return null;
     this.nextCheck = e.time + CHECK_INTERVAL;
-    if (!this.mayOpen(e, false)) return null;
+    if (!this.mayOpen(e, 1)) return null;
     const team = this.config.userTeam;
     const draft = (this.allowed(e, 'attack') ? attackingMoment(e, team) : null)
       ?? (this.allowed(e, 'transition') ? transitionMoment(e, team, this.track) : null)
@@ -91,16 +96,16 @@ export class Orchestrator {
     }
     // A penalty is rare and always decisive enough: only the overall limit applies, not the spacing.
     const penalty = r.kind === 'penalty';
-    if (!this.mayOpen(e, penalty)) return null;
+    if (!this.mayOpen(e, penalty ? 0 : SET_PIECE_SPACING)) return null;
     const kind: MomentKind | null = r.kind === 'throw-in' ? 'throw-in' : r.kind === 'corner' ? 'corner' : r.kind === 'free-kick' ? 'free-kick' : penalty ? 'penalty' : null;
     if (!kind || !this.allowed(e, 'set-piece', kind)) return null;
     const draft = kind === 'throw-in' ? throwInMoment(e, team) : kind === 'corner' ? cornerMoment(e, team) : kind === 'free-kick' ? freeKickMoment(e, team) : penaltyMoment(e, team);
     return draft ? this.open(e, draft, true) : null;
   }
 
-  /** Spacing, overall limit and pacing over the half: no more than about the share of the half already played. */
-  private mayOpen(e: MatchEngine, ignoreCooldown: boolean): boolean {
-    if (!ignoreCooldown && e.time - this.lastMomentAt < this.config.cooldown) return false;
+  /** Spacing (this share of the cooldown), overall limit and pacing over the half: no more than about the share of the half already played. */
+  private mayOpen(e: MatchEngine, spacing: number): boolean {
+    if (e.time - this.lastMomentAt < this.config.cooldown * spacing) return false;
     if (this.momentsThisHalf >= this.config.maxPerHalf) return false;
     const share = e.clockSeconds() / (e.config.halfMinutes * 60);
     return this.momentsThisHalf < 1 + this.config.maxPerHalf * share;

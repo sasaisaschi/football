@@ -1,15 +1,21 @@
 import './hud.css';
 import { TEAMS } from '../engine/rosters';
-import type { MatchSnapshot } from '../engine/types';
+import type { MatchSnapshot, TeamId } from '../engine/types';
+import type { PlaybackMode } from '../sim/playback';
 
-/** Broadcast overlay: score bug, clock, live ticker and status line. Reads snapshots only. */
+/**
+ * Broadcast overlay: score bug, clock, how the picture is running (live, condensed, decision), a match timeline with
+ * goals and decision moments, the live ticker and the status line. Reads snapshots and events only.
+ */
 export class Hud {
   readonly el = document.createElement('div');
   private readonly score: HTMLElement;
   private readonly clock: HTMLElement;
   private readonly ticker: HTMLElement;
   private readonly status: HTMLElement;
-  private readonly speed: HTMLElement;
+  private readonly mode: HTMLElement;
+  private readonly progress: HTMLElement;
+  private readonly markers: HTMLElement;
   private readonly lines: string[] = [];
   /** Wall time until which the status line is shown. */
   private statusUntil = 0;
@@ -18,33 +24,48 @@ export class Hud {
     this.el.className = 'hud';
     this.el.innerHTML = `
       <div class="hud-bug">
-        <span class="hud-live">LIVE</span>
         <span class="hud-team hud-home">${TEAMS[0].short}</span>
         <span class="hud-score" data-score>0 : 0</span>
         <span class="hud-team hud-away">${TEAMS[1].short}</span>
         <span class="hud-clock" data-clock>00:00</span>
       </div>
-      <div class="hud-speed" data-speed hidden></div>
+      <div class="hud-mode" data-mode>LIVE</div>
+      <div class="hud-timeline" aria-hidden="true"><span class="hud-progress" data-progress></span><span class="hud-half"></span><div data-markers></div></div>
       <div class="hud-ticker" data-ticker></div>
       <div class="hud-status" data-status></div>`;
-    this.score = this.el.querySelector('[data-score]')!;
-    this.clock = this.el.querySelector('[data-clock]')!;
-    this.ticker = this.el.querySelector('[data-ticker]')!;
-    this.status = this.el.querySelector('[data-status]')!;
-    this.speed = this.el.querySelector('[data-speed]')!;
+    const q = (s: string) => this.el.querySelector<HTMLElement>(s)!;
+    this.score = q('[data-score]'); this.clock = q('[data-clock]'); this.ticker = q('[data-ticker]'); this.status = q('[data-status]');
+    this.mode = q('[data-mode]'); this.progress = q('[data-progress]'); this.markers = q('[data-markers]');
   }
 
+  /** Match clock in minutes:seconds, counting on through the second half. */
   clockText(s: Pick<MatchSnapshot, 'clockSeconds' | 'half'>): string {
-    const total = s.clockSeconds + (s.half === 2 ? this.halfMinutes * 60 : 0);
+    const total = this.elapsed(s);
     return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
   }
 
-  update(s: MatchSnapshot, timeScale: number, wall: number): void {
+  elapsed(s: Pick<MatchSnapshot, 'clockSeconds' | 'half'>): number {
+    return Math.min(this.halfMinutes * 60, s.clockSeconds) + (s.half === 2 ? this.halfMinutes * 60 : 0);
+  }
+
+  update(s: MatchSnapshot, mode: PlaybackMode, speed: number, deciding: boolean, wall: number): void {
     if (this.statusUntil && wall > this.statusUntil) this.clearStatus();
     this.score.textContent = `${s.score[0]} : ${s.score[1]}`;
     this.clock.textContent = this.clockText(s);
-    this.speed.hidden = timeScale <= 1;
-    this.speed.textContent = `Zeitraffer x${timeScale}`;
+    this.progress.style.width = `${(this.elapsed(s) / (this.halfMinutes * 120)) * 100}%`;
+    const label = deciding ? 'ENTSCHEIDUNG' : mode === 'condensed' ? `VERDICHTET ×${Math.round(speed)}` : speed > 1.5 ? `ZEITRAFFER ×${Math.round(speed)}` : 'LIVE';
+    if (this.mode.textContent !== label) this.mode.textContent = label;
+    this.mode.dataset.state = deciding ? 'decision' : speed > 1.5 ? 'fast' : 'live';
+    this.el.classList.toggle('deciding', deciding);
+  }
+
+  /** A goal or a decision moment on the timeline, at the match second it happened. */
+  mark(kind: 'goal' | 'moment', at: number, team: TeamId, title: string): void {
+    const m = document.createElement('span');
+    m.className = `hud-marker hud-marker-${kind} ${team === 0 ? 'home' : 'away'}`;
+    m.style.left = `${(at / (this.halfMinutes * 120)) * 100}%`;
+    m.title = title;
+    this.markers.append(m);
   }
 
   /**
@@ -67,7 +88,7 @@ export class Hud {
     time.textContent = clock;
     line.append(time, document.createTextNode(text));
     this.lines.unshift(line.outerHTML);
-    if (this.lines.length > 5) this.lines.length = 5;
+    if (this.lines.length > 4) this.lines.length = 4;
     this.ticker.innerHTML = this.lines.join('');
   }
 }

@@ -1,6 +1,5 @@
 import './main.css';
 import * as THREE from 'three';
-import RAPIER from '@dimforge/rapier3d-simd-compat';
 import { MatchApp } from './app';
 import { CrowdAudio } from './audio/crowd-audio';
 import { DEFAULT_ORCHESTRATOR } from './orchestrator/orchestrator';
@@ -12,7 +11,10 @@ import { showStartScreen } from './ui/start-screen';
  * Optional URL parameters for development and verification (documented in PROJECT_REPORT.md):
  *   ?seed=123            reproduce a match
  *   ?half=5              preselect the half length in minutes
- *   ?cooldown=20         seconds between decision moments (default 75)
+ *   ?cooldown=20         simulated seconds between decision moments (default 75)
+ *   ?moments=5           decision moments per half at most (default 5)
+ *   ?timeout=15          seconds the user has for a decision (default 15)
+ *   ?condense=0          show everything live instead of condensing quiet play
  *   ?autostart=1         skip the start screen (used by the browser check)
  */
 const params = new URLSearchParams(location.search);
@@ -26,7 +28,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.0;
 host.append(renderer.domElement);
 const overlay = document.createElement('div');
 overlay.className = 'overlay';
@@ -34,8 +36,8 @@ host.append(overlay);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#050a14');
-scene.fog = new THREE.Fog('#050a14', 140, 320);
-scene.add(new THREE.HemisphereLight(0xc9d8ff, 0x1a3020, 0.9));
+scene.fog = new THREE.Fog('#050a14', 160, 360);
+scene.add(new THREE.HemisphereLight(0xc9d8ff, 0x1a3020, 0.85));
 // Key light standing in for the floodlight banks; it casts the player and ball shadows.
 const key = new THREE.DirectionalLight(0xffffff, 2.6);
 key.position.set(-40, 80, 50);
@@ -62,6 +64,7 @@ resize();
 
 const audio = new CrowdAudio();
 let app: MatchApp | null = null;
+let starting = false;
 let last = performance.now();
 let orbit = 0;
 
@@ -70,24 +73,29 @@ function loop(now: number): void {
   last = now;
   if (app) app.frame(dt);
   else {
-    // Establishing shot of the bowl behind the start screen.
-    orbit += dt * 0.05;
-    camera.position.set(Math.cos(orbit) * 95, 42, Math.sin(orbit) * 75);
-    camera.lookAt(0, 0, 0);
+    // Establishing shot of the bowl behind the start screen, from inside the stadium under the roofs.
+    orbit += dt * 0.04;
+    camera.position.set(Math.cos(orbit) * 62, 19, Math.sin(orbit) * 44);
+    camera.lookAt(Math.cos(orbit) * -8, 0, Math.sin(orbit) * -6);
     stadium.update(now / 1000, 0.15, 0);
   }
   renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }
 
-async function startMatch(halfMinutes: number): Promise<void> {
+async function startMatch(halfMinutes: number, condense: boolean): Promise<void> {
+  if (starting) return;
+  starting = true;
   audio.start();
-  await RAPIER.init();
-  app = new MatchApp(scene, camera, stadium, overlay, audio, {
+  app = await MatchApp.create(scene, camera, stadium, overlay, audio, {
     seed: num('seed', Math.floor(Math.random() * 1e9)),
     halfMinutes,
-    directorCooldown: num('cooldown', DEFAULT_ORCHESTRATOR.cooldown),
+    // The app's spacing was set for 2 × 45 minutes; shorter halves get proportionally shorter spacing (at least 20 s).
+    cooldown: num('cooldown', Math.max(20, Math.round((DEFAULT_ORCHESTRATOR.cooldown * halfMinutes) / 45))),
+    maxPerHalf: num('moments', DEFAULT_ORCHESTRATOR.maxPerHalf),
+    timeoutSeconds: num('timeout', DEFAULT_ORCHESTRATOR.timeoutSeconds),
     userTeam: 0,
+    condense,
   });
   // Read-only handle for the browser check script.
   (window as unknown as { __match?: MatchApp }).__match = app;
@@ -99,5 +107,5 @@ window.addEventListener('keydown', ev => {
 
 requestAnimationFrame(loop);
 const half = num('half', 15);
-if (params.get('autostart') === '1') void startMatch(half);
-else showStartScreen(overlay, half, choice => void startMatch(choice.halfMinutes));
+if (params.get('autostart') === '1') void startMatch(half, params.get('condense') !== '0');
+else showStartScreen(overlay, half, choice => void startMatch(choice.halfMinutes, choice.condense));

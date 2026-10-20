@@ -1,29 +1,36 @@
 import './start-screen.css';
 import { TEAMS } from '../engine/rosters';
 
-export type MatchChoice = { halfMinutes: number };
+export type MatchChoice = { halfMinutes: number; condense: boolean };
 
-/** Opening card: the fixture, the user's role and the match length. Starting it is also the audio gesture. */
+/** Opening card: the fixture, what the user plays, the match length and pacing. Starting it is also the audio gesture. */
 export function showStartScreen(host: HTMLElement, defaultHalf: number, onStart: (c: MatchChoice) => void): void {
   const el = document.createElement('div');
   el.className = 'start';
-  const card = document.createElement('div');
-  card.className = 'start-card';
-  card.innerHTML = `
-    <div class="start-kicker">MATCHDAY &middot; FLUTLICHT &middot; AUSVERKAUFT</div>
-    <h1>THE 12TH MAN</h1>
-    <div class="start-fixture"><span class="home"></span><span class="vs">vs</span><span class="away"></span></div>
-    <p data-intro></p>
-    <div class="start-lengths" role="radiogroup" aria-label="Spieldauer"></div>
-    <button class="start-go" data-go>Anpfiff</button>
-    <small>Gespielt wird in Echtzeit; ruhige Phasen im Mittelfeld laufen im Zeitraffer.</small>`;
-  card.querySelector('.home')!.textContent = TEAMS[0].name;
-  card.querySelector('.away')!.textContent = TEAMS[1].name;
-  card.querySelector('[data-intro]')!.textContent = `Die Mannschaften spielen selbst. Wenn es darauf ankommt, entscheidest du für ${TEAMS[0].name}. Ob es klappt, entscheiden Füße, Ball und Schiedsrichter.`;
+  el.innerHTML = `
+    <div class="start-card">
+      <div class="start-kicker">Matchday · Flutlicht · Ausverkauft</div>
+      <h1>THE 12TH MAN</h1>
+      <div class="start-fixture"><span class="home"></span><span class="vs">gegen</span><span class="away"></span></div>
+      <ol class="start-steps">
+        <li><b>Die Partie läuft selbst.</b><span>22 Spieler, echte Ballphysik, ein unabhängiger Schiedsrichter.</span></li>
+        <li><b>Der Orchestrator hält an,</b><span>wenn es eine echte Wahl gibt – im Spiel, vor Einwurf, Ecke, Freistoß oder in der Halbzeit.</span></li>
+        <li><b>Du entscheidest, die Spieler setzen um.</b><span>Ob es klappt, entscheiden Füße, Ball und Gegner.</span></li>
+      </ol>
+      <div class="start-row">
+        <div class="start-lengths" role="radiogroup" aria-label="Spieldauer"></div>
+        <label class="start-condense"><input type="checkbox" data-condense checked /> Ruhige Phasen verdichten</label>
+      </div>
+      <button class="start-go" data-go type="button">Anpfiff</button>
+      <small>Verdichtet heißt: jede Sekunde wird berechnet, ruhiges Spiel aber schneller gezeigt. Ohne Verdichtung läuft alles live.</small>
+    </div>`;
+  el.querySelector('.home')!.textContent = TEAMS[0].name;
+  el.querySelector('.away')!.textContent = TEAMS[1].name;
   let halfMinutes = defaultHalf;
-  const lengths = card.querySelector('.start-lengths')!;
-  for (const [label, minutes] of [['Kurz · 2 × 5 min', 5], ['Mittel · 2 × 15 min', 15], ['Voll · 2 × 45 min', 45]] as const) {
+  const lengths = el.querySelector('.start-lengths')!;
+  for (const [label, minutes] of [['2 × 5 min', 5], ['2 × 15 min', 15], ['2 × 45 min', 45]] as const) {
     const b = document.createElement('button');
+    b.type = 'button';
     b.textContent = label;
     b.setAttribute('role', 'radio');
     const select = () => {
@@ -36,10 +43,10 @@ export function showStartScreen(host: HTMLElement, defaultHalf: number, onStart:
     lengths.append(b);
     if (minutes === defaultHalf) select();
   }
-  card.querySelector<HTMLButtonElement>('[data-go]')!.addEventListener('click', () => {
+  el.querySelector<HTMLButtonElement>('[data-go]')!.addEventListener('click', () => {
+    const condense = el.querySelector<HTMLInputElement>('[data-condense]')!.checked;
     el.remove();
-    onStart({ halfMinutes });
+    onStart({ halfMinutes, condense });
   });
-  el.append(card);
   host.append(el);
 }

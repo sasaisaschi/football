@@ -97,13 +97,13 @@ describe('orchestrator: open play', () => {
     const e = new MatchEngine({ seed: 8, halfMinutes: 4 });
     const director = new Orchestrator({ userTeam: 0, cooldown: 60, maxPerHalf: 3, timeoutSeconds: 12 });
     e.director = director.attach();
-    const times: number[] = [];
+    const times: { t: number; setPiece: boolean }[] = [];
     const kinds: { kind: string; half: number }[] = [];
     while (e.phase !== 'full-time' && e.time < 600) {
       e.step();
       if (e.phase === 'decision' && e.moment) {
         // The half-time talk and a penalty are outside the spacing (the talk also outside the half's quota).
-        if (e.moment.kind !== 'team-talk' && e.moment.kind !== 'penalty') times.push(e.time);
+        if (e.moment.kind !== 'team-talk' && e.moment.kind !== 'penalty') times.push({ t: e.time, setPiece: e.moment.category === 'set-piece' });
         kinds.push({ kind: e.moment.kind, half: e.half });
         e.resolveMoment(e.moment.defaultOptionId, 'timeout');
       }
@@ -113,7 +113,8 @@ describe('orchestrator: open play', () => {
     expect(kinds.filter(k => k.kind === 'team-talk')).toEqual([{ kind: 'team-talk', half: 2 }]);
     // No kind of situation crowds out the others: at most one transition moment (counter, counter-press) per half.
     for (const half of [1, 2]) expect(kinds.filter(k => k.half === half && (k.kind === 'counter-press' || k.kind === 'counter-attack')).length).toBeLessThanOrEqual(1);
-    for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(60 - 0.5);
+    // Open play keeps the full spacing; a set piece may follow after a third of it.
+    for (let i = 1; i < times.length; i++) expect(times[i].t - times[i - 1].t).toBeGreaterThanOrEqual((times[i].setPiece ? 20 : 60) - 0.5);
   }, 300_000);
 
   it('danger in front of our box: pressing is carried out by the defender, delegating is recorded as such', () => {

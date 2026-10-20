@@ -60,7 +60,7 @@ function createCrowd(SX: number, SZ: number) {
   const seat = 0.55;
   const long = Math.floor((2 * SX) / seat), end = Math.floor((2 * SZ) / seat);
   const count = ROWS * 2 * (long + end);
-  const geo = new THREE.CapsuleGeometry(0.2, 0.42, 2, 6);
+  const geo = new THREE.CapsuleGeometry(0.17, 0.36, 2, 6);
   const phase = new Float32Array(count), side = new Float32Array(count);
   const material = new THREE.MeshStandardMaterial({ roughness: 0.9 });
   // Fans bob in the vertex shader (no per-frame CPU work): amplitude follows the tension; on a goal the
@@ -82,8 +82,11 @@ function createCrowd(SX: number, SZ: number) {
         transformed.y += max(0.0, sin(uTime * freq + aPhase)) * amp;`);
   };
   const mesh = new THREE.InstancedMesh(geo, material, count);
-  const home = new THREE.Color(TEAMS[0].kit), away = new THREE.Color(TEAMS[1].kit);
-  const neutral = [new THREE.Color('#d9dee6'), new THREE.Color('#2b3240'), new THREE.Color('#7a8394'), new THREE.Color('#e9c46a')];
+  // Fans sit in the half-light of a night stadium: the pitch is lit, the stands much less. Full-strength kit colours
+  // made the terraces the brightest part of every picture.
+  const dim = (c: string, k: number) => new THREE.Color(c).multiplyScalar(k);
+  const home = dim(TEAMS[0].kit, 0.42), away = dim(TEAMS[1].kit, 0.42);
+  const neutral = [dim('#d9dee6', 0.3), dim('#2b3240', 0.6), dim('#7a8394', 0.35), dim('#b9a27a', 0.3)];
   const dummy = new THREE.Object3D();
   let n = 0;
   for (let s = 0; s < 4; s++) {
@@ -96,7 +99,7 @@ function createCrowd(SX: number, SZ: number) {
       // Home fans behind the goal at -X and along the near side; the away end is at +X.
       const team = (!isLong && s === 3) || (isLong && x > 30 && s === 0) ? 1 : 0;
       const hash = (c * 73 + r * 151 + s * 17) % 100;
-      const color = hash < 55 ? (team === 0 ? home : away) : neutral[hash % neutral.length];
+      const color = hash < 40 ? (team === 0 ? home : away) : neutral[hash % neutral.length];
       dummy.position.set(x, 1.55 + r * ROW_RISE, z);
       dummy.rotation.set(0, isLong ? (s === 0 ? 0 : Math.PI) : s === 2 ? Math.PI / 2 : -Math.PI / 2, 0);
       dummy.updateMatrix();

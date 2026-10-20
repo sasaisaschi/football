@@ -12,8 +12,8 @@ import { ballVisual, outlook } from './open-play';
 
 /** A set-piece runner further away than this from his zone could not be there in time (m). */
 const ZONE_REACH = 30;
-/** Throw-ins deep in the own half are routine; only from about the halfway line forward is the choice worth a stop. */
-const THROW_IN_FROM_U = -0.1;
+/** Throw-ins in the own half are routine; only in the opponents' half is the choice worth a stop. */
+const THROW_IN_FROM_U = 0;
 /** Free kicks are only worth a stop in the opponents' half. */
 const FREE_KICK_FROM_U = 0.15;
 /** A direct free kick is offered as a shot only from this close to goal (m) and with at least this chance. */

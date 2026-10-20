@@ -38,6 +38,20 @@ describe('agents: traits and experience', () => {
     expect(run().map(m => m.confidence)).toEqual(minds.map(m => m.confidence));
   });
 
+  it('an action left open too long is dropped, not judged – also when the same player plays on', () => {
+    const profiles = createRoster(7);
+    const minds = profiles.map(p => new PlayerMind(p.traits));
+    const t = new ExperienceTracker(profiles, minds);
+    const pos = { x: 0, y: 0, z: 0 };
+    let id = 0;
+    const ev = (e: Record<string, unknown>, time: number) => t.onEvent({ ...e, id: ++id, tick: 0, time } as MatchEvent);
+    ev({ type: 'swing', player: 9, action: 'dribble', source: 'ai' }, 1);
+    ev({ type: 'touch', player: 9, part: 'boot', ballSpeed: 3, position: pos }, 1.1);
+    // Long after: the same player swings again. Before the fix this judged an expired action and crashed.
+    ev({ type: 'swing', player: 9, action: 'dribble', source: 'ai' }, 9);
+    expect(minds[9].recent).toEqual([]);
+  });
+
   it('traits differ between players and leave the abilities of the roster untouched', () => {
     const roster = createRoster(7);
     expect(new Set(roster.map(p => p.traits.risk.toFixed(3))).size).toBeGreaterThan(15);

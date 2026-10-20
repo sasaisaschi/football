@@ -71,8 +71,8 @@ export class ExperienceTracker {
   constructor(private readonly profiles: readonly PlayerProfile[], private readonly minds: readonly PlayerMind[]) {}
 
   onEvent(e: MatchEvent): void {
+    if (this.open && e.time - this.open.time > OPEN_FOR) this.open = null;
     const o = this.open;
-    if (o && e.time - o.time > OPEN_FOR) this.open = null;
     switch (e.type) {
       case 'swing':
         if (e.action === 'pass' || e.action === 'dribble' || e.action === 'shot') {

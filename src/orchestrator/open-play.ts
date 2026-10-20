@@ -115,10 +115,12 @@ export function transitionMoment(e: MatchEngine, team: TeamId, track: Possession
       { id: 'gegenpress', label: 'Sofort gegenpressen', detail: 'Hoch pressen, Linie rückt auf', effect: { type: 'team', team, instruction: press, seconds: 10 }, outlook: 'schnelle Rückeroberung möglich, Raum hinter der Abwehr', visual: { actor: touch.player, line: line(press, false), zone: { x: ball.x, z: ball.z, r: 8 } } },
       { id: 'drop', label: 'Fallen lassen', detail: 'Kompakt hinter den Ball', effect: { type: 'team', team, instruction: drop, seconds: 10 }, outlook: 'sicherer, Gegner baut ruhig auf', visual: { actor: touch.player, line: line(drop, false) } },
     ];
+    // The team acts; the player nearest to the ball leads the press (or the retreat).
     const ours = e.profiles.filter(p => p.team === team && p.role !== 'GK' && !e.referee.sentOff.has(p.id)).sort((a, b) => dist(e.bodies[a.id].position(), ball) - dist(e.bodies[b.id].position(), ball))[0];
+    for (const o of options) if (o.visual) o.visual.actor = ours.id;
     return {
-      kind: 'counter-press', category: 'transition', title: 'Ballverlust in der gegnerischen Hälfte', situation: 'Der Gegner hat den Ball gerade erobert.',
-      focusPlayer: touch.player, options, defaultOptionId: base.press === 'high' ? 'gegenpress' : 'drop', participants: participantsFor(e, team, touch.player, options, ours ? [ours.id] : []),
+      kind: 'counter-press', category: 'transition', title: 'Ballverlust in der gegnerischen Hälfte', situation: `${playerName(e, touch.player)} hat den Ball gerade erobert.`,
+      focusPlayer: ours.id, options, defaultOptionId: base.press === 'high' ? 'gegenpress' : 'drop', participants: participantsFor(e, team, ours.id, options, [touch.player]),
     };
   }
   return null;
