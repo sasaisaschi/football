@@ -40,6 +40,9 @@ function fits(points: readonly Vec3[], safe: SafeArea): boolean {
   return true;
 }
 
+/** Where on screen the scene's centre should land: the middle of the free area (normalised device coordinates). */
+let aim = { x: 0, y: 0 };
+
 function place(target: THREE.Vector3, azimuth: number, elevation: number, distance: number): void {
   camera.position.set(
     target.x + Math.cos(azimuth) * Math.cos(elevation) * distance,
@@ -48,6 +51,25 @@ function place(target: THREE.Vector3, azimuth: number, elevation: number, distan
   );
   camera.lookAt(target);
   camera.updateMatrixWorld(true);
+  // Aimed so that the target appears in the middle of the free area, not of the whole picture: centred on the screen,
+  // half the scene lay behind a panel at the bottom (measured at 800 × 900: players under the panel). The camera looks at
+  // the point seen at the opposite offset, with the same lookAt the app uses, so this is exactly the picture shown.
+  if (aim.x !== 0 || aim.y !== 0) {
+    const look = v.set(-aim.x, -aim.y, 0.5).unproject(camera).sub(camera.position).normalize();
+    lookPoint.copy(camera.position).addScaledVector(look, camera.position.distanceTo(target));
+    camera.lookAt(lookPoint);
+    camera.updateMatrixWorld(true);
+  } else lookPoint.copy(target);
+}
+
+/** The point the camera looks at, as placed last: what the app's camera aims at. */
+const lookPoint = new THREE.Vector3();
+function aimedTarget(): THREE.Vector3 {
+  return lookPoint.clone();
+}
+
+function aimAt(safe: SafeArea): void {
+  aim = { x: (safe.left + safe.right) / 2, y: (safe.bottom + safe.top) / 2 };
 }
 
 /**
@@ -76,7 +98,8 @@ function mostVisible(points: readonly Vec3[], attackDir: 1 | -1, aspect: number,
   camera.updateProjectionMatrix();
   const target = new THREE.Box3().setFromPoints(points.map(p => new THREE.Vector3(p.x, p.y, p.z))).getCenter(new THREE.Vector3());
   target.y = Math.min(1, target.y);
-  let best: { score: number; position: THREE.Vector3 } | null = null;
+  aimAt(safe);
+  let best: { score: number; position: THREE.Vector3; aimed: THREE.Vector3 } | null = null;
   for (let a = 0; a < AZIMUTHS; a++) {
     const azimuth = (a / AZIMUTHS) * Math.PI * 2;
     for (const elevation of ELEVATIONS) {
@@ -91,10 +114,10 @@ function mostVisible(points: readonly Vec3[], attackDir: 1 | -1, aspect: number,
       });
       // Equal coverage: prefer looking along the attack.
       score += 0.1 * -Math.cos(azimuth) * attackDir;
-      if (!best || score > best.score) best = { score, position: camera.position.clone() };
+      if (!best || score > best.score) best = { score, position: camera.position.clone(), aimed: aimedTarget() };
     }
   }
-  return best ? { position: best.position, target } : null;
+  return best ? { position: best.position, target: best.aimed } : null;
 }
 
 function fallback(points: readonly Vec3[]): Framing {
@@ -112,7 +135,8 @@ function frameWithin(points: readonly Vec3[], attackDir: 1 | -1, aspect: number,
   const box = new THREE.Box3().setFromPoints(points.map(p => new THREE.Vector3(p.x, p.y, p.z)));
   const target = box.getCenter(new THREE.Vector3());
   target.y = Math.min(1, target.y);
-  let best: { score: number; position: THREE.Vector3 } | null = null;
+  aimAt(safe);
+  let best: { score: number; position: THREE.Vector3; aimed: THREE.Vector3 } | null = null;
   for (let a = 0; a < AZIMUTHS; a++) {
     const azimuth = (a / AZIMUTHS) * Math.PI * 2;
     const dirX = Math.cos(azimuth), dirZ = Math.sin(azimuth);
@@ -133,10 +157,10 @@ function frameWithin(points: readonly Vec3[], attackDir: 1 | -1, aspect: number,
       const along = -dirX * attackDir;
       // Steep views read less like football: they only win when nothing flatter fits nearly as tight.
       const score = hi * (1.25 - 0.25 * along) * (dirZ > 0 ? 0.92 : 1) * (elevation > 0.9 ? 1.35 : 1);
-      if (!best || score < best.score) best = { score, position: p.clone() };
+      if (!best || score < best.score) best = { score, position: p.clone(), aimed: aimedTarget() };
     }
   }
-  return best ? { position: best.position, target } : null;
+  return best ? { position: best.position, target: best.aimed } : null;
 }
 
 /** Projects a point with a given camera framing (for tests and the overlap check of the interface). */

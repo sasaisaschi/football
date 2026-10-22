@@ -1417,4 +1417,104 @@ Schusslabor nach allen Korrekturen unverändert (8/12/16/20/25 m: 92/92/92/85/92
 - Deterministisch: keine Zufallszahl, gleiche Partie → gleiche Wechsel. Der Kommentar nennt den Grund („… kommt für … – mehr Offensive im Rückstand“).
 - In der App wechselt der Gegner des Nutzerteams so (`runner.ts`, `benchCoach: [1]`); das Nutzerteam wechselt nur durch die Entscheidung des Menschen.
 - Tests (`ai/bench-manager.test.ts`, 4): Rückstand → Stürmer für Mittelfeldspieler, spielt danach; Führung → defensiver Wechsel, Unentschieden → keiner von beiden; Rote Karte für den Torwart → Ersatztorwart läuft ins Tor; ganze Partie → nur bei ruhendem Ball, nur das eigene Team, höchstens 5, keine Rückkehr, bei Wiederholung identisch.
+- **Nachtrag aus den Browsersitzungen (§11.4):** Der Gegner wechselte dort dreimal binnen zwei Spielminuten wegen Form. Seitdem höchstens ein Formwechsel je Unterbrechung und mindestens 10 % einer Halbzeit zwischen zwei Wechselgelegenheiten (außer Ersatztorwart); im Test geprüft. Die vier Sitzungen in §11.4 liefen vor dieser Korrektur; danach zeigten Desktop-, Schmal- und Gedächtnislauf 2, 1 und 3 gegnerische Wechsel (2 × 5: Formwechsel in der 7. und 8. Minute, Offensivwechsel bei Rückstand in der 8.).
 - Für die Dateigrenze ausgelagert, Partie bit-identisch (Seeds 1–2 gleiche Ereignisse): `engine/substitutions.ts`, `engine/snapshot.ts` aus `match-engine.ts` zusammen mit dem Verlassen und Betreten des Platzes und `clampSpot` (624 → 517 Zeilen), `ai/ball-reach.ts` aus `brain.ts` (540 → 492).
+
+### 11.4 C1 Spielzeit und Benutzererfahrung – gemessen, Ziel erreicht
+
+**Kennzeichnung der Länge** (`ui/match-length.ts`):
+- Startbildschirm: „Kurzpartie · 2 × 15 min statt 2 × 45“ mit gemessener Dauer.
+- Anzeigetafel: gelbes Feld „2×15“, bei voller Spielzeit grau „2×45“.
+- Ergebnis: „Abpfiff · Kurzpartie · 2 × 15 min statt 2 × 45“.
+
+Die Uhr zeigt die echte simulierte Zeit (0–30 min). Die volle Spielzeit bleibt wählbar.
+
+**Messverfahren** (`CHECK_SESSION=1 npm run test:browser`, Produktions-Build über `vite preview`, Chrome headless, Intel Iris Xe, 1600 × 900):
+- Das Skript spielt wie ein Mensch. Jede Entscheidung fällt nach einer Bedenkzeit von 5–10 s, je Moment aus dem Seed des Skripts gezogen.
+- In 80 % der Fälle wählt es eine Option per Taste, in 20 % überlässt es die Wahl den Spielern.
+- Gemessen werden:
+  - Nutzerzeit (Wanduhr), Rechenzeit des Workers und simulierte Zeit,
+  - die Zeit in Live-Bild, Verdichtung und Entscheidung,
+  - Stillstand (das Bild steht ohne offene Entscheidung),
+  - FPS-Stichproben,
+  - alle Texte von Leiste und Konsequenzkarte.
+- Die Einstellungen sind die der App für die jeweilige Länge, keine Testparameter.
+
+| Sitzung | Nutzerzeit | Rechenzeit | Momente (Arten) | Bedenkzeit gesamt | live / verdichtet / Entscheidung | Stillstand | FPS live / verdichtet |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2 × 15, Seed 7 | **6:30** | 2:11 | 13 (7) | 104 s | 117 / 70 / 107 s | 0 s | 60 / 60 |
+| 2 × 15, Seed 11 | **7:10** | 3:45 | 12 (8, u. a. Elfmeter, Eckenverteidigung) | 84 s | 117 / 129 / 87 s | 0 s | 58 / 60 |
+| 2 × 15, Seed 23 | **7:22** | 3:56 | 12 (8) | 93 s | 104 / 126 / 97 s | 0 s | 56 / 60 |
+| 2 × 5, Seed 11, mit Gedächtnis | **4:15** | 1:27 | 9 | 69 s | 83 / 30 / 69 s | 0 s | 61 / 60 |
+| **2 × 45, Seed 7** | **15:34** | 12:05 | 13 (8) | 98 s | 173 / 456 / 102 s | 0 s | 59 / 60 |
+
+Alle Sitzungen erreichten den Abpfiff ohne Konsolenfehler oder Warnungen. Jede Wahl wurde als `user` bzw. `delegated` protokolliert. Während der 2 × 45-Messung lief etwa eine Minute lang ein Unit-Test parallel; der Wert ist dadurch höchstens leicht erhöht.
+
+**Bewertung:**
+- **Der interaktive 5–10-Minuten-Modus ist 2 × 15 min:**
+  - 6:30–7:22 Nutzerzeit bei 12–13 Entscheidungen, also etwa alle 35 s eine Entscheidung.
+  - Etwa ein Viertel der Zeit ist eigene Bedenkzeit, der Rest Spiel.
+  - Die Partie ist kein 90-Minuten-Spiel und wird auch nicht so dargestellt.
+- **Volle Partie zum Vergleich:** 15:34 min, ebenfalls 13 Momente (die Abklingzeit skaliert für 2 × 45), also deutlich weniger Entscheidungen je Minute. Begrenzend bleibt die Rechenzeit (§10.10 R1).
+- **Wartezeiten:** In keiner Sitzung stand das Bild ohne Entscheidung still (0 s). Die Verdichtung (×4–×24) überbrückt ruhige Phasen, die letzten 5 s vor jedem Moment laufen in Echtzeit.
+- **FPS:** 56–61 live und 60 verdichtet in den Stichproben während der Sitzung. Die erste Messung direkt nach dem Anpfiff lag in einer Sitzung bei 40–43 FPS (Aufwärmen von Shadern und Worker), danach nicht mehr.
+- **Verständlichkeit** (eigene Durchsicht aller 10–13 Leisten- und Konsequenztexte je Sitzung und der Aufnahmen):
+  - Jede Leiste nennt die Lage, den Akteur mit Form und Charakter, die Optionen mit erwarteter Folge und die Tendenz der Spieler.
+  - Jede Konsequenzkarte nennt nur beobachtete Ereignisse in Reihenfolge, z. B. „Doyle (7) wirft ein. Adeyemi (10) (Gegner) ist am Ball. Ball bei Hale (8). Danach ging es ohne klares Ergebnis weiter.“
+  - Gefunden und behoben: Der Tastenhinweis lautete immer „1–4 wählen“, auch bei zwei oder drei Optionen.
+
+### 11.5 C4 Grafische und interaktive Endabnahme – geprüft, drei Fehler behoben
+
+Geprüft habe ich selbst die Aufnahmen aller Sitzungen (je Moment vor der Entscheidung und nach der Konsequenz, dazu das Ergebnis) und die Prüfläufe Desktop und schmal, verglichen mit `docs/phase-b-rest/`. Spieleranimationen, Ballkontakte, Konsequenzkarten und Ergebnisseite entsprechen dem Stand der Restarbeiten.
+
+Behoben:
+1. **Optionsnummern verdeckten Spieler:**
+   - Bei naher Entscheidungskamera (Einwurf) füllte die Nummer „1“ ein Fünftel des Bildes und hing vor dem Kopf des Empfängers (`docs/phase-c/04-…`).
+   - Jetzt hält sie eine feste Bildgröße (`tactical-overlay.ts`, unter 30 m Abstand verkleinert) und schwebt über dem Kopf.
+2. **Schmale Ansicht – Beteiligte unter der Leiste:**
+   - Im Prüflauf 800 × 900 verdeckte die Leiste bei der Freistoßmauer zwei Spieler und die Option „4“, bei der Halbzeitansprache einen Spieler.
+   - Ursache in `framing.ts`: Die Kamera richtete die Mitte der Szene auf die Bildmitte. Der freie Bereich liegt aber oben (am Desktop links).
+   - Jetzt zielt sie so, dass die Szene in der Mitte des freien Bereichs liegt, mit demselben `lookAt` wie die App.
+   - Danach: 0 verdeckte Beteiligte auf beiden Formaten. Die Tests in `framing.test.ts` sind unverändert grün.
+3. **Tastenhinweis** (siehe C1).
+
+**Abschlussläufe** (Produktions-Build, Seed 7):
+
+| Lauf | Ergebnis |
+| --- | --- |
+| Desktop 1600 × 900, 2 × 15 | `ok`, 0 Fehler/Warnungen; 10 Momente in 7 Arten (Strafraumgefahr, Gegenpressing, Durchbruch, Ecke, Halbzeitansprache, Wechsel, Durchsetzen), jedes Mal eingefroren und als `user` entschieden; **0 verdeckte, 0 abgeschnittene Beteiligte**; FPS 53 live / 60 verdichtet |
+| Schmal 800 × 900, 2 × 5 | `ok`; 6 Momente in 6 Arten (u. a. Freistoßmauer, Halbzeitansprache, Wechsel); **0 verdeckte, 0 abgeschnittene Beteiligte** (vor der Korrektur 2 Momente mit verdeckten Spielern); FPS 43 live / 60 verdichtet |
+
+Vergleichsbilder aus dem Produktions-Build liegen in `docs/phase-c/`:
+- Startbildschirm mit Längenangabe und Anzeigetafel „2×15“,
+- Elfmeter,
+- Einwurf vor der Korrektur der Nummern, Ecke nach der Korrektur,
+- schmale Ansicht Mauer und Halbzeit nach der Korrektur,
+- Figuren nah,
+- Ergebnis 2 × 15 und 2 × 45.
+
+### 11.6 C5 Abschlusstests
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npm run check` | `tsc` fehlerfrei, **27 Testdateien / 151 Tests bestanden** (3 Dateien nur über eigene Befehle, unten), Build erfolgreich |
+| `npm run sim` (2 × 45 min, Seed 2026) | Abpfiff regulär, 0:2, 23 Torschüsse, 0 Eigentore, Passquote 76 %, 1,99 ms/Tick (Node) |
+| `npm run lab` (Schusslabor) | 8/12/16/20/25 m: 92/92/92/85/92 % gehalten, Fänge 46/40/25/25/29 von 55 – identisch mit Phase B und den Restarbeiten |
+| `RECORD_SCENES=1` (Szenenaufzeichnung) | bestanden; `lab/scenes.json` bewusst nicht ersetzt, damit die Vergleichsbilder der Restarbeiten reproduzierbar bleiben |
+| Mehr-Seed-Probe | 60 Seeds vorher und nachher (§11.2) |
+| Browser Desktop, schmal, Produktions-Build | §11.5 |
+| Vollständige Sitzungen | 4 Kurzpartien und 1 volle Partie bis zum Abpfiff (§11.4) |
+| Reproduzierbarkeit ohne und mit Gedächtnis | Test `agent-memory.test.ts`: dieselbe Partie ohne Gedächtnis zweimal identisch; mit gespeichertem (als JSON geschriebenem und gelesenem) Gedächtnis zweimal identisch; das Gedächtnis verändert den Verlauf. Im Browser lief eine Sitzung mit eingeschaltetem Gedächtnis fehlerfrei (§11.4). |
+
+### 11.7 Status je Punkt
+
+| Punkt | Implementiert | Getestet | Gemessen | Offen |
+| --- | --- | --- | --- | --- |
+| C1 Spielzeit und Benutzererfahrung | Längenkennzeichnung, Sitzungsmodus im Prüfskript | Browser (5 Sitzungen) | 2 × 15: 6:30–7:22 min, 2 × 45: 15:34 min, 0 s Stillstand, FPS | 2 × 45 bleibt bei ≈ 15 min (Rechenzeit) |
+| C2 Fußballrealismus | 4 Fehlerkorrekturen (Mitspieler, Torwart ×2, Regel 12), erweiterte Statistik | 3 neue Tests, jeweils geprüft, dass sie ohne die Korrektur fehlschlagen | 4 Commits × 24 Seeds, 60 Seeds vorher/nachher, Schusslabor | Torschüsse 16/90 (real ≈ 25), Ecken 6/90, kaum Standardtore, Passzahl ≈ 1400/90 |
+| C3 Gegnerische Wechsel | ja | 4 Tests | in jeder Browserpartie 1–4 Wechsel des Gegners (siehe §11.3, Nachtrag) | keine Wechsel wegen Verletzung (es gibt keine Verletzungen), keine taktische Systemänderung |
+| C4 Grafische Endabnahme | 3 Korrekturen | Framing-Tests, Browser Desktop und schmal | 0 verdeckte Beteiligte, FPS | keine Gesichter, kein Motion-Capture (wie §10.10) |
+| C5 Abschlusstests | – | alle oben | – | – |
+| Szenariomodus | nein | – | – | weiterhin eigener Folgepunkt (§10.10 R6) |
+
+**Nicht als Erfolg gewertet:** Grüne Unit-Tests allein. Alle Aussagen zu Spielzeit, Verständlichkeit und Darstellung stammen aus den Browsersitzungen und den Aufnahmen, die Statistik aus Mehr-Seed-Läufen.

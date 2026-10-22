@@ -6,9 +6,9 @@ export type MatchChoice = { halfMinutes: number; condense: boolean; resetMemory:
 
 /** What each length means for the session (user time measured in the production build, PROJECT_REPORT.md §11). */
 const LENGTH_NOTE: Record<5 | 15 | 45, string> = {
-  5: 'Zum Ausprobieren: wenige Entscheidungen.',
-  15: 'Jede Sekunde der 30 Spielminuten wird simuliert.',
-  45: 'Die ganze Partie, jede Sekunde simuliert.',
+  5: 'Zum Ausprobieren, etwa 4 Minuten.',
+  15: 'Jede Sekunde der 30 Spielminuten wird simuliert, etwa 7 Minuten.',
+  45: 'Die ganze Partie, jede Sekunde simuliert, etwa 15 Minuten.',
 };
 
 /** Opening card: the fixture, what the user plays, the match length and pacing. Starting it is also the audio gesture. */
