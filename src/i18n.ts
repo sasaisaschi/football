@@ -8,6 +8,9 @@ export type Lang = 'en' | 'de';
 
 let current: Lang = 'en';
 
+/** Where the start screen remembers the viewer's language. */
+export const LANG_STORAGE_KEY = 'the12thman.lang';
+
 export function setLang(lang: Lang): void {
   current = lang;
 }

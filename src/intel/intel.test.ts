@@ -8,6 +8,8 @@ import { Orchestrator } from '../orchestrator/orchestrator';
 import { IntelBoard, INTEL_SCHEMA } from './board';
 import { narrate } from './narrator';
 import { passDifficulty } from './stats';
+import { briefMoment } from './moment-brief';
+import type { DecisionMoment, MatchSnapshot } from '../engine/types';
 
 beforeAll(async () => {
   await RAPIER.init();
@@ -19,17 +21,23 @@ function play(seed: number, halfMinutes: number) {
   e.director = new Orchestrator({ userTeam: 0, cooldown: 25, maxPerHalf: 5, timeoutSeconds: 15 }).attach();
   const board = new IntelBoard(e.profiles, halfMinutes);
   const events: MatchEvent[] = [];
+  const moments: { m: DecisionMoment; frame: MatchSnapshot; briefs: [ReturnType<typeof briefMoment>, ReturnType<typeof briefMoment>] }[] = [];
   let pending: MatchEvent[] = [];
   e.onEvent(ev => { events.push(ev); pending.push(ev); });
   while (e.phase !== 'full-time' && e.time < halfMinutes * 120 + 300) {
     e.step();
-    if (e.phase === 'decision') { board.noteMoment(e.moment!); e.resolveMoment(e.moment!.defaultOptionId, 'timeout'); }
+    if (e.phase === 'decision') {
+      const frame = e.snapshot();
+      moments.push({ m: e.moment!, frame, briefs: [briefMoment(e.moment!, frame, e.profiles, board.stats, 'fan'), briefMoment(e.moment!, frame, e.profiles, board.stats, 'analyst')] });
+      board.noteMoment(e.moment!);
+      e.resolveMoment(e.moment!.defaultOptionId, 'timeout');
+    }
     const frame = e.snapshot();
     for (const ev of pending) board.ingest(ev, frame);
     pending = [];
     board.observe(frame);
   }
-  return { e, board, events };
+  return { e, board, events, moments };
 }
 
 describe('match intelligence pipeline', () => {
@@ -77,6 +85,23 @@ describe('match intelligence pipeline', () => {
     expect(a.insights.every(i => i.text.fan.en.text && i.text.fan.de.text && i.text.analyst.en.text && i.text.analyst.de.text)).toBe(true);
     expect(a.teams[0].possessionPct + a.teams[1].possessionPct).toBeGreaterThanOrEqual(99);
   }, 900_000);
+
+  it('every decision moment is explained from its frozen frame, the estimates are the players\' own', () => {
+    const { moments } = run();
+    expect(moments.length).toBeGreaterThan(2);
+    for (const { m, briefs } of moments) {
+      for (const b of briefs) {
+        if (m.category !== 'coach') expect(b.lines.length, m.kind).toBeGreaterThan(0);
+        for (const l of [...b.lines, ...b.options.map(o => o.note)]) expect(l, m.kind).not.toMatch(/undefined|NaN|Infinity/);
+        for (const o of m.options) {
+          const note = b.options.find(x => x.id === o.id)!;
+          if (o.estimate !== undefined) expect(note.note).toContain(`${Math.round(o.estimate * 100)} %`);
+        }
+      }
+      // The analyst gets at least as much as the fan, with the numbers.
+      expect(briefs[1].lines.length).toBeGreaterThanOrEqual(briefs[0].lines.length - 1);
+    }
+  }, 600_000);
 
   it('pass difficulty follows its parts: longer, pressed and forward passes are harder', () => {
     expect(passDifficulty(8, 9, 0)).toBe(2);

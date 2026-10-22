@@ -1,6 +1,7 @@
 import './decision-panel.css';
 import type { DecisionMoment, DecisionSource, MatchSnapshot, MomentCategory, PlayerProfile } from '../engine/types';
 import { tr } from '../i18n';
+import type { MomentBrief } from '../intel/moment-brief';
 
 const CATEGORY = (c: MomentCategory): string => ({ attack: tr('Attack', 'Angriff'), transition: tr('Transition', 'Umschalten'), defence: tr('Defence', 'Abwehr'), 'set-piece': tr('Set piece', 'Standard'), coach: tr('Coach', 'Trainer') })[c];
 const ACTION = (a: string): string => ({ pass: tr('Pass', 'Pass'), dribble: tr('Dribble', 'Dribbling'), shot: tr('Shot', 'Schuss') } as Record<string, string>)[a];
@@ -31,6 +32,7 @@ export class DecisionPanel {
   private readonly title: HTMLElement;
   private readonly lastKey: HTMLElement;
   private readonly situation: HTMLElement;
+  private readonly why: HTMLElement;
   private readonly actor: HTMLElement;
   private readonly options: HTMLElement;
 
@@ -43,6 +45,7 @@ export class DecisionPanel {
       <div class="decision-timer"><span data-bar></span></div>
       <h2 data-title></h2>
       <p class="decision-situation" data-situation></p>
+      <section class="decision-why" data-why hidden><h3></h3><ul></ul></section>
       <div class="decision-actor" data-actor></div>
       <div class="decision-options" role="listbox" data-options></div>
       <footer class="decision-foot">
@@ -52,6 +55,7 @@ export class DecisionPanel {
     const q = (s: string) => this.el.querySelector<HTMLElement>(s)!;
     this.bar = q('[data-bar]'); this.seconds = q('[data-seconds]'); this.kicker = q('[data-kicker]');
     this.lastKey = q('[data-last-key]');
+    this.why = q('[data-why]');
     this.title = q('[data-title]'); this.situation = q('[data-situation]'); this.actor = q('[data-actor]'); this.options = q('[data-options]');
     q('[data-delegate]').addEventListener('click', () => this.delegate());
     window.addEventListener('keydown', ev => this.key(ev));
@@ -71,7 +75,8 @@ export class DecisionPanel {
     return narrow ? { right: 0, bottom: h - this.el.offsetTop } : { right: w - this.el.offsetLeft, bottom: 0 };
   }
 
-  show(m: DecisionMoment, now: number, s: MatchSnapshot, profiles: PlayerProfile[]): void {
+  /** `brief`: the match intelligence's explanation of the moment (intel/moment-brief.ts), measured in the frozen frame. */
+  show(m: DecisionMoment, now: number, s: MatchSnapshot, profiles: PlayerProfile[], brief?: MomentBrief): void {
     this.moment = m;
     this.deadline = now + m.timeoutSeconds;
     this.kicker.textContent = `${CATEGORY(m.category)} · ${tr('Your moment', 'Dein Moment')}`;
@@ -79,6 +84,9 @@ export class DecisionPanel {
     this.lastKey.textContent = String(m.options.length);
     this.situation.textContent = m.situation;
     this.renderActor(profiles[m.focusPlayer], s.minds[m.focusPlayer]);
+    this.why.hidden = !brief?.lines.length;
+    this.why.querySelector('h3')!.textContent = tr('Why it matters', 'Warum es zählt');
+    this.why.querySelector('ul')!.replaceChildren(...(brief?.lines ?? []).map(l => { const li = document.createElement('li'); li.textContent = l; return li; }));
     this.options.replaceChildren(...m.options.map((o, i) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -87,6 +95,12 @@ export class DecisionPanel {
       b.setAttribute('role', 'option');
       const part = (cls: string, text: string) => { const e = document.createElement('span'); e.className = cls; e.textContent = text; return e; };
       b.append(part('decision-key', String(i + 1)), part('decision-label', o.label), part('decision-detail', o.detail), part('decision-outlook', o.outlook));
+      const facts = brief?.options.find(x => x.id === o.id);
+      if (facts?.note) {
+        const f = part('decision-facts', facts.note);
+        if (facts.risk) f.dataset.risk = facts.risk;
+        b.append(f);
+      }
       if (o.id === m.defaultOptionId) b.append(part('decision-ai', tr('What the players would do', 'Tendenz der Spieler')));
       b.addEventListener('click', () => this.choose(o.id, 'user'));
       b.addEventListener('mouseenter', () => this.setFocus(i));

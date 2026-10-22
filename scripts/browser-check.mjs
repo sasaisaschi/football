@@ -5,7 +5,7 @@
 // consequence shown. Screenshots (before the decision, with a focused option, after the consequence) and a JSON report
 // go to browser-check-output/.
 // Usage: npm run test:browser   (env: CHROME_PATH, CHECK_SECONDS, CHECK_MOMENTS, CHECK_SOFTWARE_GL=1, CHECK_FULL=1,
-//        CHECK_VIEWPORT=1600x900, CHECK_SEED=7, CHECK_HALF=5, CHECK_COOLDOWN=25, CHECK_PREVIEW=1)
+//        CHECK_VIEWPORT=1600x900, CHECK_SEED=7, CHECK_HALF=5, CHECK_COOLDOWN=25, CHECK_PREVIEW=1, CHECK_QUERY=mode=analyst&focus=9)
 //   CHECK_FULL=1 plays a full match (2 × 45 min) and hands every moment to the players after 2 s, to measure the
 //   session's wall-clock time, the worker's computing time and the simulated time.
 //   CHECK_SESSION=1 plays a whole session like a user (CHECK_HALF minutes per half): every decision after a think time
@@ -113,7 +113,9 @@ try {
   // A session uses the app's own settings for its length (spacing, moments, countdown), as a user would get them.
   const settings = session ? '' : `${cooldown}&moments=${full ? 5 : 6}&timeout=${full ? 30 : 90}`;
   const memory = process.env.CHECK_MEMORY ? '' : '&memory=0';
-  await send('Page.navigate', { url: `http://localhost:${port}/?seed=${seed}&half=${half}${settings}${memory}` });
+  // CHECK_QUERY: extra URL parameters, e.g. 'mode=analyst&focus=9&lang=de'.
+  const extra = process.env.CHECK_QUERY ? `&${process.env.CHECK_QUERY}` : '';
+  await send('Page.navigate', { url: `http://localhost:${port}/?seed=${seed}&half=${half}${settings}${memory}${extra}` });
   const waitFor = async (expr, seconds) => { for (let i = 0; i < seconds * 4; i++) { const v = await evaluate(expr); if (v) return v; await sleep(250); } return null; };
   report.checks.renderer = await evaluate("(()=>{const g=document.createElement('canvas').getContext('webgl2');const d=g&&g.getExtension('WEBGL_debug_renderer_info');return d?g.getParameter(d.UNMASKED_RENDERER_WEBGL):'unknown'})()");
   const startVisible = await waitFor("!!document.querySelector('.start-go')", 30);

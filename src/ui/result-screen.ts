@@ -5,6 +5,11 @@ import { playerKey, type AgentMemory } from '../ai/agent-memory';
 import { lengthLabel } from './match-length';
 import { tr } from '../i18n';
 import type { PlayerProfile, TeamId } from '../engine/types';
+import { narrate } from '../intel/narrator';
+import type { Insight, Personalization } from '../intel/types';
+
+/** The match intelligence at full time: its insights for the recap, and the complete feed for download. */
+export type IntelResult = { insights: readonly Insight[]; prefs: Personalization; feed: () => unknown };
 
 /** The players' memory before and after this match, for the "development" lines. */
 export type Development = { before: AgentMemory | null; after: AgentMemory | null; profiles: readonly PlayerProfile[]; team: TeamId; error: string | null };
@@ -16,7 +21,7 @@ const BY = (by: ChronicleEntry['by']): string => ({ user: tr('you', 'du'), deleg
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 /** Full time: the score, every decision with what was observed right after it, and how long the session took. */
-export function showResult(host: HTMLElement, score: readonly [number, number], chronicle: readonly ChronicleEntry[], metrics: SessionMetrics, dev: Development): HTMLElement {
+export function showResult(host: HTMLElement, score: readonly [number, number], chronicle: readonly ChronicleEntry[], metrics: SessionMetrics, dev: Development, intel: IntelResult): HTMLElement {
   const el = document.createElement('div');
   el.className = 'result';
   el.innerHTML = `
@@ -24,11 +29,13 @@ export function showResult(host: HTMLElement, score: readonly [number, number], 
       <div class="result-kicker" data-kicker></div>
       <div class="result-score"><span class="home"></span><b data-score></b><span class="away"></span></div>
       <dl class="result-metrics" data-metrics></dl>
+      <h3>${tr('Match report', 'Spielbericht')} · ${intel.prefs.mode === 'fan' ? tr('Fan', 'Fan') : tr('Analyst', 'Analyst')}</h3>
+      <ol class="result-recap" data-recap></ol>
       <h3>${tr('Your decisions', 'Deine Entscheidungen')}</h3>
       <ol class="result-list" data-list></ol>
       <h3>${tr('What the players take with them', 'Was die Spieler mitnehmen')}</h3>
       <ul class="result-development" data-dev></ul>
-      <button type="button" data-again>${tr('New match', 'Neues Spiel')}</button>
+      <div class="result-actions"><button type="button" data-again>${tr('New match', 'Neues Spiel')}</button><button type="button" class="secondary" data-feed>${tr('Download match intelligence (JSON)', 'Match Intelligence herunterladen (JSON)')}</button></div>
     </div>`;
   el.querySelector('[data-kicker]')!.textContent = `${tr('Full time', 'Abpfiff')} · ${lengthLabel(metrics.halfMinutes).long}`;
   el.querySelector('.home')!.textContent = TEAMS[0].name;
@@ -60,6 +67,28 @@ export function showResult(host: HTMLElement, score: readonly [number, number], 
     const dd = document.createElement('dd'); dd.textContent = v;
     dl.append(dt, dd);
   }
+  // The automated recap: the final summary, every goal's story and the notable moments, in the viewer's mode.
+  const recap = el.querySelector('[data-recap]')!;
+  const picked = intel.insights.filter(i => i.kind === 'full-summary' || i.kind === 'goal-story' || (i.priority === 2 && i.kind !== 'speed')).slice(-8);
+  const ordered = [...picked.filter(i => i.kind === 'full-summary'), ...picked.filter(i => i.kind !== 'full-summary')];
+  for (const i of ordered) {
+    const w = narrate(i, intel.prefs.mode, { profiles: dev.profiles, favouriteTeam: intel.prefs.favouriteTeam });
+    const li = document.createElement('li');
+    li.dataset.kind = i.kind;
+    li.innerHTML = '<span class="result-clock"></span><b></b><p></p>';
+    li.querySelector('span')!.textContent = i.clock;
+    li.querySelector('b')!.textContent = w.title;
+    li.querySelector('p')!.textContent = w.text;
+    recap.append(li);
+  }
+  el.querySelector('[data-feed]')!.addEventListener('click', () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(intel.feed(), null, 1)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'the-12th-man-match-intelligence.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
   const devList = el.querySelector('[data-dev]')!;
   for (const line of developmentLines(dev)) {
     const li = document.createElement('li');
