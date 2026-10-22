@@ -28,6 +28,7 @@ export class DecisionPanel {
   private readonly seconds: HTMLElement;
   private readonly kicker: HTMLElement;
   private readonly title: HTMLElement;
+  private readonly lastKey: HTMLElement;
   private readonly situation: HTMLElement;
   private readonly actor: HTMLElement;
   private readonly options: HTMLElement;
@@ -45,10 +46,11 @@ export class DecisionPanel {
       <div class="decision-options" role="listbox" data-options></div>
       <footer class="decision-foot">
         <button class="decision-delegate" data-delegate type="button">Den Spielern überlassen <kbd>0</kbd></button>
-        <span class="decision-keys"><kbd>1</kbd>–<kbd>4</kbd> wählen · <kbd>↑</kbd><kbd>↓</kbd> + <kbd>Enter</kbd></span>
+        <span class="decision-keys"><kbd>1</kbd>–<kbd data-last-key>4</kbd> wählen · <kbd>↑</kbd><kbd>↓</kbd> + <kbd>Enter</kbd></span>
       </footer>`;
     const q = (s: string) => this.el.querySelector<HTMLElement>(s)!;
     this.bar = q('[data-bar]'); this.seconds = q('[data-seconds]'); this.kicker = q('[data-kicker]');
+    this.lastKey = q('[data-last-key]');
     this.title = q('[data-title]'); this.situation = q('[data-situation]'); this.actor = q('[data-actor]'); this.options = q('[data-options]');
     q('[data-delegate]').addEventListener('click', () => this.delegate());
     window.addEventListener('keydown', ev => this.key(ev));
@@ -73,6 +75,7 @@ export class DecisionPanel {
     this.deadline = now + m.timeoutSeconds;
     this.kicker.textContent = `${CATEGORY[m.category]} · Dein Moment`;
     this.title.textContent = m.title;
+    this.lastKey.textContent = String(m.options.length);
     this.situation.textContent = m.situation;
     this.renderActor(profiles[m.focusPlayer], s.minds[m.focusPlayer]);
     this.options.replaceChildren(...m.options.map((o, i) => {

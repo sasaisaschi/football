@@ -59,6 +59,9 @@ function dashes(a: Vec2, b: Vec2, mat: THREE.Material): THREE.Group {
   return g;
 }
 
+/** World size of an option's number from LABEL_FAR metres away; closer the number shrinks so it never covers a player. */
+const LABEL_SIZE = 1.5, LABEL_FAR = 30;
+
 /** The option's key number floating above the end of its path. */
 function label(n: number, at: THREE.Vector3, colour: THREE.Color): THREE.Sprite {
   const c = document.createElement('canvas');
@@ -71,8 +74,9 @@ function label(n: number, at: THREE.Vector3, colour: THREE.Color): THREE.Sprite 
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-  s.scale.setScalar(1.5);
-  s.position.copy(at).add(new THREE.Vector3(0, 1.6, 0));
+  s.scale.setScalar(LABEL_SIZE);
+  // Above a receiver's head, not in front of it.
+  s.position.copy(at).add(new THREE.Vector3(0, 2.6, 0));
   s.renderOrder = 5;
   return s;
 }
@@ -96,6 +100,8 @@ export class TacticalOverlay {
   readonly group = new THREE.Group();
   private marks: OptionMarks[] = [];
   private pulse: THREE.Mesh | null = null;
+  /** The options' key numbers, kept at a steady size on screen. */
+  private readonly tags: THREE.Sprite[] = [];
   private focused = -1;
 
   show(m: DecisionMoment, s: MatchSnapshot, team: (id: number) => TeamId): void {
@@ -156,6 +162,7 @@ export class TacticalOverlay {
         if (!v.ball && !v.runs && !v.zone) end = new THREE.Vector3(v.line.to, 0, z0);
       }
       const tag = label(i + 1, end, colour);
+      this.tags.push(tag);
       mats.push(tag.material);
       g.add(tag);
       this.group.add(g);
@@ -182,11 +189,15 @@ export class TacticalOverlay {
     return this.focused;
   }
 
-  update(time: number): void {
+  update(time: number, camera: THREE.Camera): void {
     if (this.pulse) this.pulse.scale.setScalar(1 + 0.12 * Math.sin(time * 5));
+    // The numbers keep a steady size on screen: at a close decision framing a fixed world size filled a fifth of the
+    // picture and hid the receiver it belongs to (throw-in, browser check).
+    for (const t of this.tags) t.scale.setScalar(LABEL_SIZE * Math.min(1, t.position.distanceTo(camera.position) / LABEL_FAR));
   }
 
   hide(): void {
+    this.tags.length = 0;
     for (const c of [...this.group.children]) {
       this.group.remove(c);
       c.traverse(o => {

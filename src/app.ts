@@ -141,7 +141,7 @@ export class MatchApp {
     s.players.forEach((p, k) => this.figures[k].update(lerpPlayer(a.players[k], p, alpha), gaitDt, ball));
     this.camera.condensed = this.playback.mode === 'condensed';
     this.camera.update({ ...s, ball: { ...s.ball, position: ball } }, this.wall, dt);
-    this.overlay.update(this.wall);
+    this.overlay.update(this.wall, this.cam);
     const excitement = Math.min(1, Math.max(0, (Math.abs(ball.x) - 20) / 30));
     const celebrate = this.wall < this.celebrateUntil ? (this.celebrateTeam === 0 ? 1 : -1) : 0;
     this.stadium.update(this.wall, excitement, celebrate);

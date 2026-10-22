@@ -91,6 +91,9 @@ describe('the computer coach (bench-manager.ts)', () => {
     expect(subs.length).toBeLessThanOrEqual(5);
     expect(new Set(subs.map(s => s.on)).size).toBe(subs.length);
     expect(subs.map(s => [s.off, s.on, s.reason])).toEqual(subsOf(b.e).map(s => [s.off, s.on, s.reason]));
+    // Occasions at least a tenth of a half apart (3 min halves: 18 s).
+    const times = [...new Set(subs.filter(s => s.reason !== 'keeper').map(s => s.time))];
+    for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(18 - 1e-6);
     expect(subs.every(s => DEFENDERS.has(s.role) || MIDFIELDERS.has(s.role) || FORWARDS.has(s.role) || s.role === 'GK')).toBe(true);
   }, 300_000);
 });

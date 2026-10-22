@@ -11,6 +11,8 @@ const POOR_FORM = -0.15, FAILED = 3;
 const FORM_FROM = 0.5, CHASE_FROM = 0.55, PROTECT_FROM = 0.7;
 /** Changes per stoppage: two at most, as coaches usually do. */
 const PER_STOPPAGE = 2;
+/** Least time between two of his substitution occasions, as a share of a half (three changes in two minutes looked like panic). */
+const OCCASION_GAP = 0.1;
 
 const lineOf = (r: Role) => (DEFENDERS.has(r) ? 'def' : MIDFIELDERS.has(r) ? 'mid' : FORWARDS.has(r) ? 'fwd' : 'gk');
 
@@ -22,6 +24,8 @@ const lineOf = (r: Role) => (DEFENDERS.has(r) ? 'def' : MIDFIELDERS.has(r) ? 'mi
  */
 export class BenchManager {
   private readonly used = new Set<SubReason>();
+  /** Match clock (s, counted through both halves) of his last occasion. */
+  private lastOccasion = -Infinity;
 
   constructor(readonly team: TeamId) {}
 
@@ -53,15 +57,14 @@ export class BenchManager {
     }
     if (e.half !== 2) return changes;
     const share = e.clockSeconds() / (e.config.halfMinutes * 60);
+    if (this.clock(e) - this.lastOccasion < OCCASION_GAP * e.config.halfMinutes * 60) return changes;
     const halfTime = share < 0.01;
     const [ours, theirs] = team === 0 ? e.score : [e.score[1], e.score[0]];
 
     if (halfTime || share >= FORM_FROM) {
-      for (const p of [...field].sort((a, b) => form(a) - form(b))) {
-        const recent = e.minds[p.id].recent;
-        if (form(p) > POOR_FORM || recent.filter(r => !r.ok).length < FAILED) continue;
-        add(p, sameLine(p), 'form');
-      }
+      // One change for form per stoppage: the worst of those out of form (three at once in one minute looked like panic).
+      const poor = [...field].sort((a, b) => form(a) - form(b)).find(p => form(p) <= POOR_FORM && e.minds[p.id].recent.filter(r => !r.ok).length >= FAILED);
+      if (poor) add(poor, sameLine(poor), 'form');
       const booked = field.filter(p => e.referee.yellow.has(p.id) && lineOf(p.role) === 'def');
       for (const p of booked) add(p, sameLine(p), 'card');
     }
@@ -78,9 +81,15 @@ export class BenchManager {
     return changes;
   }
 
+  private clock(e: MatchEngine): number {
+    return e.clockSeconds() + (e.half === 2 ? e.config.halfMinutes * 60 : 0);
+  }
+
   /** Makes this stoppage's changes; each one is a real Law 3 substitution. */
   atStoppage(e: MatchEngine): void {
-    for (const c of this.decide(e)) {
+    const changes = this.decide(e);
+    if (changes.length) this.lastOccasion = this.clock(e);
+    for (const c of changes) {
       if (!e.canSubstitute(this.team)) return;
       e.substitute(c.off, c.on, c.role, c.reason);
       if (c.reason === 'chase' || c.reason === 'protect') this.used.add(c.reason);
