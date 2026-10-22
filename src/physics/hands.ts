@@ -21,6 +21,8 @@ export class KeeperHands {
   rel: Vec3;
   target: Vec3;
   private joint: RAPIER.ImpulseJoint | null = null;
+  /** Height of the held ball above the hands (the joint's anchor); negative when he holds it below them. */
+  private holdY = 0;
   heldSince = 0;
   diveUntil = 0;
   recoverUntil = 0;
@@ -136,6 +138,7 @@ export class KeeperHands {
     const gap = HANDS.radius + BALL_SPEC.radius;
     const anchor = { x: ((b.x - h.x) / d) * gap, y: ((b.y - h.y) / d) * gap, z: ((b.z - h.z) / d) * gap };
     this.joint = this.world.createImpulseJoint(RAPIER.JointData.spherical(anchor, { x: 0, y: 0, z: 0 }), this.body, ball, true);
+    this.holdY = anchor.y;
     this.heldSince = now;
   }
 
@@ -158,6 +161,13 @@ export class KeeperHands {
     if (!this.keeper.body.isEnabled()) return;
     if (this.diveTime >= 0) this.diveTime = this.diveTime + dt < DIVE.recover ? this.diveTime + dt : -1;
     const step = HANDS.maxSpeed * dt;
+    // A held ball never goes into the turf: a ball caught from above hangs below the hands, and lowered with them it was
+    // pressed into the ground until the turf shot it out of his grip into his own goal (traced own goal).
+    if (this.joint) {
+      const floor = BALL_SPEC.radius + 0.01 - this.holdY;
+      if (this.target.y < floor) this.target = { ...this.target, y: floor };
+      if (this.rel.y < floor) this.rel = { ...this.rel, y: floor };
+    }
     const d = { x: this.target.x - this.rel.x, y: this.target.y - this.rel.y, z: this.target.z - this.rel.z };
     const n = Math.hypot(d.x, d.y, d.z);
     const k = n > step ? step / n : 1;

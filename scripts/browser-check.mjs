@@ -8,18 +8,30 @@
 //        CHECK_VIEWPORT=1600x900, CHECK_SEED=7, CHECK_HALF=5, CHECK_COOLDOWN=25, CHECK_PREVIEW=1)
 //   CHECK_FULL=1 plays a full match (2 × 45 min) and hands every moment to the players after 2 s, to measure the
 //   session's wall-clock time, the worker's computing time and the simulated time.
+//   CHECK_SESSION=1 plays a whole session like a user (CHECK_HALF minutes per half): every decision after a think time
+//   of CHECK_THINK seconds (default 5-10, drawn per moment from CHECK_SEED), mostly a chosen option, sometimes handed
+//   to the players. Measures wall-clock, computing and simulated time, time in live / condensed / decision, waits (the
+//   picture stands still without a decision), FPS samples, and records every panel and consequence text.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const full = !!process.env.CHECK_FULL;
-const out = join(root, full ? 'browser-check-full' : 'browser-check-output');
+const session = !!process.env.CHECK_SESSION;
+const full = !!process.env.CHECK_FULL || session;
+const out = join(root, process.env.CHECK_OUT ?? (session ? 'browser-check-session' : full ? 'browser-check-full' : 'browser-check-output'));
+const [thinkMin, thinkMax] = (process.env.CHECK_THINK ?? '5-10').split('-').map(Number);
+// Reproducible "user": a small seeded generator for think times and choices.
+let rngState = (Number(process.env.CHECK_SEED ?? 7) * 2654435761) >>> 0;
+const rand = () => { rngState = (rngState + 0x6d2b79f5) >>> 0; let t = rngState; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 const port = 5390 + Math.floor(Math.random() * 50);
 const debugPort = 9400 + Math.floor(Math.random() * 50);
 const maxSeconds = Number(process.env.CHECK_SECONDS ?? (full ? 1500 : 420));
+const time = { live: 0, condensed: 0, decision: 0, held: 0, stalled: 0 };
+const fpsSamples = { live: [], condensed: [] };
+const texts = { consequences: [] };
 const wantMoments = Number(process.env.CHECK_MOMENTS ?? 5);
 const [vw, vh] = (process.env.CHECK_VIEWPORT ?? '1600x900').split('x').map(Number);
 
@@ -98,7 +110,10 @@ try {
   const seed = Number(process.env.CHECK_SEED ?? 7);
   // Without an explicit spacing the app scales it with the half length, as for a user.
   const cooldown = process.env.CHECK_COOLDOWN ? `&cooldown=${process.env.CHECK_COOLDOWN}` : full ? '' : '&cooldown=25';
-  await send('Page.navigate', { url: `http://localhost:${port}/?seed=${seed}&half=${half}${cooldown}&moments=${full ? 5 : 6}&timeout=${full ? 30 : 90}&memory=0` });
+  // A session uses the app's own settings for its length (spacing, moments, countdown), as a user would get them.
+  const settings = session ? '' : `${cooldown}&moments=${full ? 5 : 6}&timeout=${full ? 30 : 90}`;
+  const memory = process.env.CHECK_MEMORY ? '' : '&memory=0';
+  await send('Page.navigate', { url: `http://localhost:${port}/?seed=${seed}&half=${half}${settings}${memory}` });
   const waitFor = async (expr, seconds) => { for (let i = 0; i < seconds * 4; i++) { const v = await evaluate(expr); if (v) return v; await sleep(250); } return null; };
   report.checks.renderer = await evaluate("(()=>{const g=document.createElement('canvas').getContext('webgl2');const d=g&&g.getExtension('WEBGL_debug_renderer_info');return d?g.getParameter(d.UNMASKED_RENDERER_WEBGL):'unknown'})()");
   const startVisible = await waitFor("!!document.querySelector('.start-go')", 30);
@@ -127,11 +142,44 @@ try {
     const state = await evaluate(`(()=>{const d=${D};return {deciding:d.deciding,finished:d.finished,mode:d.mode,speed:d.speed}})()`);
     if (state?.finished) break;
     if (state?.mode === 'condensed' && !report.checks.fpsCondensed) { report.checks.fpsCondensed = await fps(); await shot('04-condensed'); }
+    if (session && !state?.deciding) {
+      // Sample the session: where the wall-clock time goes, whether the picture stands still, FPS now and then.
+      const a = await evaluate(`${D}.shownTick`);
+      const t1 = Date.now();
+      await sleep(400);
+      const b = await evaluate(`[${D}.shownTick, ${D}.mode, ${D}.deciding, [...document.querySelectorAll('.consequence li')].map(e=>e.textContent).join(' | ')]`);
+      const dt = (Date.now() - t1) / 1000;
+      if (b[2]) continue;
+      if (b[0] === a && b[1] !== 'held') time.stalled += dt; else time[b[1]] += dt;
+      if (b[3] && texts.consequences.at(-1) !== b[3]) texts.consequences.push(b[3]);
+      if (rand() < 0.03) { const f = await fps(); if (state.mode === 'live' || state.mode === 'condensed') fpsSamples[state.mode].push(f); }
+      continue;
+    }
     if (!state?.deciding) { await sleep(400); continue; }
     n++;
     const m = await evaluate(`(()=>{const m=${D}.moment;return {kind:m.kind,category:m.category,title:m.title,options:m.options.map(o=>o.label),default:m.defaultOptionId}})()`);
     const entry = { n, ...m };
     if (full) {
+      if (session) {
+        entry.panel = await evaluate("document.querySelector('.decision')?.innerText");
+        const think = thinkMin + rand() * (thinkMax - thinkMin);
+        const opened = Date.now();
+        if (n <= 6) { await sleep(1400); await shot(`${String(10 + n)}-${m.kind}-a-before`); }
+        await sleep(Math.max(0, think * 1000 - (Date.now() - opened)));
+        const delegate = rand() < 0.2;
+        const key = delegate ? '0' : String(1 + Math.floor(rand() * m.options.length));
+        const before = await evaluate(`${D}.events.length`);
+        await press(key);
+        entry.thinkSeconds = +((Date.now() - opened) / 1000).toFixed(1);
+        entry.chosen = delegate ? 'delegated' : m.options[Number(key) - 1];
+        await sleep(300);
+        entry.decision = await evaluate(`${D}.events.slice(${before}).find(e=>e.type==='decision')?.chosenBy ?? null`);
+        if (entry.decision !== (delegate ? 'delegated' : 'user')) fail(`moment ${n}: decision recorded as ${entry.decision}`);
+        time.decision += (Date.now() - opened) / 1000;
+        if (n <= 6) { await sleep(3500); await shot(`${String(10 + n)}-${m.kind}-c-after`); }
+        report.moments.push(entry);
+        continue;
+      }
       await sleep(2000);
       await press('0');
       entry.chosen = 'delegated';
@@ -179,6 +227,10 @@ try {
   if (full) {
     const done = await waitFor(`${D}.finished`, Math.max(10, maxSeconds - (Date.now() - t0) / 1000));
     report.checks.fullMatch = { finished: !!done, metrics: await evaluate(`${D}.metrics`), wallSecondsMeasuredByScript: Math.round((Date.now() - t0) / 1000) };
+    if (session) {
+      const avg = a => a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1) : null;
+      report.checks.session = { secondsIn: Object.fromEntries(Object.entries(time).map(([k, v]) => [k, Math.round(v)])), fps: { live: avg(fpsSamples.live), condensed: avg(fpsSamples.condensed), samples: fpsSamples }, consequences: texts.consequences, substitutions: await evaluate(`${D}.events.filter(e=>e.type==='substitution').map(e=>({team:e.team,reason:e.reason??'user',minute:Math.floor(e.time/60)}))`) };
+    }
     if (!done) fail('the full match did not reach full time in the allotted time');
     await shot('99-result');
   }

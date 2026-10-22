@@ -87,3 +87,50 @@ describe('perception of a ball in the air', () => {
     expect(later.pos.y).toBeCloseTo(1 + 4 * 0.4 - 4.9 * 0.16, 5);
   });
 });
+
+/** The ball's radius: a held ball lower than this is in the turf. */
+const BALL_PHYSICS_RADIUS = 0.11;
+
+describe('keeper and slow balls near his goal (traced own goals)', () => {
+  it('a ball gathered from above is never pressed into the turf while held (seed 41: the turf shot it into his goal)', () => {
+    const e = new MatchEngine({ seed: 300, halfMinutes: 45 });
+    const gk = e.profiles.find(p => p.team === 1 && p.role === 'GK')!.id;
+    stageScenario(e, { [gk]: { x: 51, z: 0 } }, { x: 30, y: 0.11, z: 20 });
+    const hands = e.keepers.get(gk)!.hands, ball = e.physics.ball;
+    // After a dive (only then do his arms reach the turf) the hands come down onto a ball lying beside him and grip it from above.
+    hands.dive({ x: 51, z: 1 }, e.time, 0.5, 1.5);
+    for (let k = 0; k < 20; k++) { hands.reachFor({ ...hands.world3(), y: 0.3 }); e.physics.step(); }
+    const h = hands.world3();
+    // At the grip's distance (hands' plus ball's radius), below and in front of the hands.
+    const gap = 0.15 + BALL_PHYSICS_RADIUS, dy = BALL_PHYSICS_RADIUS - h.y;
+    ball.setTranslation({ x: h.x - Math.sqrt(Math.max(0, gap * gap - dy * dy)), y: BALL_PHYSICS_RADIUS, z: h.z }, true);
+    ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    hands.catchBall(ball, e.time);
+    let lowest = Infinity;
+    const watch = () => { lowest = Math.min(lowest, ball.translation().y); };
+    // Holding it low (as he does after a save on the ground), then lifting it to roll it out.
+    const low = hands.world3();
+    hands.reachFor({ ...low, y: 0 });
+    for (let k = 0; k < 60; k++) { e.physics.step(); watch(); }
+    hands.reachFor({ ...low, x: low.x - 0.3, y: 0.25 });
+    for (let k = 0; k < 60; k++) { e.physics.step(); watch(); }
+    expect(lowest).toBeGreaterThan(BALL_PHYSICS_RADIUS - 0.005);
+  });
+
+  it('a slow ball rolling past him towards his goal is played with the feet, not pushed over his line', () => {
+    let goals = 0, played = 0;
+    for (let i = 0; i < 8; i++) {
+      const e = new MatchEngine({ seed: 400 + i, halfMinutes: 45 });
+      const gk = e.profiles.find(p => p.team === 1 && p.role === 'GK')!.id;
+      // The ball is already a little behind him (nearer his goal line), rolling on slowly.
+      stageScenario(e, { [gk]: { x: 48.6, z: 0.3 * (i - 4) } }, { x: 49.2, y: 0.11, z: 0.2 * (i - 4) }, { x: 1.2 + 0.1 * i, y: 0, z: 0 });
+      const log: MatchEvent[] = [];
+      e.onEvent(ev => log.push(ev));
+      runFor(e, 5, () => log.some(ev => ev.type === 'goal' || ev.type === 'out'));
+      if (log.some(ev => ev.type === 'goal')) goals++;
+      if (log.some(ev => ev.type === 'swing' && ev.player === gk)) played++;
+    }
+    expect(goals).toBe(0);
+    expect(played).toBeGreaterThanOrEqual(6);
+  });
+});

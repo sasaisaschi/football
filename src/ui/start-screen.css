@@ -24,3 +24,4 @@
 .start-memory { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin-bottom: var(--space-4); font-size: var(--fs-xs); color: var(--c-text-muted); max-width: 480px; line-height: 1.4; }
 .start-memory button { background: transparent; color: var(--c-text-muted); border: 1px solid var(--c-line); border-radius: var(--radius-sm); padding: 2px var(--space-2); font: inherit; cursor: pointer; }
 .start-memory button:hover, .start-memory button:focus-visible { color: var(--c-text); border-color: var(--c-accent); outline: none; }
+.start-length-note { margin: calc(-1 * var(--space-2)) 0 var(--space-4); font-size: var(--fs-sm); color: var(--c-text-muted); max-width: 480px; line-height: 1.4; }

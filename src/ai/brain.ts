@@ -9,7 +9,8 @@ import { approach, trySwing } from './execution';
 import { blockLane, bodyInLine, carrierHasBall, jockey, pressCarrier } from './box-orders';
 import { tackle, tackleApproach } from './challenge';
 import { firstTouch } from './first-touch';
-import { aerialBefore, aerialIntercept, headerIntercept, isAirborne } from './aerial';
+import { headerIntercept, isAirborne } from './aerial';
+import { arrivesBefore, interceptTime } from './ball-reach';
 import { chooseHeader, CONTESTED } from './heading';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { offBallCommand } from './off-ball';
@@ -41,10 +42,10 @@ export type BrainContext = {
 
 export type BrainOutput = { command: BodyCommand; effort: number; swing: { action: BallAction; source: 'ai' | 'user' } | null };
 
-/** Effective deceleration (m/s²) a player assumes for a moving ball when guessing where to meet it. */
-const BALL_DAMPING = 1.1;
 /** Ball within this distance of an opponent whose team played it last: he has it, I jockey instead of charging in (m); otherwise 1.1 m. */
 const CARRIER_REACH = 1.6;
+/** A team-mate this close to a ball slower than MATE_CONTROL_SPEED has it at his feet: it is his, not mine (m, m/s). */
+const MATE_CONTROL = 1, MATE_CONTROL_SPEED = 4;
 /** How far beyond the meeting point on the ball's line a header is set up (m). */
 const HEADER_SET = 0.35;
 /** Within this distance of the carrier a jockeying defender no longer closes in (m). */
@@ -55,30 +56,6 @@ const SHOULDER_GAP = 1.1;
 const DIRECT_FREE_KICK_XG = 0.05;
 /** Extra pace of the lunge into a sliding tackle over the run (m/s). */
 const SLIDE_LUNGE = 0.5;
-
-/**
- * A rolling ball's believed path, sampled every 0.1 s for 4 s: the same for every player a brain asks about, so it is
- * worked out once per ball state (asked for oneself and each team-mate in turn, it was ≈ 10 % of a tick, profiled).
- */
-const GROUND_SAMPLES = 41;
-const ground = { key: [NaN, NaN, NaN, NaN], n: 0, t: new Float64Array(GROUND_SAMPLES + 1), x: new Float64Array(GROUND_SAMPLES + 1), z: new Float64Array(GROUND_SAMPLES + 1) };
-
-function groundPath(pos: Vec2 | Vec3, vel: Vec2 | Vec3): typeof ground {
-  const k0 = ground.key;
-  if (k0[0] === pos.x && k0[1] === pos.z && k0[2] === vel.x && k0[3] === vel.z) return ground;
-  ground.key = [pos.x, pos.z, vel.x, vel.z];
-  ground.n = 0;
-  const speed = Math.max(0.01, Math.hypot(vel.x, vel.z));
-  const stop = speed / BALL_DAMPING;
-  for (let t = 0; t <= 4; t += 0.1) {
-    // Position along the ball's path after t seconds of uniform deceleration (it does not roll backwards).
-    const tt = Math.min(t, stop);
-    const k = tt - (0.5 * BALL_DAMPING * tt * tt) / speed;
-    const i = ground.n++;
-    ground.t[i] = t; ground.x[i] = pos.x + vel.x * k; ground.z[i] = pos.z + vel.z * k;
-  }
-  return ground;
-}
 
 /**
  * One autonomous footballer. Decides from its own perception a few times per second: win the ball, play it,
@@ -119,39 +96,19 @@ export class PlayerBrain {
     };
   }
 
-  /** Estimated time for a player at p with top speed v to reach the (believed) moving ball. */
-  static interceptTime(p: Vec2, vmax: number, ball: { pos: Vec2 | Vec3; vel: Vec2 | Vec3; spin?: Vec3 }): { t: number; at: Vec2 } {
-    // A ball in the air is met where it first comes down to a playable height, not along its shadow on the turf.
-    if ('y' in ball.pos && 'y' in ball.vel) {
-      const aerial = aerialIntercept(p, vmax, ball.pos, ball.vel, ball.spin);
-      if (aerial) return aerial;
-    }
-    const path = groundPath(ball.pos, ball.vel);
-    for (let i = 0; i < path.n; i++) {
-      if (Math.hypot(path.x[i] - p.x, path.z[i] - p.z) / vmax + 0.3 <= path.t[i]) return { t: path.t[i], at: { x: path.x[i], z: path.z[i] } };
-    }
-    return { t: 4 + Math.hypot(ball.pos.x - p.x, ball.pos.z - p.z) / vmax, at: ball.pos };
-  }
-
-  /**
-   * Is interceptTime(p, vmax, ball).t below `limit`? Exactly the same answer, but the search stops at `limit`: asked
-   * for every team-mate of every player in every tick, the full search was ≈ 10 % of a tick (profiled).
-   */
-  static arrivesBefore(p: Vec2, vmax: number, ball: { pos: Vec2 | Vec3; vel: Vec2 | Vec3; spin?: Vec3 }, limit: number): boolean {
-    if ('y' in ball.pos && 'y' in ball.vel && isAirborne(ball.pos, ball.vel)) return aerialBefore(p, vmax, ball.pos, ball.vel, ball.spin ?? { x: 0, y: 0, z: 0 }, limit);
-    const path = groundPath(ball.pos, ball.vel);
-    for (let i = 0; i < path.n; i++) {
-      if (path.t[i] >= limit) return false;
-      if (Math.hypot(path.x[i] - p.x, path.z[i] - p.z) / vmax + 0.3 <= path.t[i]) return true;
-    }
-    return 4 + Math.hypot(ball.pos.x - p.x, ball.pos.z - p.z) / vmax < limit;
-  }
+  /** Estimated time for a player at p with top speed v to reach the (believed) moving ball (ball-reach.ts). */
+  static interceptTime = interceptTime;
+  /** Is interceptTime(p, vmax, ball).t below `limit`? (ball-reach.ts) */
+  static arrivesBefore = arrivesBefore;
 
   /** Do I believe I am my team's quickest player to the ball? Decentralised, so two may go, or none. */
   private believesBallIsMine(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): boolean {
     if (ctx.restart) return ctx.restart.taker === this.profile.id;
     // The keeper only plays the ball with his feet inside his own area (back-passes, loose balls).
     if (this.profile.role === 'GK' && !inPenaltyArea(ball.pos.x, ball.pos.z, (-ctx.sign) as 1 | -1)) return false;
+    // Never into my own man: a team-mate with the ball at his feet keeps it (traced own goals: a defender took the
+    // ball off his own keeper, or stood on it as the keeper passed, and it went in).
+    if (this.mateInControl(ctx, ball)) return false;
     // A ball played towards me is mine to receive (the passer looked at me; the receiver knows it).
     if (this.ballComingToMe(ball)) return true;
     const mine = PlayerBrain.interceptTime(this.body.position(), this.body.limits.maxSpeed, ball).t - (this.committedToBall ? 0.25 : 0);
@@ -478,6 +435,21 @@ export class PlayerBrain {
     const dx = self.x - ball.pos.x, dz = self.z - ball.pos.z, d = Math.hypot(dx, dz) || 1;
     const closing = ((ball.vel.x - v.x) * dx + (ball.vel.z - v.z) * dz) / d;
     return d < 0.9 || (closing > 0.3 && (d - 0.4) / closing < seconds);
+  }
+
+  /** A team-mate who (as far as I can see) has a slow ball at his feet and is closer to it than I am. */
+  private mateInControl(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): boolean {
+    if (Math.hypot(ball.vel.x, ball.vel.z) > MATE_CONTROL_SPEED) return false;
+    const self = this.body.position();
+    const mine = Math.hypot(ball.pos.x - self.x, ball.pos.z - self.z);
+    for (const p of ctx.profiles) {
+      if (p.team !== this.profile.team || p.id === this.profile.id) continue;
+      const pos = this.perception.playerNow(p.id, ctx.now);
+      if (!pos) continue;
+      const d = Math.hypot(ball.pos.x - pos.x, ball.pos.z - pos.z);
+      if (d < MATE_CONTROL && d < mine) return true;
+    }
+    return false;
   }
 
   /** An opponent who (as far as I can see) has the ball at his feet and is closer to it than I am. */

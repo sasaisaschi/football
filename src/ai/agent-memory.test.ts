@@ -80,4 +80,19 @@ describe('agents: relationships and memory across matches', () => {
     expect(choice(() => {}, withTrust('LCM'))).toBe('A');
     expect(choice(() => {}, withTrust('RCM'))).toBe('B');
   }, 120_000);
+
+  it('the same match replays identically with and without a stored memory; a memory changes how it goes', () => {
+    const run = (memory?: AgentMemory) => {
+      const e = new MatchEngine({ seed: 9, halfMinutes: 45, ...(memory ? { memory } : {}) });
+      runFor(e, 150);
+      return { events: e.events.map(ev => `${ev.tick}:${ev.type}:${'player' in ev ? ev.player : ''}`).join(' '), minds: updateMemory(emptyMemory(7), e.minds, e.profiles) };
+    };
+    const fresh = run();
+    expect(run().events).toBe(fresh.events);
+    // A memory from that match, stored and read back as the browser does.
+    const stored = parseMemory(JSON.stringify(fresh.minds), 7)!;
+    const remembered = run(stored);
+    expect(run(parseMemory(JSON.stringify(fresh.minds), 7)!).events).toBe(remembered.events);
+    expect(remembered.events).not.toBe(fresh.events);
+  }, 240_000);
 });

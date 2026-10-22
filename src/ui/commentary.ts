@@ -1,11 +1,16 @@
 import { TEAMS } from '../engine/rosters';
-import type { MatchEvent, PlayerProfile } from '../engine/types';
+import type { MatchEvent, PlayerProfile, SubReason } from '../engine/types';
 
 /** What commentary needs to know: who is who, and the score at the time of the event. */
 export type CommentaryContext = { profiles: readonly PlayerProfile[]; score: readonly [number, number] };
 
 const RESTART: Record<string, string> = {
   'throw-in': 'Einwurf', corner: 'Ecke', 'goal-kick': 'Abstoß', 'free-kick': 'Freistoß', penalty: 'Elfmeter', kickoff: 'Anstoß', 'drop-ball': 'Schiedsrichterball',
+};
+
+/** The computer coach's reason, as the commentator would see it. */
+const SUB_REASON: Record<SubReason, string> = {
+  keeper: 'der Ersatztorwart geht ins Tor', form: 'glückloser Auftritt', card: 'der Verteidiger ist gelbbelastet', chase: 'mehr Offensive im Rückstand', protect: 'die Führung soll halten',
 };
 
 /**
@@ -26,7 +31,7 @@ export function commentaryFor(e: MatchEvent, ctx: CommentaryContext): string | n
     case 'out': return `${RESTART[e.restart]} für ${team(e.team)}.`;
     case 'half-time': return 'Halbzeit.';
     case 'full-time': return `Abpfiff! Endstand ${ctx.score[0]}:${ctx.score[1]}.`;
-    case 'substitution': return `Wechsel bei ${team(e.team)}: ${name(e.on)} kommt für ${name(e.off)}.`;
+    case 'substitution': return `Wechsel bei ${team(e.team)}: ${name(e.on)} kommt für ${name(e.off)}${e.reason ? ` – ${SUB_REASON[e.reason]}` : ''}.`;
     case 'decision': return e.chosenBy === 'timeout' ? 'Keine Vorgabe – die Spieler entscheiden selbst.' : e.chosenBy === 'delegated' ? 'Der Trainer überlässt es den Spielern.' : 'Die Entscheidung ist gefallen – jetzt müssen die Spieler sie umsetzen.';
     default: return null;
   }

@@ -35,7 +35,8 @@ export class SimRunner {
   private events: MatchEvent[] = [];
 
   constructor(readonly config: RunnerConfig) {
-    this.engine = new MatchEngine({ seed: config.seed, halfMinutes: config.halfMinutes, memory: config.memory });
+    // The other team's substitutions are made by the computer's coach; the user's only by the user.
+    this.engine = new MatchEngine({ seed: config.seed, halfMinutes: config.halfMinutes, memory: config.memory, benchCoach: [(1 - config.userTeam) as TeamId] });
     this.orchestrator = new Orchestrator({ userTeam: config.userTeam, cooldown: config.cooldown, maxPerHalf: config.maxPerHalf, timeoutSeconds: config.timeoutSeconds });
     this.engine.director = this.orchestrator.attach();
     this.engine.onEvent(e => this.events.push(e));

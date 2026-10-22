@@ -2,13 +2,14 @@ import './result-screen.css';
 import { TEAMS } from '../engine/rosters';
 import type { ChronicleEntry } from './consequence';
 import { playerKey, type AgentMemory } from '../ai/agent-memory';
+import { lengthLabel } from './match-length';
 import type { PlayerProfile, TeamId } from '../engine/types';
 
 /** The players' memory before and after this match, for the "development" lines. */
 export type Development = { before: AgentMemory | null; after: AgentMemory | null; profiles: readonly PlayerProfile[]; team: TeamId; error: string | null };
 
 /** Measured at the end: the user's wall-clock time, the worker's computing time, the simulated match time. */
-export type SessionMetrics = { wallSeconds: number; cpuSeconds: number; simSeconds: number; moments: number };
+export type SessionMetrics = { wallSeconds: number; cpuSeconds: number; simSeconds: number; moments: number; halfMinutes: number };
 
 const BY: Record<ChronicleEntry['by'], string> = { user: 'du', delegated: 'überlassen', timeout: 'Zeit abgelaufen' };
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -19,7 +20,7 @@ export function showResult(host: HTMLElement, score: readonly [number, number], 
   el.className = 'result';
   el.innerHTML = `
     <div class="result-card">
-      <div class="result-kicker">Abpfiff</div>
+      <div class="result-kicker" data-kicker></div>
       <div class="result-score"><span class="home"></span><b data-score></b><span class="away"></span></div>
       <dl class="result-metrics" data-metrics></dl>
       <h3>Deine Entscheidungen</h3>
@@ -28,6 +29,7 @@ export function showResult(host: HTMLElement, score: readonly [number, number], 
       <ul class="result-development" data-dev></ul>
       <button type="button" data-again>Neues Spiel</button>
     </div>`;
+  el.querySelector('[data-kicker]')!.textContent = `Abpfiff · ${lengthLabel(metrics.halfMinutes).long}`;
   el.querySelector('.home')!.textContent = TEAMS[0].name;
   el.querySelector('.away')!.textContent = TEAMS[1].name;
   el.querySelector('[data-score]')!.textContent = `${score[0]} : ${score[1]}`;

@@ -2,6 +2,7 @@ import './hud.css';
 import { TEAMS } from '../engine/rosters';
 import type { MatchSnapshot, TeamId } from '../engine/types';
 import type { PlaybackMode } from '../sim/playback';
+import { lengthLabel } from './match-length';
 
 /**
  * Broadcast overlay: score bug, clock, how the picture is running (live, condensed, decision), a match timeline with
@@ -28,6 +29,7 @@ export class Hud {
         <span class="hud-score" data-score>0 : 0</span>
         <span class="hud-team hud-away">${TEAMS[1].short}</span>
         <span class="hud-clock" data-clock>00:00</span>
+        <span class="hud-length" data-length></span>
       </div>
       <div class="hud-mode" data-mode>LIVE</div>
       <div class="hud-timeline" aria-hidden="true"><span class="hud-progress" data-progress></span><span class="hud-half"></span><div data-markers></div></div>
@@ -36,6 +38,11 @@ export class Hud {
     const q = (s: string) => this.el.querySelector<HTMLElement>(s)!;
     this.score = q('[data-score]'); this.clock = q('[data-clock]'); this.ticker = q('[data-ticker]'); this.status = q('[data-status]');
     this.mode = q('[data-mode]'); this.progress = q('[data-progress]'); this.markers = q('[data-markers]');
+    // The playing time is always on screen: a shortened match is never shown as if it were the full 90 minutes.
+    const length = lengthLabel(halfMinutes), tag = q('[data-length]');
+    tag.textContent = length.short;
+    tag.title = length.long;
+    tag.dataset.full = String(length.full);
   }
 
   /** Match clock in minutes:seconds, counting on through the second half. */

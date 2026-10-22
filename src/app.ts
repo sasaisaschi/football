@@ -41,7 +41,7 @@ const SOUND_PACE = 2;
 export class MatchApp {
   readonly client: SimClient;
   readonly playback = new Playback();
-  readonly metrics: SessionMetrics = { wallSeconds: 0, cpuSeconds: 0, simSeconds: 0, moments: 0 };
+  readonly metrics: SessionMetrics;
   private figures: PlayerFigure[] = [];
   private profiles: PlayerProfile[] = [];
   private readonly ball = createBallView();
@@ -70,6 +70,7 @@ export class MatchApp {
     this.client = new SimClient({ seed: options.seed, halfMinutes: options.halfMinutes, userTeam: options.userTeam, cooldown: options.cooldown, maxPerHalf: options.maxPerHalf, timeoutSeconds: options.timeoutSeconds, memory: options.memory ?? undefined });
     this.camera = new CameraDirector(cam);
     this.hud = new Hud(options.halfMinutes);
+    this.metrics = { wallSeconds: 0, cpuSeconds: 0, simSeconds: 0, moments: 0, halfMinutes: options.halfMinutes };
     this.panel = new DecisionPanel((id, by) => this.resolve(id, by), i => this.overlay.focus(i));
     host.append(this.hud.el, this.panel.el);
     scene.add(this.ball.mesh, this.overlay.group);
@@ -140,7 +141,7 @@ export class MatchApp {
     s.players.forEach((p, k) => this.figures[k].update(lerpPlayer(a.players[k], p, alpha), gaitDt, ball));
     this.camera.condensed = this.playback.mode === 'condensed';
     this.camera.update({ ...s, ball: { ...s.ball, position: ball } }, this.wall, dt);
-    this.overlay.update(this.wall);
+    this.overlay.update(this.wall, this.cam);
     const excitement = Math.min(1, Math.max(0, (Math.abs(ball.x) - 20) / 30));
     const celebrate = this.wall < this.celebrateUntil ? (this.celebrateTeam === 0 ? 1 : -1) : 0;
     this.stadium.update(this.wall, excitement, celebrate);

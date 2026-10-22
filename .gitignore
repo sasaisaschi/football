@@ -8,3 +8,4 @@ browser-check-output/
 *.log
 browser-check-full/
 perf-output/
+browser-check-*/

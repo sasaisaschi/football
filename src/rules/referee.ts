@@ -46,6 +46,8 @@ const SLIDE_RECKLESS = 5, SLIDE_EXCESSIVE = 7;
 
 export class Referee {
   lastTouch: Touch | null = null;
+  /** The last touch by anyone other than whoever touched last: a keeper's own touches after a back-pass do not lift it. */
+  private beforeOwn: Touch | null = null;
   /**
    * A throw-in that has left the hands but not yet entered the pitch (Law 15): it is not out again while it flies in
    * from above the touchline, and is retaken by the same team if it lands outside.
@@ -69,9 +71,20 @@ export class Referee {
 
   constructor(private readonly profiles: PlayerProfile[]) {}
 
+  /**
+   * Law 12: may this keeper not handle the ball, because a team-mate deliberately kicked it to him? Controlling it with
+   * his own feet first does not change that (traced: a keeper who stopped a back-pass then picked it up).
+   */
+  backPassAgainst(keeper: number): boolean {
+    const t = this.lastTouch?.player === keeper ? this.beforeOwn : this.lastTouch;
+    return !!t && t.team === this.profiles[keeper].team && t.player !== keeper && t.part === 'boot' && !!t.deliberate && this.profiles[t.player].role !== 'GK';
+  }
+
   /** Every ball contact, in order. `positions` is the true position of all players at that moment. */
   onBallContact(touch: Touch, half: 1 | 2, positions: Map<number, Vec2>): Decision[] {
     const out: Decision[] = [];
+    if (!this.lastTouch) this.beforeOwn = null;
+    else if (this.lastTouch.player !== touch.player) this.beforeOwn = this.lastTouch;
     this.lastBallContact.set(touch.player, touch.time);
     this.lastTouchOf[touch.team] = touch;
     this.throwInEntering = null;
@@ -86,9 +99,8 @@ export class Referee {
         out.push({ type: 'restart', kind: 'free-kick', team: (1 - touch.team) as TeamId, spot: { x: touch.position.x, z: touch.position.z }, reason: 'handball' });
         return out;
       }
-      const last = this.lastTouch;
       // Law 12: only a ball deliberately kicked to him by a team-mate; blocks and deflections may be handled.
-      if (last && last.team === touch.team && last.player !== touch.player && last.part === 'boot' && last.deliberate) {
+      if (this.backPassAgainst(touch.player)) {
         out.push({ type: 'restart', kind: 'free-kick', team: (1 - touch.team) as TeamId, spot: { x: touch.position.x, z: touch.position.z }, reason: 'back-pass' });
         return out;
       }
