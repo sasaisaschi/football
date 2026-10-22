@@ -9,6 +9,7 @@ import { ThrowHands } from '../physics/throw-hands';
 import { throwInStand } from '../ai/throw-in';
 import { ExperienceTracker, PlayerMind } from '../ai/mind';
 import { applyMemory, type AgentMemory } from '../ai/agent-memory';
+import { BenchManager } from '../ai/bench-manager';
 import { PITCH, attackSign, BALL_SPEC } from '../physics/pitch-geometry';
 import { PHYSICS_DT, PhysicsWorld, physicsClock, type Contact, type ContactPart } from '../physics/world';
 import { Referee, penaltySpot, restartDistance, type Decision, type PlayerState } from '../rules/referee';
@@ -16,12 +17,18 @@ import { SLOTS, toWorld } from '../ai/shape';
 import { createRng, type Rng } from './rng';
 import { createRoster, TEAMS } from './rosters';
 import { chooseTaker, PLACE_DELAY, restartReady, type RestartState } from './restarts';
+import { engineSnapshot } from './snapshot';
+import { benchOf, canSubstitute, substitute, SubstitutionLog } from './substitutions';
 import type {
-  BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, PlayerView, RestartKind, TeamId, TeamInstruction, Vec2, Vec3,
+  BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, RestartKind, Role, SubReason, TeamId, TeamInstruction, Vec2, Vec3,
 } from './types';
 
-/** `memory`: what the players remember from earlier matches (agent-memory.ts); without it they start from their traits. */
-export type MatchConfig = { seed: number; halfMinutes: number; rosterSeed?: number; memory?: AgentMemory };
+/**
+ * `memory`: what the players remember from earlier matches (agent-memory.ts); without it they start from their traits.
+ * `benchCoach`: teams whose substitutions the computer's coach makes (bench-manager.ts); the user's team changes only by
+ * the user's decision.
+ */
+export type MatchConfig = { seed: number; halfMinutes: number; rosterSeed?: number; memory?: AgentMemory; benchCoach?: TeamId[] };
 export type Director = (engine: MatchEngine) => DecisionMoment | null;
 type EventInput = MatchEvent extends infer E ? E extends MatchEvent ? Omit<E, 'id' | 'tick' | 'time'> : never : never;
 
@@ -33,8 +40,6 @@ export const DEFAULT_INSTRUCTION: TeamInstruction = { press: 'mid', lineHeight: 
  * about a fifth. Off-ball planning was ≈ 30 % of a tick (profiled).
  */
 const NEAR_BALL = 5, FAR_FROM_BALL = 22;
-/** Law 3 (competition rules of the top leagues): five substitutes, used on at most three occasions plus half-time. */
-const MAX_SUBSTITUTIONS = 5, SUB_OCCASIONS = 3;
 
 /**
  * Authoritative match engine: the only owner of time, phase, score, restarts and the physical world.
@@ -68,16 +73,17 @@ export class MatchEngine {
   moment: DecisionMoment | null = null;
   director: Director | null = null;
   /** Phase to return to once the open moment is settled: play goes on, or the restart it stopped is still to be taken. */
-  private momentResume: 'in-play' | 'stopped' = 'in-play';
+  momentResume: 'in-play' | 'stopped' = 'in-play';
   readonly instructions: [TeamInstruction, TeamInstruction] = [{ ...DEFAULT_INSTRUCTION }, { ...DEFAULT_INSTRUCTION }];
   private readonly baseInstructions: [TeamInstruction, TeamInstruction] = [{ ...DEFAULT_INSTRUCTION }, { ...DEFAULT_INSTRUCTION }];
   private readonly instructionUntil: [number, number] = [0, 0];
   private listeners: ((e: MatchEvent) => void)[] = [];
   private eventId = 0;
-  private heldBy: number | null = null;
+  heldBy: number | null = null;
   /** Each player's latest swing, to tell a deliberate kick from a block or deflection (Law 12 back-pass). */
   private readonly lastSwing = new Map<number, { kind: BallAction['kind']; time: number }>();
   private readonly lastPlan: (BrainOutput | null)[] = [];
+  private readonly benchCoaches: BenchManager[];
 
   constructor(readonly config: MatchConfig) {
     this.rng = createRng(config.seed);
@@ -116,6 +122,7 @@ export class MatchEngine {
     if (config.memory) applyMemory(config.memory, this.minds, this.profiles);
     // The substitutes wait off the pitch: no body in play, invisible to everyone until they come on.
     for (const p of this.profiles) if (p.squad === 'bench') { this.leavePitch(p.id); this.referee.sentOff.add(p.id); }
+    this.benchCoaches = (config.benchCoach ?? []).map(t => new BenchManager(t));
     this.throwHands = new ThrowHands(this.physics.world, this.physics.ball);
     this.physics.registerKinematic(this.throwHands);
     this.setupKickoff(0);
@@ -157,7 +164,7 @@ export class MatchEngine {
     this.phase = this.phase === 'full-time' ? 'full-time' : 'stopped';
     const taker = chooseTaker(kind, team, spot, this.profiles, this.positions(), this.referee.sentOff);
     this.throwHands.reset();
-    this.restart = { kind, team, spot, placeAt: this.time + delay, placed: false, placedAt: 0, taker, consulted: false, direct, plans: {} };
+    this.restart = { kind, team, spot, placeAt: this.time + delay, placed: false, placedAt: 0, taker, consulted: false, benchSeen: false, direct, plans: {} };
     for (const b of this.brains) { b.intent = null; b.userIntent = null; }
   }
 
@@ -242,6 +249,11 @@ export class MatchEngine {
       }
     }
     this.advanceRestart();
+    const r = this.restart;
+    if (r?.placed && !r.benchSeen && this.phase === 'stopped') {
+      r.benchSeen = true;
+      for (const m of this.benchCoaches) m.atStoppage(this);
+    }
     const truth = this.truth();
     const states = new Map<number, PlayerState>();
     for (const p of this.profiles) {
@@ -448,7 +460,7 @@ export class MatchEngine {
   }
 
   /** Off the pitch (red card, substitution, bench): no collider, no body in the simulation, forgotten by everyone. */
-  private leavePitch(player: number): void {
+  leavePitch(player: number): void {
     const body = this.bodies[player];
     body.collider.setEnabled(false);
     for (const b of this.legs[player].boots) b.collider.setEnabled(false);
@@ -463,71 +475,20 @@ export class MatchEngine {
     for (const b of this.brains) b.perception.forget(player);
   }
 
-  private setPartsEnabled(player: number, on: boolean): void {
+  setPartsEnabled(player: number, on: boolean): void {
     for (const b of this.legs[player].boots) b.body.setEnabled(on);
     this.heads[player].body.setEnabled(on);
     this.chests[player].body.setEnabled(on);
     this.keepers.get(player)?.hands.body.setEnabled(on);
   }
 
-  /** Substitutions made per team, and the stoppages they were made at (Law 3: five changes on three occasions plus half-time). */
-  readonly substitutions: [number, number] = [0, 0];
-  private readonly subOccasions: [number, number] = [0, 0];
-  private readonly lastSubRestart: [RestartState | null, RestartState | null] = [null, null];
-
-  /** Can `team` still make a change now? Only with the ball out of play, within the limits of Law 3. */
-  canSubstitute(team: TeamId): boolean {
-    const r = this.restart;
-    const deadBall = this.phase === 'stopped' || (this.phase === 'decision' && this.momentResume === 'stopped');
-    if (!r || !deadBall || this.substitutions[team] >= MAX_SUBSTITUTIONS) return false;
-    return this.lastSubRestart[team] === r || this.halfTimeRestart(r) || this.subOccasions[team] < SUB_OCCASIONS;
-  }
-
-  /** The kick-off of the second half: changes at half-time do not use up an occasion (Law 3). */
-  private halfTimeRestart(r: RestartState): boolean {
-    return r.kind === 'kickoff' && this.half === 2 && this.clockSeconds() < 1;
-  }
-
-  /** Bench players of `team` who may still come on. */
-  benchOf(team: TeamId): PlayerProfile[] {
-    return this.profiles.filter(p => p.team === team && p.squad === 'bench' && this.referee.sentOff.has(p.id) && !this.substitutedOn.has(p.id));
-  }
-
-  private readonly substitutedOn = new Set<number>();
-
-  /**
-   * Law 3: `on` replaces `off` while the ball is out of play. The replaced player leaves and may not return; the
-   * substitute enters at the halfway line and takes over his position. Throws on an illegal change.
-   */
-  substitute(off: number, on: number): void {
-    const po = this.profiles[off], pn = this.profiles[on];
-    if (po.team !== pn.team) throw new Error('Substitution between different teams');
-    if (!this.canSubstitute(po.team)) throw new Error('No substitution possible now (ball in play or limit reached)');
-    if (this.referee.sentOff.has(off)) throw new Error(`${po.name} is not on the pitch`);
-    if (!this.benchOf(pn.team).some(p => p.id === on)) throw new Error(`${pn.name} cannot come on`);
-    const r = this.restart!;
-    if (this.lastSubRestart[po.team] !== r && !this.halfTimeRestart(r)) this.subOccasions[po.team]++;
-    this.lastSubRestart[po.team] = r;
-    this.substitutions[po.team]++;
-    this.leavePitch(off);
-    this.referee.sentOff.add(off);
-    pn.role = po.role;
-    this.substitutedOn.add(on);
-    this.referee.sentOff.delete(on);
-    const body = this.bodies[on];
-    body.body.setEnabled(true);
-    body.collider.setEnabled(true);
-    this.setPartsEnabled(on, true);
-    if (po.role === 'GK') this.keepers.get(on)?.hands.collider.setEnabled(true);
-    const side = po.team === 0 ? 1 : -1;
-    body.place(0, side * (PITCH.halfWidth - 0.5), side > 0 ? Math.PI : 0);
-    this.legs[on].snap();
-    this.heads[on].reset();
-    this.chests[on].reset();
-    this.brains[on].perception.reset(this.truth());
-    if (r.taker === off) r.taker = chooseTaker(r.kind, r.team, r.spot, this.profiles, this.positions(), this.referee.sentOff);
-    this.emit({ type: 'substitution', team: po.team, off, on, role: po.role });
-  }
+  /** Law 3 bookkeeping (substitutions.ts): changes made per team, occasions used, who has come on. */
+  readonly subs = new SubstitutionLog();
+  get substitutions(): readonly [number, number] { return this.subs.made; }
+  canSubstitute(team: TeamId): boolean { return canSubstitute(this, team); }
+  benchOf(team: TeamId): PlayerProfile[] { return benchOf(this, team); }
+  /** Law 3: `on` replaces `off` while the ball is out of play (substitutions.ts); throws on an illegal change. */
+  substitute(off: number, on: number, role?: Role, reason?: SubReason): void { substitute(this, off, on, role, reason); }
 
   private checkClock(): void {
     if (this.clockSeconds() < this.config.halfMinutes * 60) return;
@@ -561,39 +522,7 @@ export class MatchEngine {
   }
 
   snapshot(): MatchSnapshot {
-    const ball = this.physics.ball;
-    const t = ball.translation(), v = ball.linvel(), w = ball.angvel(), r = ball.rotation();
-    return {
-      tick: this.tick,
-      time: this.time,
-      half: this.half,
-      clockSeconds: this.clockSeconds(),
-      phase: this.phase,
-      score: [this.score[0], this.score[1]],
-      ball: { position: { x: t.x, y: t.y, z: t.z }, velocity: { x: v.x, y: v.y, z: v.z }, spin: { x: w.x, y: w.y, z: w.z }, rotation: { x: r.x, y: r.y, z: r.z, w: r.w }, heldBy: this.heldBy },
-      players: this.profiles.map(p => {
-        const body = this.bodies[p.id], legs = this.legs[p.id];
-        const pos = body.translation(), vel = body.linvel();
-        return {
-          id: p.id,
-          position: { x: pos.x, y: pos.y, z: pos.z },
-          velocity: { x: vel.x, y: vel.y, z: vel.z },
-          heading: body.heading,
-          boots: [legs.bootWorld(0), legs.bootWorld(1)],
-          swingingBoot: legs.swing ? legs.swing.plan.side : -1,
-          hands: this.handsOf(p.id),
-          upperBody: this.upperBodyView(p.id),
-          lying: body.lying(),
-          booked: this.referee.redCards.has(p.id) ? 'red' : this.referee.yellow.has(p.id) ? 'yellow' : 'none',
-          sentOff: this.referee.sentOff.has(p.id),
-        };
-      }),
-      possession: this.possession(),
-      lastTouch: this.referee.lastTouch?.player ?? null,
-      restart: this.restart ? { kind: this.restart.kind, team: this.restart.team, position: this.restart.spot, taker: this.restart.taker, placed: this.restart.placed } : null,
-      moment: this.moment,
-      minds: this.minds.map(m => ({ confidence: m.confidence, recent: m.recent.map(r => ({ action: r.action, ok: r.ok })) })),
-    };
+    return engineSnapshot(this);
   }
 
   /** Keeper holding the ball, if any. */
@@ -605,13 +534,6 @@ export class MatchEngine {
   handsOf(id: number): Vec3 | null {
     const keeper = this.keepers.get(id);
     return keeper ? keeper.hands.world3() : this.throwHands.thrower() === this.bodies[id] ? this.throwHands.world3() : null;
-  }
-
-  private upperBodyView(id: number): PlayerView['upperBody'] {
-    const head = this.heads[id].active();
-    if (head) return { part: 'head', position: head };
-    const chest = this.chests[id].active();
-    return chest ? { part: 'chest', position: chest } : null;
   }
 
   teamName(team: TeamId): string {

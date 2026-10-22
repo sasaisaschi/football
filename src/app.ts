@@ -41,7 +41,7 @@ const SOUND_PACE = 2;
 export class MatchApp {
   readonly client: SimClient;
   readonly playback = new Playback();
-  readonly metrics: SessionMetrics = { wallSeconds: 0, cpuSeconds: 0, simSeconds: 0, moments: 0 };
+  readonly metrics: SessionMetrics;
   private figures: PlayerFigure[] = [];
   private profiles: PlayerProfile[] = [];
   private readonly ball = createBallView();
@@ -70,6 +70,7 @@ export class MatchApp {
     this.client = new SimClient({ seed: options.seed, halfMinutes: options.halfMinutes, userTeam: options.userTeam, cooldown: options.cooldown, maxPerHalf: options.maxPerHalf, timeoutSeconds: options.timeoutSeconds, memory: options.memory ?? undefined });
     this.camera = new CameraDirector(cam);
     this.hud = new Hud(options.halfMinutes);
+    this.metrics = { wallSeconds: 0, cpuSeconds: 0, simSeconds: 0, moments: 0, halfMinutes: options.halfMinutes };
     this.panel = new DecisionPanel((id, by) => this.resolve(id, by), i => this.overlay.focus(i));
     host.append(this.hud.el, this.panel.el);
     scene.add(this.ball.mesh, this.overlay.group);

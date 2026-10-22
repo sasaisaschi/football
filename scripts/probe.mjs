@@ -1,5 +1,6 @@
 // Multi-seed probe: runs short autonomous matches in parallel and reports the statistics per 90 minutes.
-// Usage: npm run probe -- [--seeds 1-6] [--minutes 10] [--parallel 6] [--orchestrator]
+// Usage: npm run probe -- [--seeds 1-6] [--minutes 10] [--parallel 6] [--orchestrator] [--bench]
+//   --bench: both teams' substitutions are made by the computer's coach (bench-manager.ts).
 //   --orchestrator: the orchestrator runs with the app's settings and every moment is settled by its default; the report
 //   then also lists the moments per kind and half (the decisions change play, so the statistics are not comparable).
 import { spawn } from 'node:child_process';
@@ -22,7 +23,7 @@ function run(seed) {
   const out = join(dir, `seed-${seed}.json`);
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [vitest, 'run', 'src/engine/full-match.test.ts'], {
-      env: { ...process.env, SIM_SEED: String(seed), SIM_HALF_MINUTES: String(minutes), SIM_OUT: out, ...(process.argv.includes('--orchestrator') ? { SIM_ORCHESTRATOR: '1' } : {}) },
+      env: { ...process.env, SIM_SEED: String(seed), SIM_HALF_MINUTES: String(minutes), SIM_OUT: out, ...(process.argv.includes('--orchestrator') ? { SIM_ORCHESTRATOR: '1' } : {}), ...(process.argv.includes('--bench') ? { SIM_BENCH: '1' } : {}) },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     let err = '';
@@ -65,10 +66,15 @@ const report = {
   goalOrigin: Object.fromEntries(Object.keys(results[0].goalOrigin).map(k => [k, p(r => r.goalOrigin[k])])),
   goalDistance: Object.fromEntries(Object.keys(results[0].goalDistance).map(k => [k, p(r => r.goalDistance[k])])),
   shotOutcome: Object.fromEntries(Object.keys(results[0].shotOutcome).map(k => [k, p(r => r.shotOutcome[k])])),
+  turnovers: Object.fromEntries(Object.keys(results[0].turnovers).map(k => [k, { n: p(r => r.turnovers[k].n), conceded: p(r => r.turnovers[k].conceded), rate: +(sum(r => r.turnovers[k].conceded) / Math.max(1, sum(r => r.turnovers[k].n))).toFixed(3) }])),
+  throwInsAfter: Object.fromEntries(Object.keys(results[0].throwInsAfter).map(k => [k, p(r => r.throwInsAfter[k])])),
+  throwInsBy: { attacking: p(r => r.throwInsBy.attacking), defending: p(r => r.throwInsBy.defending) },
   goalsSd: +Math.sqrt(results.reduce((a, r) => a + ((r.score[0] + r.score[1]) * 90 / (2 * minutes) - sum(x => x.score[0] + x.score[1]) * per90) ** 2, 0) / Math.max(1, results.length - 1)).toFixed(2),
   ballInPlay: +(sum(r => r.ballInPlay) / results.length).toFixed(2),
   msPerStep: +(sum(r => r.msPerStep) / results.length).toFixed(2), wallSeconds: Math.round((Date.now() - started) / 1000),
 };
+const subs = results.flatMap(r => r.substitutions ?? []);
+if (subs.length) report.substitutions = { perMatch: +(subs.length / results.length).toFixed(1), byReason: Object.fromEntries([...new Set(subs.map(s => s.reason))].map(k => [k, subs.filter(s => s.reason === k).length])) };
 if (process.argv.includes('--orchestrator')) {
   const all = results.flatMap(r => r.moments);
   const count = key => Object.fromEntries([...new Set(all.map(key))].sort().map(k => [k, all.filter(m => key(m) === k).length]));

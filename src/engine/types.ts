@@ -150,10 +150,12 @@ export type MatchEvent = MatchEventBase &
     | { type: 'moment'; momentId: number; team: TeamId; kind: MomentKind }
     | { type: 'decision'; momentId: number; optionId: string; chosenBy: DecisionSource }
     | { type: 'instruction'; team: TeamId; instruction: TeamInstruction; source: IntentSource }
-    /** Law 3: `on` replaces `off` and takes over his position (`role`). */
-    | { type: 'substitution'; team: TeamId; off: number; on: number; role: Role }
+    /** Law 3: `on` replaces `off` and takes over his position (`role`); `reason` when the computer's coach made the change. */
+    | { type: 'substitution'; team: TeamId; off: number; on: number; role: Role; reason?: SubReason }
   );
 export type MatchEventType = MatchEvent['type'];
+/** Why a coach changes a player: only what is known in the match (there is no fatigue model, so none is claimed). */
+export type SubReason = 'keeper' | 'form' | 'card' | 'chase' | 'protect';
 
 export type MomentKind =
   | 'finish-or-pass' | 'take-on' | 'counter-attack' | 'counter-press' | 'breakaway-defence' | 'box-defence'

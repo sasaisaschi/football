@@ -1,7 +1,15 @@
 import './start-screen.css';
 import { TEAMS } from '../engine/rosters';
+import { lengthLabel } from './match-length';
 
 export type MatchChoice = { halfMinutes: number; condense: boolean; resetMemory: boolean };
+
+/** What each length means for the session (user time measured in the production build, PROJECT_REPORT.md §11). */
+const LENGTH_NOTE: Record<5 | 15 | 45, string> = {
+  5: 'Zum Ausprobieren: wenige Entscheidungen.',
+  15: 'Jede Sekunde der 30 Spielminuten wird simuliert.',
+  45: 'Die ganze Partie, jede Sekunde simuliert.',
+};
 
 /** Opening card: the fixture, what the user plays, the match length and pacing. Starting it is also the audio gesture. */
 export function showStartScreen(host: HTMLElement, defaultHalf: number, memoryMatches: number, onStart: (c: MatchChoice) => void): void {
@@ -21,6 +29,7 @@ export function showStartScreen(host: HTMLElement, defaultHalf: number, memoryMa
         <div class="start-lengths" role="radiogroup" aria-label="Spieldauer"></div>
         <label class="start-condense"><input type="checkbox" data-condense checked /> Ruhige Phasen verdichten</label>
       </div>
+      <div class="start-length-note" data-length-note></div>
       <div class="start-memory" data-memory></div>
       <button class="start-go" data-go type="button">Anpfiff</button>
       <small>Verdichtet heißt: jede Sekunde wird berechnet, ruhiges Spiel aber schneller gezeigt. Ohne Verdichtung läuft alles live.</small>
@@ -36,6 +45,7 @@ export function showStartScreen(host: HTMLElement, defaultHalf: number, memoryMa
     memory.querySelector('button')!.addEventListener('click', () => { resetMemory = true; memory.textContent = 'Gedächtnis wird beim Anpfiff gelöscht – alle starten frisch.'; });
   } else memory.textContent = 'Erste Partie: Die Spieler beginnen mit ihrem Grundcharakter. Was sie erleben, nehmen sie in die nächste Partie mit.';
   const lengths = el.querySelector('.start-lengths')!;
+  const note = el.querySelector<HTMLElement>('[data-length-note]')!;
   for (const [label, minutes] of [['2 × 5 min', 5], ['2 × 15 min', 15], ['2 × 45 min', 45]] as const) {
     const b = document.createElement('button');
     b.type = 'button';
@@ -46,6 +56,7 @@ export function showStartScreen(host: HTMLElement, defaultHalf: number, memoryMa
       b.classList.add('selected');
       b.setAttribute('aria-checked', 'true');
       halfMinutes = minutes;
+      note.textContent = `${lengthLabel(minutes).long}. ${LENGTH_NOTE[minutes]}`;
     };
     b.addEventListener('click', select);
     lengths.append(b);

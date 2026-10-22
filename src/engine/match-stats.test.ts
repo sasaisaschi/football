@@ -72,4 +72,21 @@ describe('match statistics', () => {
     expect(s.lossesAfter.none).toBe(1);
     expect(s.pingPong).toBe(1);
   });
+  it('a shot outcome (caught, parried, blocked, out, goal) and where a goal move began', () => {
+    const st = id(0, 'ST'), gk = id(1, 'GK'), cb = id(1, 'RCB'), rw = id(0, 'RW');
+    const hands = (t: number) => at(t, { type: 'touch', player: gk, part: 'hands', ballSpeed: 9, position: { x: 50, y: 1, z: 0 } });
+    const s = matchStats([
+      swing(1, st, 'shot'), touch(1.1, st), hands(1.6), at(1.6, { type: 'catch', player: gk, position: { x: 50, y: 1, z: 0 } }),
+      at(5, { type: 'restart', restart: 'goal-kick', team: 1, position: { x: 47, z: 0 } }),
+      swing(10, st, 'shot'), touch(10.1, st), hands(10.5), touch(11, rw),
+      swing(12, rw, 'shot'), touch(12.1, rw), touch(12.4, cb),
+      touch(13, st), swing(14, st, 'shot'), touch(14.1, st), at(15, { type: 'out', restart: 'goal-kick', team: 1, position: { x: 52.5, z: 6 } }),
+      at(20, { type: 'restart', restart: 'corner', team: 0, position: { x: 52.5, z: 34 } }), at(21, { type: 'in-play', restart: 'corner', taker: rw }),
+      touch(21.1, rw), at(23, { type: 'touch', player: st, part: 'head', ballSpeed: 12, position: { x: 47, y: 2, z: 1 } }),
+      at(23.4, { type: 'goal', team: 0, scorer: st, ownGoal: false, position: { x: 52.6, y: 1, z: 0 } }),
+    ], roster);
+    expect(s.shotOutcome).toMatchObject({ caught: 1, parried: 1, blocked: 1, out: 1 });
+    expect(s.goalOrigin.corner).toBe(1);
+    expect(s.goalDistance.under11).toBe(1);
+  });
 });

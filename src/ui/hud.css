@@ -5,6 +5,8 @@
 .hud-away { border-right: 4px solid var(--c-away); }
 .hud-bug > .hud-score { background: var(--c-text); color: var(--c-night); font-size: var(--fs-lg); min-width: 84px; justify-content: center; }
 .hud-clock { color: var(--c-text-muted); font-variant-numeric: tabular-nums; }
+.hud-bug > .hud-length { font-size: var(--fs-xs); color: var(--c-night); background: var(--c-warn); padding: 0 var(--space-2); }
+.hud-bug > .hud-length[data-full='true'] { background: var(--c-panel-raised); color: var(--c-text-muted); }
 
 .hud-mode { position: absolute; top: 62px; left: var(--space-4); padding: 3px var(--space-3); border-radius: var(--radius-sm); background: var(--c-panel-raised); font-size: var(--fs-xs); letter-spacing: var(--tracking); font-weight: 800; border-left: 3px solid var(--c-live); }
 .hud-mode[data-state='fast'] { border-left-color: var(--c-warn); color: var(--c-warn); }

@@ -14,6 +14,8 @@ export type RestartState = {
   taker: number;
   /** The orchestrator has looked at this placed restart once (it may stop play before it is taken, never twice). */
   consulted: boolean;
+  /** The computer's coaches have looked at this stoppage for substitutions (once). */
+  benchSeen: boolean;
   /** A free kick awarded for a foul or handball may be shot at goal; one for offside or a back-pass is indirect (Law 13). */
   direct: boolean;
   /** Defending (or attacking) plans chosen for this restart, per team. */
