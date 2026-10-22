@@ -1,6 +1,6 @@
 # THE 12TH MAN – Technical Report & Development Guide
 
-**Stand:** 20.10.2026 · Phase A (#32) auf `main` abgeschlossen; **Phase B implementiert auf Branch `claude/phase-b-arbeitsauftrag-8042ea` (PR, Abnahme offen)** – Ergebnisse, Messwerte und Nicht-Erreichtes in §10.9. Frühere Messwerte bleiben historisch datiert.
+**Stand:** 22.10.2026 · Phase B (#33) auf `main` gemergt; **Phase-B-Restarbeiten auf Branch `claude/phase-b-arbeitsauftrag-8042ea` (Folge-PR, Abnahme offen)** – Ergebnisse, Messwerte und Nicht-Erreichtes in §10.10. Frühere Messwerte bleiben historisch datiert.
 **Rolle:** verbindliche Source of Truth für Architektur, tatsächlichen Stand, Versionen, Tests, Messwerte und nächste Schritte.
 **Kennzeichnung:** **Implementiert** = Code vorhanden · **Getestet** = durch tatsächlich ausgeführte Tests belegt · **Gemessen** = Zahl aus einem tatsächlichen Lauf · **Geplant** = nicht vorhanden · **Nicht geprüft** = vorhanden, ohne Nachweis.
 
@@ -99,6 +99,8 @@ scripts/probe.mjs           Mehr-Seed-Statistik (npm run probe; --orchestrator: 
 | 19.10.2026 | Phase A: Abschluss-Browsertest (`npm run test:browser` und Prüfskript für die vier Befunde, Seed 23, 2 × 5 min) | `ok: true`, keine Fehler/Warnungen, **53 FPS**. Einwürfe nahe und ferne Seitenlinie im Fernsehbild, keiner im Zeitraffer; Zeitraffer in 4 von 1284 Stichproben, nie bei ruhendem Ball oder hohem Ball; 9 Statusmeldungen, längste 9,3 s |
 | 20.10.2026 | Phase B: `npm run check` | `tsc` ohne Fehler, **24 Testdateien / 129 Tests bestanden** (2 übersprungen: Langsimulation, Schusslabor), `vite build` erfolgreich (Simulation als eigener Worker-Chunk) |
 | 20.10.2026 | Phase B: `npm run test:browser` (Desktop, schmal, Vollpartie) und `npm run probe` (Momentverteilung, Statistik, Ablation) | siehe §10.9 B6 |
+| 22.10.2026 | Restarbeiten: `npm run check` | `tsc` fehlerfrei, **26 Testdateien / 142 Tests bestanden** (3 übersprungen), Build erfolgreich |
+| 22.10.2026 | Restarbeiten: Browser Desktop/schmal/Produktions-Vollpartie, Schusslabor, 48-Seed-Probe | siehe §10.10 R7 |
 
 **Testinhalte:** Feldmaße/Regel 9/10, Zufall reproduzierbar; Ballaufprall, Rollweg, keine Kraftakkumulation, Magnus-Richtung, Netz/Pfosten/Latte; Beschleunigungsgrenzen, 22 Körper stabil, bitgleiche Wiederholung; Fußkontakt (Nähe kickt nie, Richtung/Tempo, Spannstoß mit Lift, Richtungsabhängigkeit, Drallkorrektur beim seitlichen Antippen, Fehltreffer mit Drall, Luftloch, Reichweite, Ballannahme); Schiedsrichter (Abseits, Einwurf-Ausnahme, Seitenwechsel, Ecke/Abstoß/Einwurf/Tor/Eigentor, Foul von hinten, Zweikampf ≠ Foul, Notbremse = Rot + Elfmeter, taktisches Foul = Gelb, Gelb-Rot, Mitspieler-Kontakt, Handspiel außerhalb, Rückpass); vollständige Partie ohne ungültige Zustandsübergänge, gleicher Seed = gleiche Partie, kein kollektives Ballverfolgen, Torwart-Ergebnisse variieren, Ballfreigabe innerhalb von 6 s; Director (Moment friert ein, jede angebotene Option wird als echter Schwung ausgeführt, gleiche Lage + andere Entscheidung → anderer Verlauf, gleiche Entscheidung → unterschiedlicher Erfolg, Momente selten und mit Abstand); Quelltext „kein Magnetismus“.
 
@@ -854,7 +856,8 @@ Insgesamt verdoppeln sich die Brustannahmen (31 → 65), und es gibt weniger Ein
 - Der laufende Spielrhythmus der Beine ist rein visuell (ruhende Schuh-Kollider bleiben unter der Hüfte); Kick-Beine folgen exakt der Physik.
 - Ballparameter sind Literaturwerte, keine eigene Messreihe.
 - Bei Kurzspielen zeigt die Uhr echte Simulationszeit (z. B. 2 × 5 min), nicht 90 Minuten.
-- Phase B: Eine 90-Minuten-Partie braucht im Browser ≈ 23 min Rechenzeit (≈ 4,2 ms je Tick, Iris Xe); die Nutzerzeit kann darunter nicht fallen (§10.9 B3). Die Agenten erhöhen Ballbesitzwechsel und Einwürfe (nicht nachkalibriert).
+- Eine 90-Minuten-Partie braucht im Browser ≈ 11,7 min Rechenzeit unter Dauerlast (2,16 ms je Tick, Iris Xe; Phase B: 4,2 ms); die Nutzerzeit (14:04 min) kann nicht unter die Rechenzeit fallen (§10.10 R1).
+- Spieler fern vom Ball planen mit 30/20 Hz neu (Körper weiter mit 60 Hz); bei sauber rollendem Ball unter 10 m/s rechnet die Physik mit 2 statt 4 Teilschritten (gleichwertig gemessen, §10.10 R1).
 - Ton ist vollständig synthetisiert (keine Fangesänge/Kommentarstimme).
 - `window.__match` ist ein lesender Zugriff für das Browser-Prüfskript.
 - Bundle: Physik-Chunk 4,6 MB (Rapier-WASM inline).
@@ -875,11 +878,12 @@ Insgesamt verdoppeln sich die Brustannahmen (31 → 65), und es gibt weniger Ein
 11. **Fußballmechaniken** – Kopfball mit echtem Sprung und Kopfballtore, Einwurf mit beiden Händen, Brustannahme, Grätsche mit liegender Kapsel und Foulbewertung (gezielte Tests, noch keine Mehr-Seed-Messung).
 12. **Phase A** – Ballannahme nach Einwürfen, Kamera an der nahen Seitenlinie, Zeitraffer nur in ruhigen Phasen, Statusmeldungen mit Laufzeit.
 13. **Phase B** – Orchestrator mit Stopp vor Standards, Agenten-Traits und Form, chronologische Simulation im Web Worker mit Präsentationsregie, neue Figuren, Entscheidungskamera, Taktik-Overlays, neue Oberfläche (§10.9).
+14. **Phase-B-Restarbeiten** – Simulation −54 % je Tick, Agenten nachkalibriert, Ersatzbank und Wechsel, Elfmeter-Torwart, Freistoßmauer, Eckenverteidigung, Beziehungen und Gedächtnis über Partien, Figur und Animation, Figuren-Labor (§10.10).
 
 ## 9. Nächste Schritte
 
-1. **Phase B abnehmen** (PR, §10.9): Abnahme durch den Auftraggeber; offen sind vor allem die Spielzeit für 2 × 45 min und die durch die Agenten gestiegenen Ballbesitzwechsel/Einwürfe.
-2. **Simulationstempo:** KI-Kosten je Tick senken (Wahrnehmung/Optionsbewertung), mit Mehr-Seed-Messung – Voraussetzung für 5–10 min bei voller Spielzeit.
+1. **Restarbeiten abnehmen** (Folge-PR, §10.10). Offen: 10 min Nutzerzeit für 2 × 45 min (gemessen 14:04 min, Engpass Rechenzeit), Tore 3,6/90 und weniger Fänge des Torwarts (nächste Kalibrierung), Szenariomodus.
+2. **Simulationstempo:** Wahrnehmung, Freilaufsuche und Abfangprüfung algorithmisch weiter verbilligen; Messung auf weiterer Hardware.
 3. Nachkalibrierung (Messung mit `npm run probe`, 48 Seeds): Schüsse (≈ 19/90, real ≈ 25), Tore (in drei kurzen Browserpartien keines), Häufigkeit von Kopfballtoren, Grätschen und Fouls, Passzahl (≈ 1360 statt ≈ 1000/90), lange Bälle über 30 m.
 4. Orchestrator: Wechsel (nach Ersatzbank-Logik), Torwart beim gegnerischen Elfmeter, defensive Eckenvarianten, Wiederholung (Replay) eines Moments aus den Ereignisdaten.
 5. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
@@ -1175,3 +1179,157 @@ Screenshots (je vor der Entscheidung, mit fokussierter Option, nach der Konseque
 - **Grafik:** keine Gesichter/Animationen aus Motion-Capture; Laufzyklus der Beine weiter dekorativ (Physikschuhe ruhen unter der Hüfte, §7).
 - **Statistik:** Ballbesitzwechsel und Einwürfe durch die Agenten erhöht (oben), nicht nachkalibriert.
 - Der Konsequenztext urteilt nur über die ersten 12 s; spätere Folgen werden bewusst nicht einer Entscheidung zugeschrieben.
+
+### 10.10 Phase-B-Restarbeiten und finale Abnahme (22.10.2026)
+
+**Ausgangslage:** PR #33 ist am 22.10.2026 gemergt worden. Ein gemergter PR lässt sich nicht mehr aktualisieren; die Restarbeiten laufen deshalb auf demselben Branch (auf den Merge-Stand von `main` vorgespult) weiter und gehen als **ein Folge-PR** mit Verweis auf #33 zur Abnahme. Kein Merge ohne Freigabe.
+
+**Unterarbeitsplan** (Abhängigkeiten: R1 vor R2, weil jede Verhaltensmessung auf dem schnellen Stand laufen muss; R3/R4 vor R5, weil die Vergleichsbilder auch die neuen Mechaniken zeigen sollen):
+- **R1 (P0) Simulationsleistung:** Profiling-Werkzeug (`scripts/perf/profile.mjs`, `bench.mjs`), Hotspots nach Selbst- und Inklusivzeit; zuerst bit-identische Optimierungen (Nachweis: Ereignisfolge und Ballposition gleich), dann Rechenintervalle mit 24-Seed-Regression; Vollpartie im Browser messen.
+- **R2 (P1) Agenten nachkalibrieren:** Ablation der drei Trait-Anteile (Risiko, Selbstvertrauen, Teamorientierung), 24 Seeds je Variante (48 bei unsicherem Befund), gemeinsame Bewertung von Schüssen, Toren, Passquote, Fouls, Einwürfen und Ballbesitzwechseln; Charaktertest muss grün bleiben.
+- **R3 (P1) Mechaniken:** Ersatzbank und Auswechslungen (Regel 3: höchstens 5 Wechsel, 3 Gelegenheiten plus Halbzeit, nur bei ruhendem Ball, Eintritt an der Mittellinie, keine Rückkehr); Torwart beim gegnerischen Elfmeter (abwarten / früh links / früh rechts, auf der Torlinie nach Regel 14); Freistoßmauer (2 / 4 Spieler, 9,15 m, oder keine Mauer) samt direktem Freistoß der KI; defensive Ecken (Mann-, Raum-, gemischte Deckung mit Konterspielern).
+- **R4 (P2) Agentensystem:** Beziehungen (gelungene Zuspiele stärken das Vertrauen zwischen zwei Mitspielern und beeinflussen die Passwahl), partienübergreifende Erfahrung, versionierte lokale Persistenz (JSON, `localStorage` im Browser), reproduzierbar.
+- **R5 (P2) Grafik:** Prüfung aller Screenshots, Verbesserungen an Figur und Animation (Laufen, Drehen, Schuss, Zweikampf), Kamera und Markierungen; Vergleichsbilder aus identischen Situationen (gleicher Seed, gleicher Tick) und FPS-Messung.
+- **R6 (optional) Szenariomodus:** nur wenn R1–R5 abgeschlossen sind; sonst als eigener Folgepunkt dokumentiert.
+- **R7 Abschluss:** `npm run check` nach jedem Schritt, Browser- und Produktions-Build-Prüfung, Mehr-Seed-Regression gegen den Phase-B-Stand, Bericht und Folge-PR.
+
+#### R1 (P0) Simulationsleistung – implementiert, gemessen; Ziel 10 min **nicht erreicht**
+
+**Werkzeuge:**
+- `scripts/perf/profile.mjs`: CPU-Profil mit Selbst- und Inklusivzeit je Funktion.
+- `scripts/perf/bench.mjs`: ms pro Tick über vier Seeds à 120 s; ein einzelner Seed misst nur einen Spielabschnitt und streut um ±10 %.
+- `scripts/perf/browser-bench.mjs` mit `perf/`: die Simulation allein im Browser-Worker, ohne Grafik.
+- Nachweis für alle bit-identischen Schritte: Ereignisfolge und Ballposition nach 60 s Spielzeit sind gleich dem Ausgangscode.
+
+**Ausgangsprofil (`main`, Node):** 3,27 ms pro Tick. Davon ≈ 55 % Rapier-Physik inklusive JS↔WASM-Übergängen, ≈ 33 % Spieler-KI (davon 12,5 % „bin ich am schnellsten am Ball?“), ≈ 2 % Snapshot und Kodierung.
+
+| Schritt | Art | ms/Tick (Node, 4 Seeds) |
+| --- | --- | --- |
+| Ausgang `main` (3dcfd79) | – | 3,27 |
+| Stiefel-Collider nur in Ballnähe in der Broadphase (Stiefel kollidieren nur mit dem Ball), Ballbahn je Ballzustand einmal, Suche bei der eigenen Ankunftszeit beendet, Körperposition und -geschwindigkeit je Physikschritt gepuffert, ruhende Stiefel nur zum Tick-Ende gesetzt | **bit-identisch** | 2,43 |
+| + Mechaniken, Kalibrierung, Ersatzbank (Spielinhalt ändert sich) | Verhalten | 2,76 |
+| + Neuplanung 20 Hz für Spieler > 22 m vom Ball | Verhalten (24 Seeds geprüft) | 2,58 |
+| + 2 statt 4 Physik-Teilschritte bei sauber rollendem Ball < 10 m/s | Physik gleichwertig (max. 3,3 cm Abweichung nach 5 s, 4–32 m/s, Drall, Aufsetzer; Schusslabor identisch) | 2,00 |
+| + Neuplanung 30 Hz für Spieler ohne Ball zwischen 5 und 22 m | Verhalten (48 Seeds geprüft) | 1,69 |
+| + Frames direkt aus der Engine kodiert | bit-identisch | **1,50 (−54 %)** |
+
+**Gemessen und verworfen:**
+- Rapiers interne Solver-Teilschritte statt äußerer Teilschritte: Rollverhalten falsch (nach 1 s 4,75 statt 7,17 m/s, Rollweg 18,7 statt 29,5 m).
+- 2 oder 3 Teilschritte für jeden Bodenball: Schuss mit 25 m/s 6 m kürzer, mit 32 m/s 2,4 % kürzer.
+- Rollschwelle 14 m/s statt 10 m/s: bis 0,38 m Abweichung.
+- 2 statt 4 Solver-Iterationen: Pfostenabpraller 0,93 m anders.
+- Untätige Kopf- und Brustkörper nicht mehr setzen: kein messbarer Effekt.
+
+**Browser, volle Partie 2 × 45 min** (Intel Iris Xe; jede Entscheidung nach 2 s delegiert, damit sie reproduzierbar bleibt):
+
+| Stand | Nutzerzeit | Rechenzeit Worker | ms/Tick im Browser | FPS live / verdichtet |
+| --- | --- | --- | --- | --- |
+| Phase B (PR #33, Dev-Server) | 24:25 | 22:47 | 4,2 | 60 / 55 |
+| nach den Optimierungen (Dev-Server) | 15:33 | 13:18 | 2,46 | 60 / 60 |
+| Produktions-Build | 14:46 | 12:30 | 2,31 | 56 / 60 |
+| + Rendern im verdichteten Modus mit 30 FPS, Schatten seltener | 14:31 | 12:10 | 2,25 | 55 / 60 |
+| **Endstand (Produktions-Build)** | **14:04** | 11:40 | 2,16 | 50 / 60 |
+
+**Warum das Ziel nicht erreicht wird (gemessen):**
+- Ohne Grafik kostet die Simulation im Browser-Worker 1,64 ms pro Tick, in Node 1,50 ms. Während einer 14-minütigen Partie mit 3D-Bild steigt das auf ≈ 2,25 ms: Worker und Grafik teilen sich das Wärme- und Leistungsbudget des Laptops.
+- Die Nutzerzeit liegt nur ≈ 20 % über der Rechenzeit (Entscheidungen, der Aufbau vor jedem Moment in Echtzeit, Start). Die Rechenzeit selbst begrenzt also.
+- Für 10 min müsste ein Tick im Browser unter Dauerlast ≈ 1,55 ms kosten (in Node ≈ 1,05 ms). Das ginge nur mit noch weniger Physik (die verbleibenden Teilschritte werden für Drall und harte Bälle gebraucht) oder deutlich seltener planenden Spielern; beides würde Ballphysik oder Reaktionen messbar verschlechtern. Deshalb nicht gemacht.
+- **Was das Ziel einhält:** 2 × 15 min ≈ 4,9 min Nutzerzeit (hochgerechnet aus der gemessenen Rechenzeit pro Tick, nicht als eigene Partie gemessen). Die volle Länge liegt bei ≈ 14,5 min.
+- **Verbleibende Möglichkeiten:**
+  - (a) Wahrnehmung, Freilaufsuche und Abfangprüfung algorithmisch weiter verbilligen (jeweils 2–5 % eines Ticks),
+  - (b) Rapier mit Mehrkernunterstützung (für den JS-Build derzeit nicht verfügbar),
+  - (c) KI auf mehrere Worker verteilen: Das bräche den gemeinsamen, deterministischen Zustand pro Tick, also nur mit großem Umbau,
+  - (d) auf stärkerer Hardware messen.
+
+#### R2 (P1) Agenten nachkalibriert – implementiert, gemessen
+- **Ursache:** Die Form wirkte als `(Selbstvertrauen − 0,5)`. Selbstvertrauen pendelt sich bei ≈ 76 % gelungenen Aktionen aber bei ≈ 0,66 ein. Damit bekamen alle Spieler einen dauerhaften Zuschlag für Dribbling und Schuss: mehr Ballverluste und Einwürfe.
+- **Korrektur:** Die Form wird gegen die neutrale Lage gemessen, den Fixpunkt der eigenen Aktualisierungsregel (`neutralConfidence`). Sie wirkt damit nur bei echter Abweichung: Charakterunterschiede bleiben, die Verschiebung ist weg. Der Charaktertest (gleiche Lage, gute Form → Dribbling, schlechte Form → Pass) bleibt grün.
+
+| pro 90 min | `main` (24 Seeds) | Phase B (48 Seeds) | nur Kalibrierung (24 Seeds) | **Endstand (48 Seeds)** | real |
+| --- | --- | --- | --- | --- | --- |
+| Tore (Eigentore) | 2,4 (0,4) | 2,9 (0,4) | 3,6 (0,6) | **3,6 (0,5)** | ≈ 2,7 |
+| Torschüsse (nach Kombination) | 14,4 (2,3) | 20,4 (2,0) | 25,3 (1,9) | **20,0 (2,0)** | ≈ 25 |
+| Pässe / Passquote | 1354 / 76 % | 1257 / 78,5 % | 1346 / 77 % | **1342 / 77 %** | ≈ 1000 / 75–85 % |
+| Ballbesitzwechsel | 1213 | 1297 | 1216 | **1262** | – |
+| Fouls / Elfmeter | 29,8 / 0,2 | 26,0 / 0,2 | 27,2 / 0,4 | **25,6 / 0,1** | ≈ 22 / 0,3 |
+| Ecken / Einwürfe | 9,8 / 57 | 8,2 / 66,3 | 11,3 / 57,2 | **8,0 / 61,7** | ≈ 10 / 45 |
+| vom Torwart gefangen | – | 5,4–6,4 | 6,2 | **3,3** | – |
+
+**Bewertung:**
+- Einwürfe (66 → 62) und Ballbesitzwechsel (1297 → 1262) sind gegenüber Phase B gesunken, die Passzahl liegt wieder auf `main`-Niveau, Fouls näher am Richtwert. Die Schüsse bleiben deutlich über `main`.
+- „Nur Kalibrierung“ ist der Stand nach der Korrektur, aber vor den neuen Mechaniken. Die anschließenden Standardregeln (Aufstellzeit, Mauer, Ausführung nur durch Stoß) nehmen einen Teil der Schüsse und Ecken wieder weg.
+- **Offen:** Tore 3,6/90 (Phase B 2,9; Unterschied ≈ 1 Standardabweichung bei 48 Seeds, nicht gesichert) und weniger Fänge des Torwarts. Das Schusslabor ist zwischen Phase B und Endstand **identisch** (gleiche Paradenquote und Fänge auf 8–25 m), die Torwartphysik ist also unverändert. Die Ursache liegt im Spielinhalt (Schussmix, Mauern) und ist der nächste Kalibrierkandidat.
+
+#### R3 (P1) Fehlende Entscheidungsmechaniken – implementiert, getestet
+- **Ersatzbank und Wechsel:**
+  - Je Team 5 Ersatzspieler (TW, IV, ZM, RA, ST) aus eigenem Zufallsstrom; die Startelf ist unverändert, eine Partie ohne Wechsel bleibt bit-identisch zur Partie ohne Bank.
+  - `MatchEngine.substitute()` nach Regel 3: höchstens 5 Wechsel, 3 Gelegenheiten plus Halbzeit, nur bei ruhendem Ball; Eintritt an der Mittellinie, Übernahme der Position, keine Rückkehr; die Bank ist komplett aus der Physik genommen.
+  - Wechsel-Moment in der 2. Halbzeit (höchstens 2): Formschwächster (aus echten Aktionen), Gelbgefährdeter, offensiver oder defensiver Wechsel mit echten Fähigkeitswerten. Es gibt kein Ermüdungsmodell, deshalb wird auch keine Müdigkeit behauptet. Vorgabe: „Keinen Wechsel“.
+- **Torwart beim gegnerischen Elfmeter:** Er steht vor dem Schuss auf der Torlinie (Regel 14). Wählbar: abwarten (bisherige Reaktion), früh links, früh rechts – der Sprung startet beim Schuss ohne Reaktionszeit, egal wohin der Ball geht.
+- **Freistoßmauer:**
+  - Bei direkten Freistößen bis 30 m stellen sich standardmäßig 3 Verteidiger in eine Mauer, 9,8 m vom Ball auf der Linie zur kurzen Torhälfte.
+  - Wählbar: 2, 3, 4 oder keine Mauer (dann besetzen 3 Spieler die Fünfmeterlinie).
+  - Die KI schießt jetzt direkte Freistöße mit realer Chance (xG ≥ 0,05); vorher wurden Freistöße immer gespielt, eine Mauer wäre bedeutungslos gewesen.
+- **Defensive Ecken:** wie gewohnt, Manndeckung (jeder Angreifer im Strafraum bekommt einen Gegenspieler), Raumdeckung (beide Pfosten, Fünfmeterlinie, Elfmeterpunkt, Strafraumkante), Raum plus zwei Konterspieler an der Mittellinie.
+- **Regelkorrekturen (IFAB), beim Testen gefunden:**
+  - Ein Standard (außer Einwurf) ist erst ausgeführt, wenn der Ball gestoßen wird. Vorher reichte ein Körperkontakt oder ein ruhender Stiefel, auf den der Ball gelegt wurde.
+  - Abstand bei Standards: Toleranz 0,1 statt 0,5 m (vorher ging ein Verteidiger auf 8,7 m).
+  - Aufstellzeit vor Ecken (3,5 s) und torgefährlichen Freistößen (2,5 s); vorher war die Ecke ausgeführt, bevor jemand im Strafraum stand.
+  - Ausgewechselte und vom Platz gestellte Spieler verschwinden aus der Wahrnehmung der anderen (vorher liefen sie als „Geister“ weiter).
+- **Tests** (`orchestrator/mechanics.test.ts`, 9 Tests):
+  - Wechsel: Ein- und Auswechslung, Position, keine Rückkehr; Grenzen; nicht im Spiel; Wechsel-Moment.
+  - Elfmeter-Torwart: auf der Linie; früher Sprung in die gewählte Richtung; über 8 Seeds mit richtig geratener Ecke mehr Paraden als mit falsch geratener, ohne vorbestimmte Parade.
+  - Mauer: 3 per Vorgabe, gewählte 4 bzw. keine, alle ≥ 9,15 m.
+  - Ecke: Mann-, Raum- und Konterdeckung stellen dieselben Verteidiger an deutlich verschiedene Orte (> 2 m), alle legal entfernt.
+  - Dazu angepasste Bestandstests: direkter Freistoß nur mit freier Schussbahn; Einwurf genau einmal ausgeführt; Schiedsrichtertests mit der Startelf.
+
+#### R4 (P2) Agentensystem erweitert – implementiert, getestet
+- **Beziehungen:** Ein angekommener Pass stärkt das Vertrauen des Passgebers in den Empfänger (+0,1) und umgekehrt (+0,05); ein verlorener Pass senkt es (−0,08). Das Vertrauen fließt mit höchstens 0,003 xT in die Passwahl ein. Test: Zwischen zwei fast gleichwertigen Pässen entscheidet das Vertrauen über den real gespielten Pass.
+- **Gedächtnis über Partien** (`ai/agent-memory.ts`, Version 1, `localStorage`-Schlüssel `the12thman.agents.v1`, kein Cloud-Dienst):
+  - Nach jeder Partie bewegt sich das Grund-Selbstvertrauen um ein Viertel der End-Form, höchstens ±0,15 um den Trait; das Vertrauen wird zu 80 % mitgenommen.
+  - Andere Version oder anderer Kader: Neustart.
+  - Start- und Ergebnisbildschirm zeigen das Gedächtnis und was die Spieler mitnehmen; „Zurücksetzen“ ist möglich.
+  - `?memory=0` spielt ohne Gedächtnis (Browsercheck, reproduzierbar).
+- **Beobachtbare Wirkung:** Ein höheres Grund-Selbstvertrauen lenkt leicht zu Einzelaktionen (≤ 0,001 xT); gespeichertes Vertrauen wählt in der nächsten Partie den Empfänger (Test).
+- **Reproduzierbar:** gleiche Partie → gleiches Gedächtnis (Test). Agenten berühren weiterhin keine Ballzustände und keine Ergebnisse.
+
+#### R5 (P2) Grafische Qualität – implementiert, im Browser geprüft
+- **Figur:** Der Kopf ist ein eigenes Teil am Halsgelenk und folgt dem Ball (±63°); Muskelwölbung an Oberschenkel, Wade und Unterarm.
+- **Animation:**
+  - Laufschritt mit Kniehub, Fersenhub und leichtem Wippen; Arme schwingen gegen die Beine, stärker mit dem Tempo.
+  - Neigung in Kurven aus Drehrate × Tempo.
+  - Beim Schuss: Standbein beugt sich, Balance-Arme (der Arm gegenüber dem Schussbein nach vorn außen).
+  - In der Grätsche stützen die Arme nach hinten.
+  - Alles, was den Ball berührt, bleibt dort, wo die Physik es hat.
+- **Vergleichbarkeit:**
+  - `src/engine/record-scenes.test.ts` (nur mit `RECORD_SCENES=1`) zeichnet echte Spielzustände auf: Seed 7, Sprint, Drehung, Schuss mitten im Schwung, Kopfball, Grätsche.
+  - `lab/` zeichnet sie mit fester Kamera.
+  - `scripts/lab/compare.mjs` erzeugt die Bilder mit dem Renderer vor R5 (Commit `1b262f6`) und danach, `side-by-side.py` setzt sie nebeneinander: `docs/phase-b-rest/lab-0*.jpg`.
+- **Darstellung:** Die schmale Ansicht ist geprüft. Desktop- und Schmal-Screenshots des Endstands liegen in `docs/phase-b-rest/`.
+
+#### R6 Szenariomodus – **nicht umgesetzt, eigener Folgepunkt**
+Bewusst nicht begonnen: P0–P2 haben die verfügbare Zeit gebraucht, und ein halb integrierter Modus würde die fortlaufende Partie gefährden. Der Weg ist vorbereitet: `stageScenario` (bisher nur in Tests), aufgezeichnete Zustände (`record-scenes`) und die Zustandstests der Standards. Ein Szenario müsste als eigener Startpunkt mit eigener Engine laufen und dürfte nie als Matchereignis erscheinen (§10.2).
+
+#### R7 Abschluss – Prüfungen auf dem Endstand
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npm run check` | `tsc` fehlerfrei, **26 Testdateien / 142 Tests bestanden** (3 Dateien übersprungen: Langsimulation, Schusslabor, Szenenaufzeichnung – nur über eigene Befehle), Build erfolgreich |
+| Browser Desktop 1600 × 900, Seed 7, 2 × 15 min | `ok`, 0 Fehler, 0 Warnungen; **14 Momente in 10 Arten** (Strafraumgefahr, Durchsetzen, Konter, **Eckenverteidigung**, Ecke, Halbzeitansprache, Gegenpressing, Einwurf, **Wechsel**, Durchbruch), jedes Mal eingefroren und per Taste als `user` entschieden, kein Beteiligter verdeckt oder außerhalb des Bildes, keine Scrollleiste; FPS live 60 / verdichtet 60 |
+| Browser schmal 800 × 900 | `ok`; nach der Framing-Korrektur 0 verdeckte und 0 abgeschnittene Beteiligte (vorher 1 verdeckter Spieler bei Strafraumgefahr); FPS live 45 / verdichtet 60 |
+| Produktions-Build, volle Partie 2 × 45 min | Abpfiff, 13 Momente, 0 Fehler/Warnungen; **14:04 min Nutzerzeit**, 11:40 min Rechenzeit, 2,16 ms/Tick; FPS live 50 / verdichtet 60 |
+| Schusslabor Phase B gegen Endstand | identisch (8/12/16/20/25 m: 92/92/92/85/92 % gehalten, gleiche Fänge) |
+| Orchestrator-, Einwurf-, Eckball- und Kameratests | alle grün; angepasst wurden nur Erwartungen, die normales Spiel nach dem Standard ausschlossen (§ R3) |
+
+Screenshots: `docs/phase-b-rest/` – Vergleichsbilder aus dem Labor (`lab-0*`), Desktop-Momente (Eckenverteidigung vor/Fokus/nach, Ecke, Halbzeit, Einwurf, Wechsel vor/nach, Durchbruch, Verdichtung), schmale Ansicht.
+
+**Status je Punkt**
+
+| Punkt | Implementiert | Getestet | Gemessen | Offen |
+| --- | --- | --- | --- | --- |
+| P0 Leistung | ja | Bit-Identität, Physik-Gleichwertigkeit, Statistik | Node −54 %, Browser 24:25 → 14:04 min | **10-min-Ziel für 2 × 45 nicht erreicht** (Engpass Rechenzeit, siehe R1) |
+| P1 Agenten-Kalibrierung | ja | Charaktertest | 48 Seeds | Tore 3,6/90, Fänge des Torwarts |
+| P1 Wechsel, Elfmeter-Torwart, Mauer, Eckenverteidigung | ja | 9 + angepasste Tests | im Browser (Wechsel, Eckenverteidigung) | gegnerische Wechsel (die KI wechselt nicht), Torwart-Wahl beim Elfmeter nur als Sprungrichtung |
+| P2 Beziehungen, Gedächtnis | ja | 3 Tests | – | Beziehungen nur über Pässe; keine Rivalitäten |
+| P2 Grafik | ja | Framing-Tests | Labor-Vergleichsbilder, FPS | keine Gesichter, kein Motion-Capture |
+| Szenariomodus | nein | – | – | eigener Folgepunkt |
