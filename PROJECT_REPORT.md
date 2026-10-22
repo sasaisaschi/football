@@ -1333,3 +1333,20 @@ Screenshots: `docs/phase-b-rest/` – Vergleichsbilder aus dem Labor (`lab-0*`),
 | P2 Beziehungen, Gedächtnis | ja | 3 Tests | – | Beziehungen nur über Pässe; keine Rivalitäten |
 | P2 Grafik | ja | Framing-Tests | Labor-Vergleichsbilder, FPS | keine Gesichter, kein Motion-Capture |
 | Szenariomodus | nein | – | – | eigener Folgepunkt |
+
+## 11. Phase C – Produktabnahme und letzte Qualitätskorrekturen (22.10.2026)
+
+**Ausgangslage:** `main` = `090aeb3` (PR #33 und #34 gemergt). Phase C läuft auf dem neuen Branch `claude/phase-c-abnahme` mit eigenem PR. Vorhandene Funktionen werden nicht neu gebaut. Kein Merge ohne Freigabe.
+
+### 11.1 Arbeitsplan (Opus, 22.10.2026)
+
+Abhängigkeiten: C2 vor C1 und C4, weil Spielzeit- und Bildmessungen auf dem endgültigen Spielinhalt laufen müssen. C3 vor C1, weil gegnerische Wechsel auch in der gemessenen Sitzung vorkommen sollen. C5 zuletzt.
+
+- **C2 Fußballrealismus** (zuerst, längste Messkette):
+  1. Statistik um Torentstehung (offenes Spiel / nach Ecke, Freistoß, Einwurf, Elfmeter, Abstoß), Schussentfernung der Tore, Schüsse aufs Tor, Paraden und Fänge nach Art (nach Schuss / sonst) erweitern.
+  2. Ursache eingrenzen: dieselbe Messung (24 Seeds × 2 × 10 min) auf den Commits der Restarbeiten (`6211c5b` bit-identisch zu Phase B, `329853b` Mechaniken und Kalibrierung, `700fbb6` Teilschritte und Neuplanung, Endstand), danach Ablation des verdächtigen Schritts.
+  3. Nur nachgewiesene Fehler oder Überbewertungen korrigieren; Abnahme mit 48 Seeds, Physiktests und Schusslabor. Keine Ergebnissteuerung.
+- **C3 Gegnerische Wechsel:** Die KI des Gegners wechselt mit denselben Regeln (`MatchEngine.substitute`, Regel 3) aus Informationen, die vorliegen: Form aus echten Aktionen, Gelbe Karten, Spielstand und Spielzeit, Fähigkeitswerte der Bank. Keine Ermüdung. Tests für Auslöser, Grenzen und Ausführung.
+- **C1 Kurzpartie 2 × 15 min:** Produktions-Build im echten Browser, mehrere Seeds, Entscheidungszeit 5–10 s (zufällig je Moment, aus dem Seed des Skripts), gemessen werden Nutzerzeit, Rechenzeit, Wartezeiten (Bild steht ohne Entscheidung), FPS und Verständlichkeit (Texte der Leiste, Konsequenzkarten). Vergleich mit einer vollen Partie 2 × 45 min. Die kurze Partie muss im Bild als verkürzte Spielzeit erkennbar sein; die volle Länge bleibt wählbar.
+- **C4 Grafische und interaktive Endabnahme:** eigene Sichtprüfung der Aufnahmen aus dem Produktions-Build gegen `docs/phase-b-rest/` (Animationen, Kamera, Ballkontakte, Markierungen, Entscheidungsleiste, Konsequenzen); konkrete Fehler beheben; neue Bilder unter `docs/phase-c/`.
+- **C5 Abschlusstests:** `npm run check`; Langsimulation, Schusslabor und Szenenaufzeichnung; Browser Desktop und schmal; Produktions-Build; mehrere vollständige Sitzungen; Reproduzierbarkeit mit und ohne Agentengedächtnis.
