@@ -9,7 +9,7 @@ import { ThrowHands } from '../physics/throw-hands';
 import { throwInStand } from '../ai/throw-in';
 import { ExperienceTracker, PlayerMind } from '../ai/mind';
 import { PITCH, attackSign, BALL_SPEC } from '../physics/pitch-geometry';
-import { PHYSICS_DT, PhysicsWorld, type Contact, type ContactPart } from '../physics/world';
+import { PHYSICS_DT, PhysicsWorld, physicsClock, type Contact, type ContactPart } from '../physics/world';
 import { Referee, penaltySpot, restartDistance, type Decision, type PlayerState } from '../rules/referee';
 import { SLOTS, toWorld } from '../ai/shape';
 import { createRng, type Rng } from './rng';
@@ -210,6 +210,8 @@ export class MatchEngine {
 
   step(): void {
     if (this.phase === 'decision' || this.phase === 'full-time') return;
+    // Body reads are buffered per physics step; anything that set a body directly between ticks is seen fresh.
+    physicsClock.epoch++;
     if (this.consultDirector()) return;
     this.tick++;
     this.time += PHYSICS_DT;
@@ -458,7 +460,7 @@ export class MatchEngine {
       ball: { position: { x: t.x, y: t.y, z: t.z }, velocity: { x: v.x, y: v.y, z: v.z }, spin: { x: w.x, y: w.y, z: w.z }, rotation: { x: r.x, y: r.y, z: r.z, w: r.w }, heldBy: this.heldBy },
       players: this.profiles.map(p => {
         const body = this.bodies[p.id], legs = this.legs[p.id];
-        const pos = body.body.translation(), vel = body.body.linvel();
+        const pos = body.translation(), vel = body.linvel();
         const keeper = this.keepers.get(p.id);
         return {
           id: p.id,

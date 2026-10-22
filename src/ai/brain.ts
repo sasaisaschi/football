@@ -9,7 +9,7 @@ import { approach, trySwing } from './execution';
 import { blockLane, bodyInLine, carrierHasBall, jockey, pressCarrier } from './box-orders';
 import { tackle, tackleApproach } from './challenge';
 import { firstTouch } from './first-touch';
-import { aerialIntercept, headerIntercept, isAirborne } from './aerial';
+import { aerialBefore, aerialIntercept, headerIntercept, isAirborne } from './aerial';
 import { chooseHeader, CONTESTED } from './heading';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { offBallCommand } from './off-ball';
@@ -53,6 +53,30 @@ const JOCKEY_CLOSE = 1.5;
 const SHOULDER_GAP = 1.1;
 /** Extra pace of the lunge into a sliding tackle over the run (m/s). */
 const SLIDE_LUNGE = 0.5;
+
+/**
+ * A rolling ball's believed path, sampled every 0.1 s for 4 s: the same for every player a brain asks about, so it is
+ * worked out once per ball state (asked for oneself and each team-mate in turn, it was ≈ 10 % of a tick, profiled).
+ */
+const GROUND_SAMPLES = 41;
+const ground = { key: [NaN, NaN, NaN, NaN], n: 0, t: new Float64Array(GROUND_SAMPLES + 1), x: new Float64Array(GROUND_SAMPLES + 1), z: new Float64Array(GROUND_SAMPLES + 1) };
+
+function groundPath(pos: Vec2 | Vec3, vel: Vec2 | Vec3): typeof ground {
+  const k0 = ground.key;
+  if (k0[0] === pos.x && k0[1] === pos.z && k0[2] === vel.x && k0[3] === vel.z) return ground;
+  ground.key = [pos.x, pos.z, vel.x, vel.z];
+  ground.n = 0;
+  const speed = Math.max(0.01, Math.hypot(vel.x, vel.z));
+  const stop = speed / BALL_DAMPING;
+  for (let t = 0; t <= 4; t += 0.1) {
+    // Position along the ball's path after t seconds of uniform deceleration (it does not roll backwards).
+    const tt = Math.min(t, stop);
+    const k = tt - (0.5 * BALL_DAMPING * tt * tt) / speed;
+    const i = ground.n++;
+    ground.t[i] = t; ground.x[i] = pos.x + vel.x * k; ground.z[i] = pos.z + vel.z * k;
+  }
+  return ground;
+}
 
 /**
  * One autonomous footballer. Decides from its own perception a few times per second: win the ball, play it,
@@ -100,16 +124,25 @@ export class PlayerBrain {
       const aerial = aerialIntercept(p, vmax, ball.pos, ball.vel, ball.spin);
       if (aerial) return aerial;
     }
-    const speed = Math.max(0.01, Math.hypot(ball.vel.x, ball.vel.z));
-    const stop = speed / BALL_DAMPING;
-    for (let t = 0; t <= 4; t += 0.1) {
-      // Position along the ball's path after t seconds of uniform deceleration (it does not roll backwards).
-      const tt = Math.min(t, stop);
-      const k = tt - (0.5 * BALL_DAMPING * tt * tt) / speed;
-      const at = { x: ball.pos.x + ball.vel.x * k, z: ball.pos.z + ball.vel.z * k };
-      if (Math.hypot(at.x - p.x, at.z - p.z) / vmax + 0.3 <= t) return { t, at };
+    const path = groundPath(ball.pos, ball.vel);
+    for (let i = 0; i < path.n; i++) {
+      if (Math.hypot(path.x[i] - p.x, path.z[i] - p.z) / vmax + 0.3 <= path.t[i]) return { t: path.t[i], at: { x: path.x[i], z: path.z[i] } };
     }
     return { t: 4 + Math.hypot(ball.pos.x - p.x, ball.pos.z - p.z) / vmax, at: ball.pos };
+  }
+
+  /**
+   * Is interceptTime(p, vmax, ball).t below `limit`? Exactly the same answer, but the search stops at `limit`: asked
+   * for every team-mate of every player in every tick, the full search was ≈ 10 % of a tick (profiled).
+   */
+  static arrivesBefore(p: Vec2, vmax: number, ball: { pos: Vec2 | Vec3; vel: Vec2 | Vec3; spin?: Vec3 }, limit: number): boolean {
+    if ('y' in ball.pos && 'y' in ball.vel && isAirborne(ball.pos, ball.vel)) return aerialBefore(p, vmax, ball.pos, ball.vel, ball.spin ?? { x: 0, y: 0, z: 0 }, limit);
+    const path = groundPath(ball.pos, ball.vel);
+    for (let i = 0; i < path.n; i++) {
+      if (path.t[i] >= limit) return false;
+      if (Math.hypot(path.x[i] - p.x, path.z[i] - p.z) / vmax + 0.3 <= path.t[i]) return true;
+    }
+    return 4 + Math.hypot(ball.pos.x - p.x, ball.pos.z - p.z) / vmax < limit;
   }
 
   /** Do I believe I am my team's quickest player to the ball? Decentralised, so two may go, or none. */
@@ -124,7 +157,7 @@ export class PlayerBrain {
       if (p.team !== this.profile.team || p.id === this.profile.id) continue;
       const pos = this.perception.playerNow(p.id, ctx.now);
       if (!pos) continue;
-      if (PlayerBrain.interceptTime(pos, 8.4, ball).t < mine - 0.05) return false;
+      if (PlayerBrain.arrivesBefore(pos, 8.4, ball, mine - 0.05)) return false;
     }
     return true;
   }

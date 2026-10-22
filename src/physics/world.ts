@@ -5,6 +5,13 @@ import type { Legs } from './legs';
 import { createPitchColliders } from './pitch-colliders';
 
 export const PHYSICS_DT = 1 / 60;
+
+/**
+ * Counts Rapier steps of every world. A player body's position can only change in a step or by `PlayerBody.place`, so
+ * a position read once stays valid until the counter moves on: the brains, legs and parts ask for the same body
+ * position dozens of times per (sub)step, and each read crossed into WASM and allocated (≈ 6 % of a tick, profiled).
+ */
+export const physicsClock = { epoch: 0 };
 /** Largest boot travel per (sub)step. Rapier's CCD does not sweep kinematic bodies, so fast strikes need substeps. */
 const MAX_BOOT_TRAVEL = 0.06;
 const MAX_SUBSTEPS = 8;
@@ -17,6 +24,12 @@ const MAX_SUBSTEPS = 8;
 const GROUND_SUBSTEPS = 4;
 /** Ball speed (m/s) below which a ball on the turf is treated as at rest. */
 const AT_REST = 0.2;
+/**
+ * Boots only ever collide with the ball (groups.ts). A player whose body is further from the ball than this at the
+ * start of a tick cannot reach it with a boot within the tick (leg ≈ 1.2 m, ball ≤ 40 m/s · 1/60 s ≈ 0.7 m), so his
+ * boot colliders leave the broad phase until the ball comes near: no contact can change, the solver has less to do.
+ */
+const BOOT_REACH = 4;
 
 export type ContactPart = 'boot' | 'head' | 'body' | 'hands';
 export type BallContact = { kind: 'ball'; player: number; part: ContactPart };
@@ -26,7 +39,7 @@ export type Contact = BallContact | BodyContact;
 type Owner = { player: number; part: ContactPart; body: RAPIER.RigidBody };
 
 /** Hooks a participant into each (sub)step: legs and hands stage their kinematic poses here. */
-export type Kinematic = { update(dt: number): void; strikeSpeedNow?(): number };
+export type Kinematic = { update(dt: number, lastSubstep: boolean): void; strikeSpeedNow?(): number };
 
 /**
  * The only Rapier world of a match. Fixed 1/60 s ticks (four substeps while the ball skids on the turf); while any boot is in a fast wind-up or strike the
@@ -39,6 +52,7 @@ export class PhysicsWorld {
   private readonly owners = new Map<number, Owner>();
   private readonly kinematics: Kinematic[] = [];
   private readonly legs: Legs[] = [];
+  private readonly bootsEnabled: boolean[] = [];
   private readonly queue = new RAPIER.EventQueue(true);
   /** Body velocities at the start of the tick, so contact closing speeds are measured before the impact. */
   private readonly preVelocity = new Map<number, { x: number; z: number }>();
@@ -57,6 +71,7 @@ export class PhysicsWorld {
 
   registerLegs(legs: Legs, player: number): void {
     this.legs.push(legs);
+    this.bootsEnabled.push(true);
     this.kinematics.push(legs);
     for (const boot of legs.boots) this.registerCollider(boot.collider, player, 'boot');
   }
@@ -81,8 +96,23 @@ export class PhysicsWorld {
   }
 
   /** Advances one tick. Body impulses must already be applied for this tick. Returns contacts in order. */
+  /** Boot colliders on only for players near the ball (see BOOT_REACH); toggled only when that changes. */
+  private gateBoots(): void {
+    const b = this.ball.translation();
+    for (let i = 0; i < this.legs.length; i++) {
+      const legs = this.legs[i];
+      const p = legs.owner.translation();
+      const near = legs.owner.body.isEnabled() && Math.hypot(p.x - b.x, p.y - b.y, p.z - b.z) < BOOT_REACH;
+      if (near === this.bootsEnabled[i]) continue;
+      this.bootsEnabled[i] = near;
+      for (const boot of legs.boots) boot.collider.setEnabled(near);
+      legs.collidersOn = near;
+    }
+  }
+
   step(): Contact[] {
     applyBallForces(this.ball);
+    this.gateBoots();
     for (const o of this.owners.values()) {
       if (o.part !== 'body') continue;
       const v = o.body.linvel();
@@ -93,8 +123,9 @@ export class PhysicsWorld {
     this.world.timestep = dt;
     const contacts: Contact[] = [];
     for (let i = 0; i < n; i++) {
-      for (const k of this.kinematics) k.update(dt);
+      for (const k of this.kinematics) k.update(dt, i === n - 1);
       this.world.step(this.queue);
+      physicsClock.epoch++;
       this.queue.drainCollisionEvents((h1, h2, started) => {
         if (!started) return;
         const c = this.classify(h1, h2);

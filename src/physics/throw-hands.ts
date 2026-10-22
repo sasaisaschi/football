@@ -65,7 +65,7 @@ export class ThrowHands {
     this.phase = 'reach';
     this.released = false;
     this.rel = { x: infield.x * 0.25, y: owner.height * 0.45, z: infield.z * 0.25 };
-    const p = owner.body.translation();
+    const p = owner.translation();
     this.body.setTranslation({ x: p.x + this.rel.x, y: this.rel.y, z: p.z + this.rel.z }, true);
   }
 
@@ -103,7 +103,7 @@ export class ThrowHands {
   update(dt: number): void {
     const o = this.owner;
     if (!o || this.phase === 'idle') return;
-    const p = o.body.translation(), v = o.body.linvel();
+    const p = o.translation(), v = o.linvel();
     const b = this.ball.translation();
     const behind: Vec3 = { x: -this.infield.x * WIND_BACK, y: o.height + HOLD_UP, z: -this.infield.z * WIND_BACK };
     const above: Vec3 = { x: this.infield.x * FRONT, y: o.height + HOLD_UP, z: this.infield.z * FRONT };

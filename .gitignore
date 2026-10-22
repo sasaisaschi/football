@@ -7,3 +7,4 @@ browser-check-output/
 !.env.example
 *.log
 browser-check-full/
+perf-output/

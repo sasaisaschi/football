@@ -31,7 +31,7 @@ export class KeeperHands {
   constructor(private readonly world: RAPIER.World, private readonly keeper: PlayerBody) {
     this.rel = this.restRel();
     this.target = { ...this.rel };
-    const p = keeper.body.translation();
+    const p = keeper.translation();
     this.body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(p.x + this.rel.x, this.rel.y, p.z + this.rel.z));
     this.collider = world.createCollider(
       RAPIER.ColliderDesc.ball(HANDS.radius)
@@ -80,7 +80,7 @@ export class KeeperHands {
 
   /** Reach a world point if the arms allow it; the target is clamped to the reach envelope around the shoulders. */
   reachFor(world: Vec3): void {
-    const p = this.keeper.body.translation();
+    const p = this.keeper.translation();
     const rel = { x: world.x - p.x, y: world.y, z: world.z - p.z };
     const shoulder = this.shoulder();
     const dx = rel.x - shoulder.x, dy = rel.y - shoulder.y, dz = rel.z - shoulder.z;
@@ -91,7 +91,7 @@ export class KeeperHands {
 
   /** Can the hands get to a world point from the current posture (without diving)? */
   withinReach(world: Vec3): boolean {
-    const p = this.keeper.body.translation();
+    const p = this.keeper.translation();
     const sh = this.shoulder();
     return Math.hypot(world.x - p.x - sh.x, world.y - sh.y, world.z - p.z - sh.z) <= HANDS.armReach + 0.25 - HANDS.radius;
   }
@@ -115,12 +115,13 @@ export class KeeperHands {
    * what the keeper chooses, never more than his power allows.
    */
   dive(towards: { x: number; z: number }, now: number, power: number, speed = KeeperHands.diveSpeed(power)): void {
-    const p = this.keeper.body.translation();
+    const p = this.keeper.translation();
     const dx = towards.x - p.x, dz = towards.z - p.z;
     const d = Math.hypot(dx, dz) || 1;
     speed = Math.min(speed, KeeperHands.diveSpeed(power));
-    const v = this.keeper.body.linvel();
+    const v = this.keeper.linvel();
     this.keeper.body.setLinvel({ x: v.x * 0.3 + (dx / d) * speed, y: v.y, z: v.z * 0.3 + (dz / d) * speed }, true);
+    this.keeper.velocityChanged();
     this.diveUntil = now + 0.55;
     this.recoverUntil = now + DIVE.recover;
     this.diveDir = { x: dx / d, z: dz / d };
@@ -148,7 +149,7 @@ export class KeeperHands {
   snap(): void {
     this.rel = this.restRel();
     this.target = { ...this.rel };
-    const p = this.keeper.body.translation();
+    const p = this.keeper.translation();
     this.body.setTranslation({ x: p.x + this.rel.x, y: this.rel.y, z: p.z + this.rel.z }, true);
   }
 
@@ -160,7 +161,7 @@ export class KeeperHands {
     const n = Math.hypot(d.x, d.y, d.z);
     const k = n > step ? step / n : 1;
     this.rel = { x: this.rel.x + d.x * k, y: this.rel.y + d.y * k, z: this.rel.z + d.z * k };
-    const p = this.keeper.body.translation();
+    const p = this.keeper.translation();
     this.body.setNextKinematicTranslation({ x: p.x + this.rel.x, y: this.rel.y, z: p.z + this.rel.z });
   }
 

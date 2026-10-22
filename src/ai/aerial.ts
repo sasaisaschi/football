@@ -30,9 +30,40 @@ export function isAirborne(pos: Vec3, vel: Vec3): boolean {
  */
 export function aerialIntercept(p: Vec2, vmax: number, pos: Vec3, vel: Vec3, spin: Vec3 = NO_SPIN): { t: number; at: Vec2 } | null {
   if (!isAirborne(pos, vel)) return null;
+  const f = flight(pos, vel, spin);
+  for (let i = 0; i < f.n; i++) {
+    if (f.ok[i] && Math.hypot(f.x[i] - p.x, f.z[i] - p.z) / vmax + START <= f.t[i]) return { t: f.t[i], at: { x: f.x[i], z: f.z[i] } };
+  }
+  const last = f.n > 0 ? { x: f.x[f.n - 1], z: f.z[f.n - 1] } : { x: pos.x, z: pos.z };
+  return { t: HORIZON + Math.hypot(last.x - p.x, last.z - p.z) / vmax, at: last };
+}
+
+/** Would aerialIntercept(...).t be below `limit`? The same answer, but the search stops at `limit`. */
+export function aerialBefore(p: Vec2, vmax: number, pos: Vec3, vel: Vec3, spin: Vec3, limit: number): boolean {
+  const f = flight(pos, vel, spin);
+  for (let i = 0; i < f.n; i++) {
+    if (f.t[i] >= limit) return false;
+    if (f.ok[i] && Math.hypot(f.x[i] - p.x, f.z[i] - p.z) / vmax + START <= f.t[i]) return true;
+  }
+  const last = f.n > 0 ? { x: f.x[f.n - 1], z: f.z[f.n - 1] } : { x: pos.x, z: pos.z };
+  return HORIZON + Math.hypot(last.x - p.x, last.z - p.z) / vmax < limit;
+}
+
+/**
+ * The predicted flight of one ball, sampled every DT: the same for every player asked about it, so it is computed once
+ * per ball state (a brain asks for itself and each team-mate in turn; profiled at ≈ 4 % of a tick before).
+ */
+type Flight = { key: number[]; n: number; t: Float64Array; x: Float64Array; z: Float64Array; ok: Uint8Array };
+const SAMPLES = Math.ceil(HORIZON / DT) + 1;
+const cached: Flight = { key: [], n: 0, t: new Float64Array(SAMPLES), x: new Float64Array(SAMPLES), z: new Float64Array(SAMPLES), ok: new Uint8Array(SAMPLES) };
+
+function flight(pos: Vec3, vel: Vec3, spin: Vec3): Flight {
+  const key = [pos.x, pos.y, pos.z, vel.x, vel.y, vel.z, spin.x, spin.y, spin.z];
+  if (cached.key.length === 9 && cached.key.every((k, i) => k === key[i])) return cached;
+  cached.key = key;
+  cached.n = 0;
   let x = pos.x, y = pos.y, z = pos.z, vx = vel.x, vy = vel.y, vz = vel.z;
   let rolling = false, descended = false;
-  let last: Vec2 = { x, z };
   for (let t = DT; t <= HORIZON; t += DT) {
     const h = Math.hypot(vx, vz);
     if (rolling) {
@@ -54,10 +85,10 @@ export function aerialIntercept(p: Vec2, vmax: number, pos: Vec3, vel: Vec3, spi
         if (vy < AIRBORNE_VY) rolling = true;
       }
     }
-    last = { x, z };
-    if (descended && y <= CONTROL_HEIGHT && Math.hypot(x - p.x, z - p.z) / vmax + START <= t) return { t, at: last };
+    const i = cached.n++;
+    cached.t[i] = t; cached.x[i] = x; cached.z[i] = z; cached.ok[i] = descended && y <= CONTROL_HEIGHT ? 1 : 0;
   }
-  return { t: HORIZON + Math.hypot(last.x - p.x, last.z - p.z) / vmax, at: last };
+  return cached;
 }
 
 /**

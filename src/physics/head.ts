@@ -82,12 +82,12 @@ export class Head {
 
   /** How high the body is off the ground (a jump), m. */
   private lift(): number {
-    return Math.max(0, this.owner.body.translation().y - this.owner.height / 2);
+    return Math.max(0, this.owner.translation().y - this.owner.height / 2);
   }
 
   /** The part at rest: on the body axis at its height, carried up when the body is in the air. */
   rest(): Vec3 {
-    const p = this.owner.body.translation();
+    const p = this.owner.translation();
     return { x: p.x, y: this.spec.rest(this.owner.height) + this.lift(), z: p.z };
   }
 
@@ -112,7 +112,7 @@ export class Head {
   plan(ball: RAPIER.RigidBody, target: Vec3, minT = 0.15, maxT = 0.7): HeaderPlan | null {
     const s = this.spec;
     const bp = ball.translation(), bv = ball.linvel();
-    const p = this.owner.body.translation(), v = this.owner.body.linvel();
+    const p = this.owner.translation(), v = this.owner.linvel();
     const g = BALL_PHYSICS.gravity, dt = 1 / 60;
     const c = { x: bp.x, y: bp.y, z: bp.z }, V = { x: bv.x, y: bv.y, z: bv.z }, w = ball.angvel();
     const standing = s.rest(this.owner.height);
@@ -185,8 +185,9 @@ export class Head {
       // Take-off so that the highest point of the jump comes at the contact: v₀ = √(2·g·rise), up for v₀/g.
       const v0 = Math.sqrt(2 * BALL_PHYSICS.gravity * plan.rise);
       if (h.t >= plan.contactAt - v0 / BALL_PHYSICS.gravity) {
-        const v = this.owner.body.linvel();
+        const v = this.owner.linvel();
         this.owner.body.setLinvel({ x: v.x, y: v0, z: v.z }, true);
+        this.owner.velocityChanged();
         h.jumped = true;
       }
     }
