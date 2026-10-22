@@ -68,3 +68,26 @@ export function substitute(e: MatchEngine, off: number, on: number, role?: Role,
   if (r.taker === off) r.taker = chooseTaker(r.kind, r.team, r.spot, e.profiles, e.positions(), e.referee.sentOff);
   e.emit({ type: 'substitution', team: po.team, off, on, role: pn.role, ...(reason ? { reason } : {}) });
 }
+
+/** Off the pitch (red card, substitution, bench): no collider, no body in the simulation, forgotten by everyone. */
+export function leavePitch(e: MatchEngine, player: number): void {
+  const body = e.bodies[player];
+  body.collider.setEnabled(false);
+  for (const b of e.legs[player].boots) b.collider.setEnabled(false);
+  e.heads[player].reset();
+  e.chests[player].reset();
+  e.keepers.get(player)?.hands.collider.setEnabled(false);
+  // He walks off: placed beside the pitch, outside the boards, where he no longer takes part.
+  body.place(0, (PITCH.halfWidth + PITCH.runOff + 4) * (e.profiles[player].team === 0 ? 1 : -1), 0);
+  body.body.setEnabled(false);
+  // His boots, head, chest and hands leave the simulation too (moving 20 idle bench boots each tick cost ≈ 10 %).
+  setPartsEnabled(e, player, false);
+  for (const b of e.brains) b.perception.forget(player);
+}
+
+export function setPartsEnabled(e: MatchEngine, player: number, on: boolean): void {
+  for (const b of e.legs[player].boots) b.body.setEnabled(on);
+  e.heads[player].body.setEnabled(on);
+  e.chests[player].body.setEnabled(on);
+  e.keepers.get(player)?.hands.body.setEnabled(on);
+}

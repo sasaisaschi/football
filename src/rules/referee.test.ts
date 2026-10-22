@@ -179,4 +179,19 @@ describe('Law 12 – fouls and misconduct', () => {
     ref.lastTouch = touch(id(1, 'RCB'), 45, 0, 'boot');
     expect(ref.onBallContact(touch(gk, 50, 0, 'hands', 3), 1, positions())).toEqual([]);
   });
+  it('a back-pass the keeper first stops with his feet may still not be picked up; after an opponent touch it may', () => {
+    const ref = new Referee(roster);
+    ref.pendingRestart = null;
+    const gk = id(1, 'GK');
+    ref.onBallContact({ ...touch(id(1, 'RCB'), 45, 0, 'boot', 1), deliberate: true }, 1, positions());
+    ref.onBallContact(touch(gk, 50, 0, 'boot', 2), 1, positions());
+    expect(ref.backPassAgainst(gk)).toBe(true);
+    expect(ref.onBallContact(touch(gk, 50, 0, 'hands', 3), 1, positions())[0]).toMatchObject({ type: 'restart', reason: 'back-pass', team: 0 });
+    const ref2 = new Referee(roster);
+    ref2.pendingRestart = null;
+    ref2.onBallContact({ ...touch(id(1, 'RCB'), 45, 0, 'boot', 1), deliberate: true }, 1, positions());
+    ref2.onBallContact(touch(gk, 50, 0, 'boot', 2), 1, positions());
+    ref2.onBallContact(touch(id(0, 'ST'), 49, 1, 'boot', 3), 1, positions({ [id(0, 'ST')]: { x: 49, z: 1 } }));
+    expect(ref2.backPassAgainst(gk)).toBe(false);
+  });
 });

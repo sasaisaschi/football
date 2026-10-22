@@ -44,6 +44,8 @@ export type BrainOutput = { command: BodyCommand; effort: number; swing: { actio
 
 /** Ball within this distance of an opponent whose team played it last: he has it, I jockey instead of charging in (m); otherwise 1.1 m. */
 const CARRIER_REACH = 1.6;
+/** A team-mate this close to a ball slower than MATE_CONTROL_SPEED has it at his feet: it is his, not mine (m, m/s). */
+const MATE_CONTROL = 1, MATE_CONTROL_SPEED = 4;
 /** How far beyond the meeting point on the ball's line a header is set up (m). */
 const HEADER_SET = 0.35;
 /** Within this distance of the carrier a jockeying defender no longer closes in (m). */
@@ -104,6 +106,9 @@ export class PlayerBrain {
     if (ctx.restart) return ctx.restart.taker === this.profile.id;
     // The keeper only plays the ball with his feet inside his own area (back-passes, loose balls).
     if (this.profile.role === 'GK' && !inPenaltyArea(ball.pos.x, ball.pos.z, (-ctx.sign) as 1 | -1)) return false;
+    // Never into my own man: a team-mate with the ball at his feet keeps it (traced own goals: a defender took the
+    // ball off his own keeper, or stood on it as the keeper passed, and it went in).
+    if (this.mateInControl(ctx, ball)) return false;
     // A ball played towards me is mine to receive (the passer looked at me; the receiver knows it).
     if (this.ballComingToMe(ball)) return true;
     const mine = PlayerBrain.interceptTime(this.body.position(), this.body.limits.maxSpeed, ball).t - (this.committedToBall ? 0.25 : 0);
@@ -430,6 +435,21 @@ export class PlayerBrain {
     const dx = self.x - ball.pos.x, dz = self.z - ball.pos.z, d = Math.hypot(dx, dz) || 1;
     const closing = ((ball.vel.x - v.x) * dx + (ball.vel.z - v.z) * dz) / d;
     return d < 0.9 || (closing > 0.3 && (d - 0.4) / closing < seconds);
+  }
+
+  /** A team-mate who (as far as I can see) has a slow ball at his feet and is closer to it than I am. */
+  private mateInControl(ctx: BrainContext, ball: { pos: Vec2; vel: Vec2 }): boolean {
+    if (Math.hypot(ball.vel.x, ball.vel.z) > MATE_CONTROL_SPEED) return false;
+    const self = this.body.position();
+    const mine = Math.hypot(ball.pos.x - self.x, ball.pos.z - self.z);
+    for (const p of ctx.profiles) {
+      if (p.team !== this.profile.team || p.id === this.profile.id) continue;
+      const pos = this.perception.playerNow(p.id, ctx.now);
+      if (!pos) continue;
+      const d = Math.hypot(ball.pos.x - pos.x, ball.pos.z - pos.z);
+      if (d < MATE_CONTROL && d < mine) return true;
+    }
+    return false;
   }
 
   /** An opponent who (as far as I can see) has the ball at his feet and is closer to it than I am. */

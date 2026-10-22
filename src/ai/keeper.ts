@@ -8,6 +8,8 @@ import { keeperShape } from './shape';
 const DIVE_MIN_SPEED = 1.5;
 /** How far beside his body a diving keeper's hands reach (shoulder swinging out plus the arm, m). */
 const DIVE_HAND_REACH = 0.9;
+/** A ball this much nearer his goal line than he is lies behind the keeper (m). */
+const BEHIND_MARGIN = 0.2;
 
 /**
  * Goalkeeping on top of the normal brain: read shots towards the goal, move across, reach and dive, claim
@@ -117,6 +119,10 @@ export class KeeperSkill {
 
     // Loose ball in the area that the keeper reaches first: claim it with the hands.
     const ballPos: Vec2 = { x: believed.pos.x, z: believed.pos.z };
+    // Not a slow ball between him and his own goal: running it down from behind to pick it up, he pushed it over his
+    // own line with his body (traced own goals). He plays it with his feet, as from a back-pass.
+    const behindMe = (ballPos.x - self.x) * goalSide > BEHIND_MARGIN && Math.hypot(believed.vel.x, believed.vel.z) < 4 && Math.hypot(ballPos.x - self.x, ballPos.z - self.z) < 3;
+    if (behindMe && inPenaltyArea(ballPos.x, ballPos.z, goalSide)) return normal();
     if (this.hands.active() && inPenaltyArea(ballPos.x, ballPos.z, goalSide) && Math.abs(believed.vel.x) + Math.abs(believed.vel.z) < 14 && this.firstToBall(ctx, ballPos)) {
       const d = Math.hypot(ballPos.x - self.x, ballPos.z - self.z);
       if (d < 1.4) this.hands.reachFor(believed.pos);

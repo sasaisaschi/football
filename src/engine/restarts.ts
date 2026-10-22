@@ -74,3 +74,8 @@ export function restartReady(r: RestartState, profiles: PlayerProfile[], positio
   }
   return true;
 }
+
+/** A restart spot inside the pitch (a foul or out-of-play position can lie on or beyond a line). */
+export function clampSpot(s: Vec2): Vec2 {
+  return { x: Math.max(-PITCH.halfLength + 0.3, Math.min(PITCH.halfLength - 0.3, s.x)), z: Math.max(-PITCH.halfWidth + 0.3, Math.min(PITCH.halfWidth - 0.3, s.z)) };
+}

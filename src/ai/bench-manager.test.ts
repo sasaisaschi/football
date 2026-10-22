@@ -13,12 +13,16 @@ beforeAll(async () => {
 const role = (e: MatchEngine, team: TeamId, r: string) => e.profiles.find(p => p.team === team && p.role === r && p.squad === 'starter')!.id;
 const whistle = (e: MatchEngine, d: Decision) => (e as unknown as { apply(d: Decision): void }).apply(d);
 type Sub = Extract<MatchEvent, { type: 'substitution' }>;
-const subsOf = (e: MatchEngine) => e.events.filter((ev): ev is Sub => ev.type === 'substitution');
+const subsOf = (e: MatchEngine, from = 0) => e.events.slice(from).filter((ev): ev is Sub => ev.type === 'substitution');
+/** Changes made at the staged stoppage only (earlier stoppages saw the real score). */
+const staged = new WeakMap<MatchEngine, number>();
+const stagedSubs = (e: MatchEngine) => subsOf(e, staged.get(e) ?? 0);
 
 /** Team 1 coached by the computer; play runs to `share` of the second half, then the ball goes over the touchline. */
 function lateStoppage(share: number, score: [number, number], seed = 5): MatchEngine {
   const e = new MatchEngine({ seed, halfMinutes: 2, benchCoach: [1] });
   runFor(e, 400, () => e.half === 2 && e.clockSeconds() > share * 120 && e.phase === 'in-play');
+  staged.set(e, e.events.length);
   e.score[0] = score[0];
   e.score[1] = score[1];
   stageScenario(e, {}, { x: 10, y: 0.11, z: 33 }, { x: 0, y: 0, z: 5 }, false);
@@ -30,7 +34,7 @@ function lateStoppage(share: number, score: [number, number], seed = 5): MatchEn
 describe('the computer coach (bench-manager.ts)', () => {
   it('trailing late on, he brings a forward on for a midfielder at a stoppage, and the forward plays', () => {
     const e = lateStoppage(0.6, [1, 0]);
-    const chase = subsOf(e).find(s => s.reason === 'chase');
+    const chase = stagedSubs(e).find(s => s.reason === 'chase');
     expect(chase, JSON.stringify(subsOf(e))).toBeDefined();
     expect(chase!.team).toBe(1);
     expect(MIDFIELDERS.has(chase!.role)).toBe(true);
@@ -43,12 +47,12 @@ describe('the computer coach (bench-manager.ts)', () => {
 
   it('leading late on, he takes a forward off for a defensive player; level, he does not chase or protect', () => {
     const lead = lateStoppage(0.75, [0, 1]);
-    const protect = subsOf(lead).find(s => s.reason === 'protect');
+    const protect = stagedSubs(lead).find(s => s.reason === 'protect');
     expect(protect, JSON.stringify(subsOf(lead))).toBeDefined();
     expect(FORWARDS.has(protect!.role)).toBe(true);
     expect(lead.profiles[protect!.on].abilities.tackling).toBeGreaterThan(lead.profiles[protect!.off].abilities.tackling);
     const level = lateStoppage(0.75, [1, 1]);
-    expect(subsOf(level).some(s => s.reason === 'chase' || s.reason === 'protect')).toBe(false);
+    expect(stagedSubs(level).some(s => s.reason === 'chase' || s.reason === 'protect')).toBe(false);
   }, 400_000);
 
   it('a keeper sent off: the substitute keeper goes in goal for a forward, even in the first half', () => {

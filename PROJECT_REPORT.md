@@ -1350,3 +1350,71 @@ Abhängigkeiten: C2 vor C1 und C4, weil Spielzeit- und Bildmessungen auf dem end
 - **C1 Kurzpartie 2 × 15 min:** Produktions-Build im echten Browser, mehrere Seeds, Entscheidungszeit 5–10 s (zufällig je Moment, aus dem Seed des Skripts), gemessen werden Nutzerzeit, Rechenzeit, Wartezeiten (Bild steht ohne Entscheidung), FPS und Verständlichkeit (Texte der Leiste, Konsequenzkarten). Vergleich mit einer vollen Partie 2 × 45 min. Die kurze Partie muss im Bild als verkürzte Spielzeit erkennbar sein; die volle Länge bleibt wählbar.
 - **C4 Grafische und interaktive Endabnahme:** eigene Sichtprüfung der Aufnahmen aus dem Produktions-Build gegen `docs/phase-b-rest/` (Animationen, Kamera, Ballkontakte, Markierungen, Entscheidungsleiste, Konsequenzen); konkrete Fehler beheben; neue Bilder unter `docs/phase-c/`.
 - **C5 Abschlusstests:** `npm run check`; Langsimulation, Schusslabor und Szenenaufzeichnung; Browser Desktop und schmal; Produktions-Build; mehrere vollständige Sitzungen; Reproduzierbarkeit mit und ohne Agentengedächtnis.
+
+### 11.2 C2 Fußballrealismus – Ursachen gemessen, vier Fehler behoben
+
+**Werkzeuge** (`engine/match-stats.ts`, `scripts/probe.mjs`, `SIM_TRACE=1`):
+- Torentstehung (offenes Spiel oder Standard ohne Ballbesitzwechsel, höchstens 20 s vorher) und Entfernung der letzten Berührung vor dem Tor.
+- Ausgang jedes getroffenen Schusses: Tor, gefangen, abgewehrt, geblockt, Mitspieler, Aus.
+- Ballverluste je Zone (eigener Strafraum, eigenes Drittel, weiter vorn) mit Gegentor binnen 12 s.
+- Einwurf-Ursache (letzte Berührung, eigenes oder gegnerisches Team).
+- Aufzeichnung der 6 s vor jedem Tor (`SIM_TRACE=1`).
+
+**1. Eingrenzung über die Commits der Restarbeiten** (je 24 Seeds × 2 × 10 min, gleiche Statistik):
+
+| pro 90 min | Phase B (`6211c5b`, bit-identisch) | `329853b` | `700fbb6` | Endstand #34 |
+| --- | --- | --- | --- | --- |
+| Tore | 3,0 | 3,8 | 2,3 | 3,9 |
+| Eigentore | 0,2 | 0,2 | 0,4 | 0,8 |
+| Fänge des Torwarts | 5,8 | 3,4 | 4,7 | 3,8 |
+
+Die Streuung der Tore je Seed beträgt 3–4 pro 90 min, der Standardfehler bei 24 Seeds also ±0,7–0,8. Bei gleicher Mechanik springen die Werte zwischen 2,3 und 3,9. **Eine Erhöhung der Torquote durch die Restarbeiten ist nicht nachweisbar.** Über alle 96 Seeds liegt sie bei 3,25 ± 0,38 (Bundesliga 2023/24: ≈ 3,2 pro Spiel). Die Fänge sinken in allen drei Ständen nach Phase B; das Schusslabor ist identisch (92/92/92/85/92 % gehalten). Ursache ist also, welche Bälle zum Torwart kommen, nicht seine Physik.
+
+**2. Wie die Tore entstehen** (Aufzeichnung, Seeds 1–12, dann 25–60):
+- Die meisten Tore folgen einem Ballverlust nahe dem eigenen Tor. Ballverluste im eigenen Strafraum: 26,8 pro 90 min, 5,6 % davon enden binnen 12 s im Gegentor. Das Modell der Spieler rechnet dort mit ≈ 10 %; es unterschätzt die Gefahr also nicht. Deshalb nicht verändert.
+- **Eigentore** (0,4–0,8 pro 90 min, real ≈ 0,1; 7 von 60 Seeds): alle um den eigenen Torwart.
+  - Ein Innenverteidiger nahm seinem eigenen Torwart den Ball vom Fuß oder stand beim Abspiel auf dem Ball.
+  - Ein langsamer Ball lag zwischen Torwart und Tor; der Torwart lief ihm hinterher, um ihn aufzunehmen, und schob ihn dabei mit dem Körper über die Linie (Seed 49: 3 s lang mit 1,5 m/s).
+  - Ein am Boden gefangener Ball wurde nach einem Hechtsprung in den Rasen gedrückt; beim Ablegen schoss ihn der Rasen mit 16,6 m/s aus den Händen ins Tor (Seed 41).
+
+**3. Behobene Fehler** (keine Kalibrierung, sondern falsches Verhalten bzw. falsche Physik):
+- **Kein Mitspieler geht an einen Ball, den ein näherer Mitspieler am Fuß hat** (≤ 1 m, Ball < 4 m/s; `brain.ts`, `mateInControl`). Vorher hob der Vorrang „ich bin schon unterwegs“ (0,25 s) diese Lage auf; eine solche Prüfung gab es nur für Gegner.
+- **Torwart nimmt einen langsamen Ball zwischen sich und dem eigenen Tor nicht auf, sondern spielt ihn mit dem Fuß** (`keeper.ts`). Test: 8 nachgestellte Lagen, ohne Korrektur 8 Eigentore, mit Korrektur 0.
+- **Ein gehaltener Ball bleibt über dem Rasen** (`hands.ts`: die Hände bleiben so hoch, dass der Ball am Haltepunkt nicht in den Boden reicht). Test: ohne Korrektur liegt der Ball bei y = −0,105 m, mit Korrektur über dem Rasen.
+- **Regel 12:** Ein absichtlich zugespielter Ball darf auch dann nicht aufgenommen werden, wenn der Torwart ihn vorher selbst mit dem Fuß gestoppt hat (`referee.ts`, `backPassAgainst`; vorher reichte die eigene Berührung zur Freigabe). Test im Schiedsrichtertest.
+
+**4. Abnahme** (gleiche 60 Seeds × 2 × 10 min vorher und nachher, pro 90 min):
+
+| | vorher (Endstand #34) | nur Mitspieler-Regel | **alle Korrekturen** | real |
+| --- | --- | --- | --- | --- |
+| Tore (± Standardfehler) | 3,8 (± 0,45) | 2,4 | **2,4 (± 0,42)** | ≈ 2,7 (Bundesliga ≈ 3,2) |
+| Eigentore (Anzahl in 60 Seeds) | 7 | 4 | **3** (davon 2 Abfälschungen) | ≈ 0,1/Spiel |
+| Torschüsse | 20,3 | 15,4 | **16,3** | ≈ 25 |
+| Pässe / Passquote | 1340 / 77 % | 1399 / 76 % | **1405 / 76 %** | ≈ 1000 / 75–85 % |
+| Ballbesitzwechsel | 1255 | 1250 | **1244** | – |
+| Fouls | 25,7 | 26,8 | **26,2** | ≈ 22 |
+| Einwürfe | 61,6 | 49,6 | **50,4** | ≈ 45 |
+| Ecken | 8,4 | 6,1 | **6,0** | ≈ 10 |
+| Fänge des Torwarts | 3,9 | 5,0 | **5,0** | – |
+
+Schusslabor nach allen Korrekturen unverändert (8/12/16/20/25 m: 92/92/92/85/92 % gehalten, Fänge 46/40/25/25/29 von 55).
+
+**Bewertung:** Tore, Eigentore, Einwürfe und Fänge liegen näher an der Realität, Ballbesitzwechsel und Fouls bleiben gleich. Torschüsse und Ecken entfernen sich weiter vom realen Wert, die Passzahl steigt. Wahrscheinliche Ursache (nicht einzeln gemessen): Ein Teil der Schüsse und Ecken entstand aus dem Gedränge zweier Mitspieler am selben Ball. Die Regel bleibt, weil sie falsches Verhalten beseitigt und keine Kennzahl steuert. Die Schusszahl ist der nächste Kalibrierkandidat (siehe Offen).
+
+**Torarten:** 31 von 32 Toren nach allen Korrekturen fielen aus dem offenen Spiel, 1 nach einer Ecke (real ≈ 25–30 % aus Standards). Hauptursache sind die wenigen Standards selbst (6 Ecken, 0,15 Elfmeter pro 90 min, 2 Elfmeter in 60 Seeds; real ≈ 10 und 0,3). Nicht verändert: Eine Kalibrierung der Flanken und Kopfbälle wäre ein eigener Schritt.
+
+**Flache Bälle auf den Torwart (Beobachtung, nicht verändert):** Ein flacher Schuss mit 18 m/s direkt auf ihn trifft meist den Körper statt der Hände (von 24 nachgestellten fing er 4), weil er nach dem Punkt greift, an dem der Ball seine eigene Position kreuzt. Die Abwehrquote ist davon nicht betroffen (Schusslabor 85–92 %, eher über dem realen Wert); eine Änderung wäre Kalibrierung ohne nachgewiesenen Fehler.
+
+### 11.3 C3 Gegnerische Wechsel – implementiert, getestet
+
+- `ai/bench-manager.ts`: Der Trainer des Teams, das der Mensch nicht steuert, prüft jede Spielunterbrechung einmal (`RestartState.benchSeen`), sobald der Ball liegt. Er wechselt über dieselbe Regel-3-Funktion wie der Mensch (`MatchEngine.substitute`; höchstens 5 Wechsel, 3 Gelegenheiten plus Halbzeit, nur bei ruhendem Ball). Höchstens zwei Wechsel je Unterbrechung.
+- Gründe, nur aus Informationen der Partie (es gibt kein Ermüdungsmodell, also auch keine behauptete Müdigkeit):
+  - **Torwart vom Platz:** Der Ersatztorwart geht für den vordersten Feldspieler ins Tor, auch in der ersten Halbzeit (`substitute(off, on, 'GK')`).
+  - **Form:** ab der Halbzeitpause oder ab der Mitte der zweiten Halbzeit, wenn das Selbstvertrauen mindestens 0,15 unter dem neutralen Wert liegt und mindestens 3 der letzten 6 bewerteten Aktionen misslangen.
+  - **Gelbbelasteter Verteidiger:** zur gleichen Zeit, durch einen Spieler derselben Linie.
+  - **Rückstand** ab 55 % der zweiten Halbzeit: der formschwächste Mittelfeldspieler für den abschlussstärksten Stürmer der Bank.
+  - **Führung** ab 70 %: der formschwächste Stürmer für den zweikampfstärksten Nicht-Stürmer der Bank.
+- Deterministisch: keine Zufallszahl, gleiche Partie → gleiche Wechsel. Der Kommentar nennt den Grund („… kommt für … – mehr Offensive im Rückstand“).
+- In der App wechselt der Gegner des Nutzerteams so (`runner.ts`, `benchCoach: [1]`); das Nutzerteam wechselt nur durch die Entscheidung des Menschen.
+- Tests (`ai/bench-manager.test.ts`, 4): Rückstand → Stürmer für Mittelfeldspieler, spielt danach; Führung → defensiver Wechsel, Unentschieden → keiner von beiden; Rote Karte für den Torwart → Ersatztorwart läuft ins Tor; ganze Partie → nur bei ruhendem Ball, nur das eigene Team, höchstens 5, keine Rückkehr, bei Wiederholung identisch.
+- Für die Dateigrenze ausgelagert, Partie bit-identisch (Seeds 1–2 gleiche Ereignisse): `engine/substitutions.ts`, `engine/snapshot.ts` aus `match-engine.ts` zusammen mit dem Verlassen und Betreten des Platzes und `clampSpot` (624 → 517 Zeilen), `ai/ball-reach.ts` aus `brain.ts` (540 → 492).

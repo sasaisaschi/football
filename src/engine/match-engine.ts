@@ -16,9 +16,9 @@ import { Referee, penaltySpot, restartDistance, type Decision, type PlayerState 
 import { SLOTS, toWorld } from '../ai/shape';
 import { createRng, type Rng } from './rng';
 import { createRoster, TEAMS } from './rosters';
-import { chooseTaker, PLACE_DELAY, restartReady, type RestartState } from './restarts';
+import { chooseTaker, clampSpot, PLACE_DELAY, restartReady, type RestartState } from './restarts';
 import { engineSnapshot } from './snapshot';
-import { benchOf, canSubstitute, substitute, SubstitutionLog } from './substitutions';
+import { benchOf, canSubstitute, leavePitch, setPartsEnabled, substitute, SubstitutionLog } from './substitutions';
 import type {
   BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, RestartKind, Role, SubReason, TeamId, TeamInstruction, Vec2, Vec3,
 } from './types';
@@ -327,19 +327,13 @@ export class MatchEngine {
         ready: r.placed && restartReady(r, this.profiles, this.positions(), t => this.sign(t), this.time, this.referee.sentOff),
         held: r.kind === 'throw-in' && this.throwHands.ready() && this.throwHands.thrower() === this.bodies[r.taker],
       } : null,
-      handsAllowed: this.phase === 'in-play' && this.referee.keeperReleased !== p.id && !this.isBackPass(p.team),
+      handsAllowed: this.phase === 'in-play' && this.referee.keeperReleased !== p.id && !this.referee.backPassAgainst(p.id),
       ballHeldBy: this.heldBy,
       sentOff: this.referee.sentOff,
     };
     const keeper = this.keepers.get(p.id);
     if (keeper) return keeper.think(ctx, () => brain.think(ctx));
     return brain.think(ctx);
-  }
-
-  /** Law 12: a keeper may not handle a ball deliberately kicked to him by a team-mate. */
-  private isBackPass(team: TeamId): boolean {
-    const t = this.referee.lastTouch;
-    return !!t && t.team === team && t.part === 'boot' && !!t.deliberate && this.profiles[t.player].role !== 'GK';
   }
 
   /** A boot touch within a pass, dribble or first-touch swing is played on purpose; a block, poke or miscued clearance is not. */
@@ -459,28 +453,9 @@ export class MatchEngine {
     this.leavePitch(player);
   }
 
-  /** Off the pitch (red card, substitution, bench): no collider, no body in the simulation, forgotten by everyone. */
-  leavePitch(player: number): void {
-    const body = this.bodies[player];
-    body.collider.setEnabled(false);
-    for (const b of this.legs[player].boots) b.collider.setEnabled(false);
-    this.heads[player].reset();
-    this.chests[player].reset();
-    this.keepers.get(player)?.hands.collider.setEnabled(false);
-    // He walks off: placed beside the pitch, outside the boards, where he no longer takes part.
-    body.place(0, (PITCH.halfWidth + PITCH.runOff + 4) * (this.profiles[player].team === 0 ? 1 : -1), 0);
-    body.body.setEnabled(false);
-    // His boots, head, chest and hands leave the simulation too (moving 20 idle bench boots each tick cost ≈ 10 %).
-    this.setPartsEnabled(player, false);
-    for (const b of this.brains) b.perception.forget(player);
-  }
-
-  setPartsEnabled(player: number, on: boolean): void {
-    for (const b of this.legs[player].boots) b.body.setEnabled(on);
-    this.heads[player].body.setEnabled(on);
-    this.chests[player].body.setEnabled(on);
-    this.keepers.get(player)?.hands.body.setEnabled(on);
-  }
+  /** Off the pitch (red card, substitution, bench): substitutions.ts. */
+  leavePitch(player: number): void { leavePitch(this, player); }
+  setPartsEnabled(player: number, on: boolean): void { setPartsEnabled(this, player, on); }
 
   /** Law 3 bookkeeping (substitutions.ts): changes made per team, occasions used, who has come on. */
   readonly subs = new SubstitutionLog();
@@ -539,8 +514,4 @@ export class MatchEngine {
   teamName(team: TeamId): string {
     return TEAMS[team].name;
   }
-}
-
-function clampSpot(s: Vec2): Vec2 {
-  return { x: Math.max(-PITCH.halfLength + 0.3, Math.min(PITCH.halfLength - 0.3, s.x)), z: Math.max(-PITCH.halfWidth + 0.3, Math.min(PITCH.halfWidth - 0.3, s.z)) };
 }
