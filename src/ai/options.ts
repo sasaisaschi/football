@@ -3,6 +3,7 @@ import { PITCH } from '../physics/pitch-geometry';
 import { MAX_ELEVATION } from '../physics/legs';
 import { groundPassSpeed, loftedPassSpeed, loftedTime, rollDistance, rollTime } from './ball-model';
 import { toTeam } from './shape';
+import { tr } from '../i18n';
 
 /** A player's picture of the moment, built from his own perception. */
 export type Picture = {
@@ -204,7 +205,7 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
       action: { kind: 'pass', receiver: m.id, aim: target, speed: lofted ? loftSpeed : ground, lofted },
       success,
       value,
-      note: `${lofted ? 'hoher' : 'flacher'} Pass, ${Math.round(td)} m`,
+      note: lofted ? tr(`high pass, ${Math.round(td)} m`, `hoher Pass, ${Math.round(td)} m`) : tr(`ground pass, ${Math.round(td)} m`, `flacher Pass, ${Math.round(td)} m`),
     });
   }
 
@@ -235,7 +236,7 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
       action: { kind: 'dribble', direction: best.dir, speed },
       success,
       value: success * threatAt(sign, ahead) - (1 - success) * lossCost(from) * 1.2,
-      note: 'Ball am Fuß',
+      note: tr('ball at feet', 'Ball am Fuß'),
     });
   }
 
@@ -249,7 +250,7 @@ export function evaluateOptions(pic: Picture): EvaluatedOption[] {
     action: { kind: 'clear', direction: { x: away.x / n, z: away.z / n }, speed: 25 },
     success: 0.5,
     value: -lossCost(from) * 0.35 - 0.6 * POSSESSION_VALUE - 0.01,
-    note: 'klären',
+    note: tr('clear', 'klären'),
   });
   return out.sort((a, b) => b.value - a.value);
 }
@@ -296,6 +297,6 @@ function shieldOption(pic: Picture, from: Vec2, pressure: number, lossCost: (p: 
     success,
     // Holding is not free: while the ball is kept, the defence gets back into shape.
     value: success * threatAt(pic.sign, from) - (1 - success) * lossCost(from) * 1.2 - SHIELD_TIME_COST,
-    note: 'Ball abschirmen',
+    note: tr('shield the ball', 'Ball abschirmen'),
   };
 }

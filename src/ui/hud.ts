@@ -3,6 +3,7 @@ import { TEAMS } from '../engine/rosters';
 import type { MatchSnapshot, TeamId } from '../engine/types';
 import type { PlaybackMode } from '../sim/playback';
 import { lengthLabel } from './match-length';
+import { tr } from '../i18n';
 
 /**
  * Broadcast overlay: score bug, clock, how the picture is running (live, condensed, decision), a match timeline with
@@ -60,7 +61,7 @@ export class Hud {
     this.score.textContent = `${s.score[0]} : ${s.score[1]}`;
     this.clock.textContent = this.clockText(s);
     this.progress.style.width = `${(this.elapsed(s) / (this.halfMinutes * 120)) * 100}%`;
-    const label = deciding ? 'ENTSCHEIDUNG' : mode === 'condensed' ? `VERDICHTET ×${Math.round(speed)}` : speed > 1.5 ? `ZEITRAFFER ×${Math.round(speed)}` : 'LIVE';
+    const label = deciding ? tr('DECISION', 'ENTSCHEIDUNG') : mode === 'condensed' ? `${tr('CONDENSED', 'VERDICHTET')} ×${Math.round(speed)}` : speed > 1.5 ? `${tr('TIME-LAPSE', 'ZEITRAFFER')} ×${Math.round(speed)}` : 'LIVE';
     if (this.mode.textContent !== label) this.mode.textContent = label;
     this.mode.dataset.state = deciding ? 'decision' : speed > 1.5 ? 'fast' : 'live';
     this.el.classList.toggle('deciding', deciding);

@@ -156,7 +156,7 @@ describe('orchestrator: set pieces stop play before they are taken', () => {
         [role(e, 1, 'GK')]: { x: 51, z: 0 }, [role(e, 1, 'RCB')]: back.rcb, [role(e, 1, 'LCB')]: back.lcb,
       }, { x: 30.5, y: 0.11, z: 3 });
       const spot = { x: 30, z: 3 };
-      if (direct) whistle(e, { type: 'foul', offender: role(e, 1, 'CM'), victim: role(e, 0, 'ST'), spot, penalty: false, card: 'none', reason: 'Foulspiel', advantage: false });
+      if (direct) whistle(e, { type: 'foul', offender: role(e, 1, 'CM'), victim: role(e, 0, 'ST'), spot, penalty: false, card: 'none', reason: 'foul', advantage: false });
       else whistle(e, { type: 'offside', player: role(e, 1, 'ST'), spot });
       e.director = open();
       runFor(e, 8);
@@ -180,7 +180,7 @@ describe('orchestrator: set pieces stop play before they are taken', () => {
     const penalty = (seed: number, orchestrated: boolean) => {
       const e = new MatchEngine({ seed, halfMinutes: 45 });
       stageScenario(e, { [role(e, 1, 'GK')]: { x: 51.5, z: 0 } }, { x: 40, y: 0.11, z: 0 });
-      whistle(e, { type: 'foul', offender: role(e, 1, 'RCB'), victim: role(e, 0, 'ST'), spot: { x: 45, z: 2 }, penalty: true, card: 'none', reason: 'Foulspiel', advantage: false });
+      whistle(e, { type: 'foul', offender: role(e, 1, 'RCB'), victim: role(e, 0, 'ST'), spot: { x: 45, z: 2 }, penalty: true, card: 'none', reason: 'foul', advantage: false });
       if (orchestrated) e.director = open();
       runFor(e, 20, () => e.events.some(ev => ev.type === 'swing'));
       return e;

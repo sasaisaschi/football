@@ -7,6 +7,7 @@ import { createPitchView } from './render/pitch-view';
 import { createStadiumView } from './render/stadium-view';
 import { showStartScreen } from './ui/start-screen';
 import { MEMORY_STORAGE_KEY, parseMemory, type AgentMemory } from './ai/agent-memory';
+import { parseLang, setLang } from './i18n';
 
 /**
  * Optional URL parameters for development and verification (documented in PROJECT_REPORT.md):
@@ -18,8 +19,13 @@ import { MEMORY_STORAGE_KEY, parseMemory, type AgentMemory } from './ai/agent-me
  *   ?condense=0          show everything live instead of condensing quiet play
  *   ?memory=0            players start without (and do not store) memory of earlier matches
  *   ?autostart=1         skip the start screen (used by the browser check)
+ *   ?lang=de             German interface (default English; the start screen remembers the choice)
  */
 const params = new URLSearchParams(location.search);
+export const LANG_STORAGE_KEY = 'the12thman.lang';
+const storedLang = (() => { try { return localStorage.getItem(LANG_STORAGE_KEY); } catch { return null; } })();
+setLang(parseLang(params.get('lang') ?? storedLang));
+document.documentElement.lang = params.get('lang') ?? storedLang ?? 'en';
 const num = (key: string, fallback: number) => (params.has(key) && Number.isFinite(Number(params.get(key))) ? Number(params.get(key)) : fallback);
 
 const host = document.querySelector<HTMLDivElement>('#app');

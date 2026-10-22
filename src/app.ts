@@ -19,6 +19,7 @@ import { DecisionPanel } from './ui/decision-panel';
 import { Hud } from './ui/hud';
 import { showResult, type SessionMetrics } from './ui/result-screen';
 import type { AgentMemory } from './ai/agent-memory';
+import { lang, tr } from './i18n';
 
 /** `memory`: what the players remember from earlier matches; `saveMemory` keeps the updated memory after full time. */
 export type AppOptions = {
@@ -67,7 +68,7 @@ export class MatchApp {
     private readonly audio: CrowdAudio,
     readonly options: AppOptions,
   ) {
-    this.client = new SimClient({ seed: options.seed, halfMinutes: options.halfMinutes, userTeam: options.userTeam, cooldown: options.cooldown, maxPerHalf: options.maxPerHalf, timeoutSeconds: options.timeoutSeconds, memory: options.memory ?? undefined });
+    this.client = new SimClient({ seed: options.seed, halfMinutes: options.halfMinutes, userTeam: options.userTeam, cooldown: options.cooldown, maxPerHalf: options.maxPerHalf, timeoutSeconds: options.timeoutSeconds, memory: options.memory ?? undefined, lang: lang() });
     this.camera = new CameraDirector(cam);
     this.hud = new Hud(options.halfMinutes);
     this.metrics = { wallSeconds: 0, cpuSeconds: 0, simSeconds: 0, moments: 0, halfMinutes: options.halfMinutes };
@@ -77,7 +78,7 @@ export class MatchApp {
     window.addEventListener('keydown', ev => {
       if ((ev.key === 'l' || ev.key === 'L') && !this.panel.open) {
         this.options.condense = !this.options.condense;
-        this.hud.setStatus(this.options.condense ? 'Ruhige Phasen werden verdichtet.' : 'Alles live – keine Verdichtung.', this.wall, STATUS_SECONDS);
+        this.hud.setStatus(this.options.condense ? tr('Quiet phases are condensed.', 'Ruhige Phasen werden verdichtet.') : tr('Everything live – no condensing.', 'Alles live – keine Verdichtung.'), this.wall, STATUS_SECONDS);
       }
     });
   }
@@ -89,7 +90,7 @@ export class MatchApp {
     app.figures = app.profiles.map(p => { const f = new PlayerFigure(p, TEAMS[p.team]); scene.add(f.root); return f; });
     app.consequence = new ConsequenceCard(app.profiles);
     host.append(app.consequence.el);
-    app.hud.setStatus(`${TEAMS[0].name} gegen ${TEAMS[1].name} – du entscheidest für ${TEAMS[options.userTeam].name}.`, 0, STATUS_SECONDS);
+    app.hud.setStatus(tr(`${TEAMS[0].name} vs ${TEAMS[1].name} – you make the calls for ${TEAMS[options.userTeam].name}.`, `${TEAMS[0].name} gegen ${TEAMS[1].name} – du entscheidest für ${TEAMS[options.userTeam].name}.`), 0, STATUS_SECONDS);
     return app;
   }
 
@@ -172,9 +173,9 @@ export class MatchApp {
     if (e.type === 'goal') {
       this.celebrateUntil = this.wall + 6;
       this.celebrateTeam = e.team;
-      if (s) this.hud.mark('goal', this.hud.elapsed(s), e.team, `Tor ${TEAMS[e.team].short}`);
+      if (s) this.hud.mark('goal', this.hud.elapsed(s), e.team, `${tr('Goal', 'Tor')} ${TEAMS[e.team].short}`);
     }
-    if (e.type === 'moment' && s) { this.hud.mark('moment', this.hud.elapsed(s), e.team, 'Entscheidung'); this.metrics.moments++; }
+    if (e.type === 'moment' && s) { this.hud.mark('moment', this.hud.elapsed(s), e.team, tr('Decision', 'Entscheidung')); this.metrics.moments++; }
     // The substitute takes over the replaced player's position; the shared profiles follow the worker's.
     if (e.type === 'substitution') this.profiles[e.on].role = e.role;
   }
@@ -217,7 +218,7 @@ export class MatchApp {
     this.overlay.hide();
     this.consequence!.start(m, optionId, by, this.hud.clockText(s), s.time, s.possession);
     this.client.resolve(optionId, by);
-    if (by !== 'user') this.hud.setStatus(by === 'delegated' ? `Du überlässt es den Spielern: ${option.label}.` : `Zeit abgelaufen – die Spieler entscheiden selbst: ${option.label}.`, this.wall, STATUS_SECONDS);
+    if (by !== 'user') this.hud.setStatus(by === 'delegated' ? tr(`You leave it to the players: ${option.label}.`, `Du überlässt es den Spielern: ${option.label}.`) : tr(`Time ran out – the players decide themselves: ${option.label}.`, `Zeit abgelaufen – die Spieler entscheiden selbst: ${option.label}.`), this.wall, STATUS_SECONDS);
   }
 
   private showFullTime(): void {
@@ -228,7 +229,7 @@ export class MatchApp {
     this.metrics.simSeconds = s.time;
     let saved: string | null = null;
     if (this.client.memory) {
-      try { this.options.saveMemory(this.client.memory); } catch (err) { saved = `Spielergedächtnis nicht gespeichert: ${err instanceof Error ? err.message : String(err)}`; }
+      try { this.options.saveMemory(this.client.memory); } catch (err) { saved = `${tr('Player memory not saved', 'Spielergedächtnis nicht gespeichert')}: ${err instanceof Error ? err.message : String(err)}`; }
     }
     showResult(this.host, s.score, this.consequence!.chronicle, this.metrics, { before: this.options.memory, after: this.client.memory, profiles: this.profiles, team: this.options.userTeam, error: saved });
   }

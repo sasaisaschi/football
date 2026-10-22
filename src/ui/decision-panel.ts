@@ -1,15 +1,16 @@
 import './decision-panel.css';
 import type { DecisionMoment, DecisionSource, MatchSnapshot, MomentCategory, PlayerProfile } from '../engine/types';
+import { tr } from '../i18n';
 
-const CATEGORY: Record<MomentCategory, string> = { attack: 'Angriff', transition: 'Umschalten', defence: 'Abwehr', 'set-piece': 'Standard', coach: 'Trainer' };
-const ACTION: Record<string, string> = { pass: 'Pass', dribble: 'Dribbling', shot: 'Schuss' };
+const CATEGORY = (c: MomentCategory): string => ({ attack: tr('Attack', 'Angriff'), transition: tr('Transition', 'Umschalten'), defence: tr('Defence', 'Abwehr'), 'set-piece': tr('Set piece', 'Standard'), coach: tr('Coach', 'Trainer') })[c];
+const ACTION = (a: string): string => ({ pass: tr('Pass', 'Pass'), dribble: tr('Dribble', 'Dribbling'), shot: tr('Shot', 'Schuss') } as Record<string, string>)[a];
 
 /** Words for a trait value, only for the clear ends of the scale. */
 function traitWords(p: PlayerProfile): string[] {
   const t = p.traits, out: string[] = [];
-  if (t.risk > 0.62) out.push('risikofreudig'); else if (t.risk < 0.38) out.push('vorsichtig');
-  if (t.teamplay > 0.62) out.push('mannschaftsdienlich'); else if (t.teamplay < 0.38) out.push('eigensinnig');
-  if (t.discipline > 0.62) out.push('diszipliniert'); else if (t.discipline < 0.38) out.push('unberechenbar');
+  if (t.risk > 0.62) out.push(tr('risk-taker', 'risikofreudig')); else if (t.risk < 0.38) out.push(tr('cautious', 'vorsichtig'));
+  if (t.teamplay > 0.62) out.push(tr('team player', 'mannschaftsdienlich')); else if (t.teamplay < 0.38) out.push(tr('selfish', 'eigensinnig'));
+  if (t.discipline > 0.62) out.push(tr('disciplined', 'diszipliniert')); else if (t.discipline < 0.38) out.push(tr('unpredictable', 'unberechenbar'));
   return out;
 }
 
@@ -36,7 +37,7 @@ export class DecisionPanel {
   constructor(private readonly resolve: (optionId: string, by: DecisionSource) => void, private readonly onFocus: (index: number) => void) {
     this.el.className = 'decision';
     this.el.hidden = true;
-    this.el.setAttribute('aria-label', 'Entscheidung');
+    this.el.setAttribute('aria-label', tr('Decision', 'Entscheidung'));
     this.el.innerHTML = `
       <header class="decision-head"><span class="decision-kicker" data-kicker></span><span class="decision-seconds" data-seconds></span></header>
       <div class="decision-timer"><span data-bar></span></div>
@@ -45,8 +46,8 @@ export class DecisionPanel {
       <div class="decision-actor" data-actor></div>
       <div class="decision-options" role="listbox" data-options></div>
       <footer class="decision-foot">
-        <button class="decision-delegate" data-delegate type="button">Den Spielern überlassen <kbd>0</kbd></button>
-        <span class="decision-keys"><kbd>1</kbd>–<kbd data-last-key>4</kbd> wählen · <kbd>↑</kbd><kbd>↓</kbd> + <kbd>Enter</kbd></span>
+        <button class="decision-delegate" data-delegate type="button">${tr('Leave it to the players', 'Den Spielern überlassen')} <kbd>0</kbd></button>
+        <span class="decision-keys"><kbd>1</kbd>–<kbd data-last-key>4</kbd> ${tr('choose', 'wählen')} · <kbd>↑</kbd><kbd>↓</kbd> + <kbd>Enter</kbd></span>
       </footer>`;
     const q = (s: string) => this.el.querySelector<HTMLElement>(s)!;
     this.bar = q('[data-bar]'); this.seconds = q('[data-seconds]'); this.kicker = q('[data-kicker]');
@@ -73,7 +74,7 @@ export class DecisionPanel {
   show(m: DecisionMoment, now: number, s: MatchSnapshot, profiles: PlayerProfile[]): void {
     this.moment = m;
     this.deadline = now + m.timeoutSeconds;
-    this.kicker.textContent = `${CATEGORY[m.category]} · Dein Moment`;
+    this.kicker.textContent = `${CATEGORY(m.category)} · ${tr('Your moment', 'Dein Moment')}`;
     this.title.textContent = m.title;
     this.lastKey.textContent = String(m.options.length);
     this.situation.textContent = m.situation;
@@ -86,7 +87,7 @@ export class DecisionPanel {
       b.setAttribute('role', 'option');
       const part = (cls: string, text: string) => { const e = document.createElement('span'); e.className = cls; e.textContent = text; return e; };
       b.append(part('decision-key', String(i + 1)), part('decision-label', o.label), part('decision-detail', o.detail), part('decision-outlook', o.outlook));
-      if (o.id === m.defaultOptionId) b.append(part('decision-ai', 'Tendenz der Spieler'));
+      if (o.id === m.defaultOptionId) b.append(part('decision-ai', tr('What the players would do', 'Tendenz der Spieler')));
       b.addEventListener('click', () => this.choose(o.id, 'user'));
       b.addEventListener('mouseenter', () => this.setFocus(i));
       b.addEventListener('focus', () => this.setFocus(i));
@@ -98,7 +99,7 @@ export class DecisionPanel {
 
   private renderActor(p: PlayerProfile, mind: MatchSnapshot['minds'][number] | undefined): void {
     const conf = mind?.confidence ?? p.traits.confidence;
-    const level = conf > 0.62 ? 'hoch' : conf < 0.4 ? 'niedrig' : 'normal';
+    const level = conf > 0.62 ? tr('high', 'hoch') : conf < 0.4 ? tr('low', 'niedrig') : tr('normal', 'normal');
     const recent = mind?.recent ?? [];
     const ok = recent.filter(r => r.ok).length;
     this.actor.replaceChildren();
@@ -114,15 +115,15 @@ export class DecisionPanel {
     meter.style.setProperty('--level', `${Math.round(conf * 100)}%`);
     const text = document.createElement('span');
     // The form line names only what happened: his judged actions in this match.
-    text.textContent = recent.length ? `Selbstvertrauen ${level} · ${ok} von ${recent.length} Aktionen gelungen` : `Selbstvertrauen ${level} · noch keine bewertete Aktion`;
+    text.textContent = recent.length ? tr(`Confidence ${level} · ${ok} of ${recent.length} actions succeeded`, `Selbstvertrauen ${level} · ${ok} von ${recent.length} Aktionen gelungen`) : tr(`Confidence ${level} · no judged action yet`, `Selbstvertrauen ${level} · noch keine bewertete Aktion`);
     form.append(meter, text);
     const marks = document.createElement('div');
     marks.className = 'decision-recent';
     for (const r of recent) {
       const s = document.createElement('span');
       s.className = r.ok ? 'ok' : 'miss';
-      s.title = `${ACTION[r.action]} ${r.ok ? 'gelungen' : 'misslungen'}`;
-      s.textContent = ACTION[r.action][0];
+      s.title = `${ACTION(r.action)} ${r.ok ? tr('succeeded', 'gelungen') : tr('failed', 'misslungen')}`;
+      s.textContent = ACTION(r.action)[0];
       marks.append(s);
     }
     const traits = document.createElement('div');

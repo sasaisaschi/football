@@ -3,6 +3,7 @@ import { TEAMS } from '../engine/rosters';
 import type { ChronicleEntry } from './consequence';
 import { playerKey, type AgentMemory } from '../ai/agent-memory';
 import { lengthLabel } from './match-length';
+import { tr } from '../i18n';
 import type { PlayerProfile, TeamId } from '../engine/types';
 
 /** The players' memory before and after this match, for the "development" lines. */
@@ -11,7 +12,7 @@ export type Development = { before: AgentMemory | null; after: AgentMemory | nul
 /** Measured at the end: the user's wall-clock time, the worker's computing time, the simulated match time. */
 export type SessionMetrics = { wallSeconds: number; cpuSeconds: number; simSeconds: number; moments: number; halfMinutes: number };
 
-const BY: Record<ChronicleEntry['by'], string> = { user: 'du', delegated: 'überlassen', timeout: 'Zeit abgelaufen' };
+const BY = (by: ChronicleEntry['by']): string => ({ user: tr('you', 'du'), delegated: tr('left to players', 'überlassen'), timeout: tr('time ran out', 'Zeit abgelaufen') })[by];
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 /** Full time: the score, every decision with what was observed right after it, and how long the session took. */
@@ -23,20 +24,20 @@ export function showResult(host: HTMLElement, score: readonly [number, number], 
       <div class="result-kicker" data-kicker></div>
       <div class="result-score"><span class="home"></span><b data-score></b><span class="away"></span></div>
       <dl class="result-metrics" data-metrics></dl>
-      <h3>Deine Entscheidungen</h3>
+      <h3>${tr('Your decisions', 'Deine Entscheidungen')}</h3>
       <ol class="result-list" data-list></ol>
-      <h3>Was die Spieler mitnehmen</h3>
+      <h3>${tr('What the players take with them', 'Was die Spieler mitnehmen')}</h3>
       <ul class="result-development" data-dev></ul>
-      <button type="button" data-again>Neues Spiel</button>
+      <button type="button" data-again>${tr('New match', 'Neues Spiel')}</button>
     </div>`;
-  el.querySelector('[data-kicker]')!.textContent = `Abpfiff · ${lengthLabel(metrics.halfMinutes).long}`;
+  el.querySelector('[data-kicker]')!.textContent = `${tr('Full time', 'Abpfiff')} · ${lengthLabel(metrics.halfMinutes).long}`;
   el.querySelector('.home')!.textContent = TEAMS[0].name;
   el.querySelector('.away')!.textContent = TEAMS[1].name;
   el.querySelector('[data-score]')!.textContent = `${score[0]} : ${score[1]}`;
   const list = el.querySelector('[data-list]')!;
   if (chronicle.length === 0) {
     const li = document.createElement('li');
-    li.textContent = 'In dieser Partie gab es keinen Entscheidungsmoment.';
+    li.textContent = tr('There was no decision moment in this match.', 'In dieser Partie gab es keinen Entscheidungsmoment.');
     list.append(li);
   }
   for (const c of chronicle) {
@@ -46,7 +47,7 @@ export function showResult(host: HTMLElement, score: readonly [number, number], 
     head.innerHTML = '<span class="result-clock"></span><b></b><span class="result-by"></span>';
     head.querySelector('.result-clock')!.textContent = c.clock;
     head.querySelector('b')!.textContent = `${c.title} – ${c.choice}`;
-    head.querySelector('.result-by')!.textContent = BY[c.by];
+    head.querySelector('.result-by')!.textContent = BY(c.by);
     const result = document.createElement('div');
     result.className = 'result-outcome';
     result.textContent = c.result;
@@ -54,7 +55,7 @@ export function showResult(host: HTMLElement, score: readonly [number, number], 
     list.append(li);
   }
   const dl = el.querySelector('[data-metrics]')!;
-  for (const [k, v] of [['Deine Zeit', mmss(metrics.wallSeconds)], ['Simulierte Spielzeit', mmss(metrics.simSeconds)], ['Rechenzeit', mmss(metrics.cpuSeconds)], ['Momente', String(metrics.moments)]]) {
+  for (const [k, v] of [[tr('Your time', 'Deine Zeit'), mmss(metrics.wallSeconds)], [tr('Simulated time', 'Simulierte Spielzeit'), mmss(metrics.simSeconds)], [tr('Compute time', 'Rechenzeit'), mmss(metrics.cpuSeconds)], [tr('Moments', 'Momente'), String(metrics.moments)]]) {
     const dt = document.createElement('dt'); dt.textContent = k;
     const dd = document.createElement('dd'); dd.textContent = v;
     dl.append(dt, dd);
@@ -73,7 +74,7 @@ export function showResult(host: HTMLElement, score: readonly [number, number], 
 /** The biggest changes in baseline confidence and the strongest new trust within the user's team, from the memory. */
 function developmentLines(d: Development): string[] {
   if (d.error) return [d.error];
-  if (!d.after) return ['Kein Spielergedächtnis in dieser Partie.'];
+  if (!d.after) return [tr('No player memory in this match.', 'Kein Spielergedächtnis in dieser Partie.')];
   const ours = d.profiles.filter(p => p.team === d.team);
   const changes = ours.map(p => {
     const key = playerKey(p);
@@ -81,7 +82,7 @@ function developmentLines(d: Development): string[] {
     const after = d.after!.players[key]?.baseline ?? before;
     return { p, delta: after - before };
   }).filter(c => Math.abs(c.delta) >= 0.005).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 3);
-  const lines = changes.map(c => `${c.p.name}: Grund-Selbstvertrauen ${c.delta > 0 ? 'steigt' : 'sinkt'} um ${Math.abs(c.delta * 100).toFixed(1)} Punkte`);
+  const lines = changes.map(c => tr(`${c.p.name}: base confidence ${c.delta > 0 ? 'rises' : 'falls'} by ${Math.abs(c.delta * 100).toFixed(1)} points`, `${c.p.name}: Grund-Selbstvertrauen ${c.delta > 0 ? 'steigt' : 'sinkt'} um ${Math.abs(c.delta * 100).toFixed(1)} Punkte`));
   let bond: { a: PlayerProfile; b: PlayerProfile; v: number } | null = null;
   for (const p of ours) {
     for (const [k, v] of Object.entries(d.after.players[playerKey(p)]?.bonds ?? {})) {
@@ -89,6 +90,6 @@ function developmentLines(d: Development): string[] {
       if (mate && (!bond || v > bond.v)) bond = { a: p, b: mate, v };
     }
   }
-  if (bond && bond.v > 0.05) lines.push(`${bond.a.name} vertraut ${bond.b.name} am meisten (gelungene Zuspiele)`);
-  return lines.length ? lines : ['Kaum Veränderung – zu wenige bewertete Aktionen.'];
+  if (bond && bond.v > 0.05) lines.push(tr(`${bond.a.name} trusts ${bond.b.name} most (passes that arrived)`, `${bond.a.name} vertraut ${bond.b.name} am meisten (gelungene Zuspiele)`));
+  return lines.length ? lines : [tr('Hardly any change – too few judged actions.', 'Kaum Veränderung – zu wenige bewertete Aktionen.')];
 }

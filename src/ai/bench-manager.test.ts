@@ -62,7 +62,7 @@ describe('the computer coach (bench-manager.ts)', () => {
     // The referee books a red card in his own lists before the engine applies the decision (referee.ts).
     e.referee.sentOff.add(keeper);
     e.referee.redCards.add(keeper);
-    whistle(e, { type: 'foul', offender: keeper, victim: role(e, 0, 'ST'), spot: { x: 30, z: 5 }, penalty: false, card: 'red', reason: 'Notbremse', advantage: false });
+    whistle(e, { type: 'foul', offender: keeper, victim: role(e, 0, 'ST'), spot: { x: 30, z: 5 }, penalty: false, card: 'red', reason: 'dogso', advantage: false });
     runFor(e, 6, () => !!e.restart?.placed && e.restart.benchSeen);
     const sub = subsOf(e).find(s => s.reason === 'keeper')!;
     expect(sub).toBeDefined();

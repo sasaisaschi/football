@@ -4,6 +4,7 @@ import type { MatchEngine } from '../engine/match-engine';
 import type { DecisionOption, MomentKind, OptionVisual, PlayerIntent, TeamId, TeamInstruction, Vec2 } from '../engine/types';
 import { PITCH } from '../physics/pitch-geometry';
 import { brainContext, carrier, dist, participantsFor, playerName, type MomentDraft } from './common';
+import { tr } from '../i18n';
 
 /** A pass or take-on the player could realistically pull off (estimated chance of success); a shot is offered whenever the player would consider it. */
 const MIN_SUCCESS = 0.3;
@@ -43,10 +44,11 @@ export function attackingMoment(e: MatchEngine, team: TeamId): MomentDraft | nul
   const from = { x: ball.x, z: ball.z };
   const decisionOptions: DecisionOption[] = contenders.map((o, i) => ({
     id: `${o.kind}-${i}`,
-    label: o.kind === 'shot' ? 'Selbst abschließen' : o.kind === 'pass' ? `Pass auf ${playerName(e, o.target!)}` : 'Gegenspieler ausspielen',
+    label: o.kind === 'shot' ? tr('Shoot', 'Selbst abschließen') : o.kind === 'pass' ? tr(`Pass to ${playerName(e, o.target!)}`, `Pass auf ${playerName(e, o.target!)}`) : tr('Take on the defender', 'Gegenspieler ausspielen'),
     detail: o.note,
     effect: { type: 'player', player: c, intent: { type: 'ball', action: o.action, source: 'user', decidedAt: e.time } satisfies PlayerIntent },
     outlook: outlook(o),
+    estimate: o.success,
     visual: ballVisual(c, from, o),
   }));
   const aiChoice = brain.chooseAction(brainContext(e, c));
@@ -54,8 +56,8 @@ export function attackingMoment(e: MatchEngine, team: TeamId): MomentDraft | nul
   const kind: MomentKind = shot ? 'finish-or-pass' : 'take-on';
   const keeper = e.profiles.find(p => p.team !== team && p.role === 'GK' && !e.referee.sentOff.has(p.id));
   return {
-    kind, category: 'attack', title: shot ? 'Abschluss oder Ablage?' : 'Durchsetzen oder abspielen?',
-    situation: `${playerName(e, c)} hat den Ball ${Math.round(Math.hypot(sign * PITCH.halfLength - ball.x, ball.z))} m vor dem Tor.`,
+    kind, category: 'attack', title: shot ? tr('Shoot or lay it off?', 'Abschluss oder Ablage?') : tr('Take him on or pass?', 'Durchsetzen oder abspielen?'),
+    situation: tr(`${playerName(e, c)} has the ball ${Math.round(Math.hypot(sign * PITCH.halfLength - ball.x, ball.z))} m from goal.`, `${playerName(e, c)} hat den Ball ${Math.round(Math.hypot(sign * PITCH.halfLength - ball.x, ball.z))} m vor dem Tor.`),
     focusPlayer: c, options: decisionOptions, defaultOptionId: fallback.id,
     participants: participantsFor(e, team, c, decisionOptions, shot && keeper ? [keeper.id] : []),
   };
@@ -100,11 +102,11 @@ export function transitionMoment(e: MatchEngine, team: TeamId, track: Possession
     if (attackers < 2 || defenders > attackers + 1 || sign * carrierV.x < 1.5) return null;
     const counter = instr({ risk: 0.95, lineHeight: 0.5, press: 'high' }), secure = instr({ risk: 0.15, lineHeight: 0 });
     const options: DecisionOption[] = [
-      { id: 'counter', label: 'Schnell kontern', detail: 'Risiko hoch, Stürmer laufen tief', effect: { type: 'team', team, instruction: counter, seconds: 15 }, outlook: `${attackers} gegen ${defenders} vor dem Ball`, visual: { actor: touch.player, line: line(counter, true), zone: { x: ball.x + sign * 25, z: ball.z * 0.5, r: 9 } } },
-      { id: 'secure', label: 'Ball sichern', detail: 'Tempo raus, Mannschaft nachrücken lassen', effect: { type: 'team', team, instruction: secure, seconds: 15 }, outlook: 'weniger Ballverlustrisiko, Gegner formiert sich', visual: { actor: touch.player, line: line(secure, true) } },
+      { id: 'counter', label: tr('Counter fast', 'Schnell kontern'), detail: tr('High risk, forwards run in behind', 'Risiko hoch, Stürmer laufen tief'), effect: { type: 'team', team, instruction: counter, seconds: 15 }, outlook: tr(`${attackers} against ${defenders} ahead of the ball`, `${attackers} gegen ${defenders} vor dem Ball`), visual: { actor: touch.player, line: line(counter, true), zone: { x: ball.x + sign * 25, z: ball.z * 0.5, r: 9 } } },
+      { id: 'secure', label: tr('Keep the ball', 'Ball sichern'), detail: tr('Slow it down, let the team move up', 'Tempo raus, Mannschaft nachrücken lassen'), effect: { type: 'team', team, instruction: secure, seconds: 15 }, outlook: tr('less risk of losing it, the opponents regroup', 'weniger Ballverlustrisiko, Gegner formiert sich'), visual: { actor: touch.player, line: line(secure, true) } },
     ];
     return {
-      kind: 'counter-attack', category: 'transition', title: 'Ballgewinn – Konter?', situation: `Ballgewinn ${Math.round((u + 1) * 52.5)} m vor dem eigenen Tor.`,
+      kind: 'counter-attack', category: 'transition', title: tr('Ball won – counter?', 'Ballgewinn – Konter?'), situation: tr(`Ball won ${Math.round((u + 1) * 52.5)} m from our own goal.`, `Ballgewinn ${Math.round((u + 1) * 52.5)} m vor dem eigenen Tor.`),
       focusPlayer: touch.player, options, defaultOptionId: base.risk > 0.6 ? 'counter' : 'secure', participants: participantsFor(e, team, touch.player, options),
     };
   }
@@ -112,14 +114,14 @@ export function transitionMoment(e: MatchEngine, team: TeamId, track: Possession
   if (touch.team !== team && u > 0.15 && e.time - e.halfStartedAt > 20 && track.lostSpell >= SPELL_FOR_COUNTER_PRESS && carrier(e, touch.team) !== null) {
     const press = instr({ press: 'high', lineHeight: 0.7 }), drop = instr({ press: 'low', lineHeight: -0.6 });
     const options: DecisionOption[] = [
-      { id: 'gegenpress', label: 'Sofort gegenpressen', detail: 'Hoch pressen, Linie rückt auf', effect: { type: 'team', team, instruction: press, seconds: 10 }, outlook: 'schnelle Rückeroberung möglich, Raum hinter der Abwehr', visual: { actor: touch.player, line: line(press, false), zone: { x: ball.x, z: ball.z, r: 8 } } },
-      { id: 'drop', label: 'Fallen lassen', detail: 'Kompakt hinter den Ball', effect: { type: 'team', team, instruction: drop, seconds: 10 }, outlook: 'sicherer, Gegner baut ruhig auf', visual: { actor: touch.player, line: line(drop, false) } },
+      { id: 'gegenpress', label: tr('Counter-press now', 'Sofort gegenpressen'), detail: tr('Press high, the line steps up', 'Hoch pressen, Linie rückt auf'), effect: { type: 'team', team, instruction: press, seconds: 10 }, outlook: tr('quick regain possible, space behind the defence', 'schnelle Rückeroberung möglich, Raum hinter der Abwehr'), visual: { actor: touch.player, line: line(press, false), zone: { x: ball.x, z: ball.z, r: 8 } } },
+      { id: 'drop', label: tr('Drop off', 'Fallen lassen'), detail: tr('Compact behind the ball', 'Kompakt hinter den Ball'), effect: { type: 'team', team, instruction: drop, seconds: 10 }, outlook: tr('safer, the opponents build up calmly', 'sicherer, Gegner baut ruhig auf'), visual: { actor: touch.player, line: line(drop, false) } },
     ];
     // The team acts; the player nearest to the ball leads the press (or the retreat).
     const ours = e.profiles.filter(p => p.team === team && p.role !== 'GK' && !e.referee.sentOff.has(p.id)).sort((a, b) => dist(e.bodies[a.id].position(), ball) - dist(e.bodies[b.id].position(), ball))[0];
     for (const o of options) if (o.visual) o.visual.actor = ours.id;
     return {
-      kind: 'counter-press', category: 'transition', title: 'Ballverlust in der gegnerischen Hälfte', situation: `${playerName(e, touch.player)} hat den Ball gerade erobert.`,
+      kind: 'counter-press', category: 'transition', title: tr('Ball lost in their half', 'Ballverlust in der gegnerischen Hälfte'), situation: tr(`${playerName(e, touch.player)} has just won the ball.`, `${playerName(e, touch.player)} hat den Ball gerade erobert.`),
       focusPlayer: ours.id, options, defaultOptionId: base.press === 'high' ? 'gegenpress' : 'drop', participants: participantsFor(e, team, ours.id, options, [touch.player]),
     };
   }
@@ -142,17 +144,17 @@ export function breakawayMoment(e: MatchEngine, team: TeamId): MomentDraft | nul
   if (!chaser || chaser.d > 6) return null;
   const path = { x: cp.x + v.x * 0.8, z: cp.z + v.z * 0.8 };
   const options: DecisionOption[] = [
-    { id: 'chase', label: 'Fair verfolgen', detail: `${playerName(e, chaser.id)} läuft mit, Torwart bleibt im Tor`, effect: { type: 'none' }, outlook: 'Torchance für den Gegner bleibt', visual: { actor: chaser.id, runs: [{ player: chaser.id, to: path }] } },
+    { id: 'chase', label: tr('Chase fairly', 'Fair verfolgen'), detail: tr(`${playerName(e, chaser.id)} runs with him, the keeper stays in goal`, `${playerName(e, chaser.id)} läuft mit, Torwart bleibt im Tor`), effect: { type: 'none' }, outlook: tr('the opponent keeps his chance', 'Torchance für den Gegner bleibt'), visual: { actor: chaser.id, runs: [{ player: chaser.id, to: path }] } },
     {
-      id: 'tactical-foul', label: 'Taktisches Foul', detail: `${playerName(e, chaser.id)} stellt sich in den Laufweg`,
+      id: 'tactical-foul', label: tr('Tactical foul', 'Taktisches Foul'), detail: tr(`${playerName(e, chaser.id)} steps into his path`, `${playerName(e, chaser.id)} stellt sich in den Laufweg`),
       effect: { type: 'player', player: chaser.id, intent: { type: 'move', action: { kind: 'tactical-foul', target: c }, source: 'user', decidedAt: e.time, until: e.time + 2.5 } },
-      outlook: goalSide.length === 0 ? 'als Notbremse droht Rot' : 'Gelbe Karte wahrscheinlich, Erfolg nicht sicher',
+      outlook: goalSide.length === 0 ? tr('last man: a red card is likely', 'als Notbremse droht Rot') : tr('yellow card likely, success not certain', 'Gelbe Karte wahrscheinlich, Erfolg nicht sicher'),
       visual: { actor: chaser.id, runs: [{ player: chaser.id, to: { x: cp.x + v.x * 0.35, z: cp.z + v.z * 0.35 } }], zone: { x: cp.x, z: cp.z, r: 1.5 } },
     },
   ];
   const keeper = e.profiles.find(p => p.team === team && p.role === 'GK');
   return {
-    kind: 'breakaway-defence', category: 'defence', title: 'Gegner läuft allein aufs Tor', situation: `${playerName(e, c)} ist durch, nur noch ${goalSide.length} Verteidiger dahinter.`,
+    kind: 'breakaway-defence', category: 'defence', title: tr('Opponent through on goal', 'Gegner läuft allein aufs Tor'), situation: tr(`${playerName(e, c)} is through, only ${goalSide.length} defender(s) behind.`, `${playerName(e, c)} ist durch, nur noch ${goalSide.length} Verteidiger dahinter.`),
     focusPlayer: chaser.id, options, defaultOptionId: 'chase', participants: participantsFor(e, team, chaser.id, options, keeper ? [keeper.id, c] : [c]),
   };
 }
@@ -183,19 +185,19 @@ export function boxDefenceMoment(e: MatchEngine, team: TeamId): MomentDraft | nu
   const towardsGoal = (m: number) => ({ x: b.x + (gx / gd) * m, z: b.z + (gz / gd) * m });
   const run = (to: Vec2): OptionVisual => ({ actor: nearest.id, runs: [{ player: nearest.id, to }] });
   const options: DecisionOption[] = [
-    { id: 'press', label: 'Zustellen', detail: `${playerName(e, nearest.id)} läuft den Ballführenden an und geht in den Zweikampf`, effect: order('press'), outlook: 'kann den Ball erobern – oder wird überlaufen', visual: run({ x: b.x, z: b.z }) },
-    { id: 'block', label: 'Schussbahn blocken', detail: `${playerName(e, nearest.id)} stellt sich zwischen Ball und Tor`, effect: order('block-lane'), outlook: 'erschwert den Abschluss, lässt Zeit für einen Pass', visual: { ...run(towardsGoal(1.8)), ball: { to: { x: goalX, z: 0 }, kind: 'shot' } } },
-    { id: 'hold', label: 'Ordnung halten', detail: `${playerName(e, nearest.id)} bleibt torseitig auf Abstand und verzögert`, effect: order('jockey'), outlook: 'schwer zu überlaufen, der Gegner hat aber Zeit zum Abschluss', visual: run(towardsGoal(3.5)) },
+    { id: 'press', label: tr('Close him down', 'Zustellen'), detail: tr(`${playerName(e, nearest.id)} goes at the ball carrier and tackles`, `${playerName(e, nearest.id)} läuft den Ballführenden an und geht in den Zweikampf`), effect: order('press'), outlook: tr('can win the ball – or be beaten', 'kann den Ball erobern – oder wird überlaufen'), visual: run({ x: b.x, z: b.z }) },
+    { id: 'block', label: tr('Block the shot', 'Schussbahn blocken'), detail: tr(`${playerName(e, nearest.id)} gets between ball and goal`, `${playerName(e, nearest.id)} stellt sich zwischen Ball und Tor`), effect: order('block-lane'), outlook: tr('makes the shot harder, leaves time for a pass', 'erschwert den Abschluss, lässt Zeit für einen Pass'), visual: { ...run(towardsGoal(1.8)), ball: { to: { x: goalX, z: 0 }, kind: 'shot' } } },
+    { id: 'hold', label: tr('Hold the shape', 'Ordnung halten'), detail: tr(`${playerName(e, nearest.id)} stays goal-side at a distance and delays`, `${playerName(e, nearest.id)} bleibt torseitig auf Abstand und verzögert`), effect: order('jockey'), outlook: tr('hard to beat, but the opponent has time to shoot', 'schwer zu überlaufen, der Gegner hat aber Zeit zum Abschluss'), visual: run(towardsGoal(3.5)) },
   ];
   return {
-    kind: 'box-defence', category: 'defence', title: 'Gefahr vor dem eigenen Strafraum', situation: `${playerName(e, c)} hat den Ball ${Math.round(toGoal)} m vor unserem Tor.`,
+    kind: 'box-defence', category: 'defence', title: tr('Danger at the edge of our box', 'Gefahr vor dem eigenen Strafraum'), situation: tr(`${playerName(e, c)} has the ball ${Math.round(toGoal)} m from our goal.`, `${playerName(e, c)} hat den Ball ${Math.round(toGoal)} m vor unserem Tor.`),
     focusPlayer: nearest.id, options, defaultOptionId: 'hold', participants: participantsFor(e, team, nearest.id, options, [c]),
   };
 }
 
 export function outlook(o: EvaluatedOption): string {
-  if (o.kind === 'shot') return `Abschlusschance etwa ${Math.round(o.success * 100)} % – Torwart und Verteidiger können blocken`;
-  if (o.kind === 'pass') return `Pass kommt nach Einschätzung zu ${Math.round(o.success * 100)} % an`;
-  return `Durchkommen etwa ${Math.round(o.success * 100)} % – sonst Ballverlust`;
+  if (o.kind === 'shot') return tr(`scoring chance about ${Math.round(o.success * 100)} % – keeper and defenders can block`, `Abschlusschance etwa ${Math.round(o.success * 100)} % – Torwart und Verteidiger können blocken`);
+  if (o.kind === 'pass') return tr(`pass estimated to arrive ${Math.round(o.success * 100)} % of the time`, `Pass kommt nach Einschätzung zu ${Math.round(o.success * 100)} % an`);
+  return tr(`gets through about ${Math.round(o.success * 100)} % – otherwise the ball is lost`, `Durchkommen etwa ${Math.round(o.success * 100)} % – sonst Ballverlust`);
 }
 
