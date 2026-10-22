@@ -24,7 +24,7 @@ it.runIf(enabled)('shot lab', async () => {
   const rng = createRng(7);
   const report: Record<string, unknown> = {};
   for (const d of DISTANCES) {
-    let goals = 0, saves = 0, other = 0;
+    let goals = 0, saves = 0, other = 0, catches = 0;
     const byZone: Record<string, [number, number]> = { centre: [0, 0], side: [0, 0], corner: [0, 0] };
     for (let i = 0; i < SHOTS_PER_DISTANCE; i++) {
       const e = new MatchEngine({ seed: 1000 + i, halfMinutes: 45 });
@@ -45,13 +45,14 @@ it.runIf(enabled)('shot lab', async () => {
       runFor(e, 3, () => log.some(ev => ev.type === 'goal' || ev.type === 'out'));
       const zone = Math.abs(tz) < 1.2 ? 'centre' : Math.abs(tz) < 2.6 ? 'side' : 'corner';
       byZone[zone][1]++;
+      if (log.some(ev => ev.type === 'catch' && ev.player === gk)) catches++;
       if (log.some(ev => ev.type === 'goal')) goals++;
       else if (log.some(ev => (ev.type === 'touch' || ev.type === 'catch') && ev.player === gk)) { saves++; byZone[zone][0]++; }
       else other++;
     }
     const decided = Math.max(1, goals + saves);
     report[`${d} m`] = {
-      saveRate: +(saves / decided).toFixed(2), goals, saves, wideOrShort: other,
+      saveRate: +(saves / decided).toFixed(2), goals, saves, catches, wideOrShort: other,
       zones: Object.fromEntries(Object.entries(byZone).map(([k, [s, n]]) => [k, `${s}/${n}`])),
     };
   }
