@@ -1518,3 +1518,33 @@ Vergleichsbilder aus dem Produktions-Build liegen in `docs/phase-c/`:
 | Szenariomodus | nein | – | – | weiterhin eigener Folgepunkt (§10.10 R6) |
 
 **Nicht als Erfolg gewertet:** Grüne Unit-Tests allein. Alle Aussagen zu Spielzeit, Verständlichkeit und Darstellung stammen aus den Browsersitzungen und den Aufnahmen, die Statistik aus Mehr-Seed-Läufen.
+
+## 12. Phase D – Hackathon-Einreichung und AI Match Intelligence (22.10.2026)
+
+**Ausgangslage:** `main` = `c0e84c0` (PR #33–#35 gemergt). Branch `claude/phase-d-submission`, ein PR, kein Merge ohne Freigabe. Abgabefrist laut Regeln: 27.10.2026, 23:59 PT (= 28.10.2026, 07:59 MEZ). Registrierung laut Auftraggeber erfolgt.
+
+**Vorgaben des Auftraggebers (22.10.2026):**
+- Azure/Microsoft Foundry wird vorerst zurückgestellt. Die Foundry-Schnittstelle wird modular vorbereitet; die echte Integration bleibt als offen gekennzeichnet, bis sie tatsächlich funktioniert.
+- Öffentliche Demo über GitHub Pages: Die Konfiguration wird vorbereitet, aber nichts aktiviert oder veröffentlicht. Das Deployment ist ein eigener letzter Schritt nach der Abnahme.
+
+### 12.1 Arbeitsplan
+
+Abhängigkeiten: D-i18n vor D2/D3, weil die Erklärungen zweisprachig erzeugt werden. D2 vor D3, weil die Entscheidungsszenen die Analyse nutzen. D4 nach D2/D3, weil die neuen Anzeigen mitgestaltet werden. Video und Einreichungspaket zuletzt, weil sie den Endstand zeigen.
+
+1. **D1 Compliance-Matrix** aus den offiziellen Regeln (Anforderung, Nachweis, fehlender Teil, Arbeitsschritt), inklusive Lizenz, fremder Assets und Testzugang bis zum Ende der Bewertung (10.11.2026).
+2. **Sprache:** Englisch als Standard, Deutsch umschaltbar (`?lang=de` und Startbildschirm); auch Orchestrator-Texte aus dem Worker.
+3. **D2 Match Intelligence** (`src/intel/`), deterministisch, ohne Cloud:
+   - Ingest der `MatchEvent`s in Bildreihenfolge zusammen mit dem jeweils gezeigten Snapshot.
+   - Statistik je Team und Spieler: Pässe mit Distanz, Ankunft und Schwierigkeit; Schüsse mit Tempo und xG; Ballbesitz; Ballbesitzwechsel; Druck auf den Ballführer; Standards; Entscheidungen.
+   - Mustererkennung mit Begründung aus Ereignissen (z. B. Druckwechsel, Kontrolle oder Chaos, Rhythmus, Torgefahr).
+   - Texte für Fan- und Analystenmodus in EN/DE. Jede Aussage verweist auf die Ereignis-IDs, auf denen sie beruht.
+   - Personalisierung (Lieblingsteam, Spielerfokus), Abschlussbericht und maschinenlesbarer, zeitgestempelter JSON-Export für Overlays.
+4. **D3 Erklärbarkeit der Entscheidungen:** In der Entscheidungsleiste steht „Warum jetzt“ (Druck auf den Akteur mit Gegnername und Abstand, offene Passwege, Risiko je Option aus der vorhandenen Bewertung). Die Konsequenzkarte zeigt den tatsächlichen Ausgang gegen die Einschätzung. Die Analyse erklärt nur; sie gibt keine Absichten, Ballkontakte oder Entscheidungen vor.
+5. **Foundry-Schnittstelle (vorbereitet, nicht aktiv):**
+   - Client-Adapter, der strukturierte Fakten an einen serverseitigen Endpunkt schickt; ohne konfigurierten Endpunkt aus.
+   - Endpunkt-Code als Azure Function mit Grenzen für Anfragen, Länge und Kosten; Schlüssel nur serverseitig.
+   - Tests für „aus“, Fehler und Zeitüberschreitung.
+6. **D4 Bildqualität** der Entscheidungsszenen (Spielergröße, Kamera, Licht, Overlays, Intelligence-Anzeige), belegt durch neue Browser-Screenshots.
+7. **D5 Deployment vorbereitet:** Vite-Basis-Pfad und GitHub-Actions-Workflow, der nur manuell auslösbar ist. Nicht veröffentlicht.
+8. **D6 Paket:** `submission/PITCH_EN.md`, `DEMO_SCRIPT_EN.md`, `SUBMISSION_CHECKLIST.md`, neues englisches `README.md`, Demovideo (< 2 min) aus echten Browseraufnahmen.
+9. **D7 Abschluss:** Typecheck, alle Tests, Build, Browserprüfungen (beide Modi, beide Sprachen, Cloud-Fehlerfälle), Bericht §12, ein PR.
