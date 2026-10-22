@@ -137,7 +137,7 @@ export class MatchApp {
     this.ball.update(ball, s.ball.rotation);
     // The decorative running cycle follows simulated time, but not faster than a sprint's cadence.
     const gaitDt = dt * Math.min(this.playback.speed, 3);
-    s.players.forEach((p, k) => this.figures[k].update(lerpPlayer(a.players[k], p, alpha), gaitDt));
+    s.players.forEach((p, k) => this.figures[k].update(lerpPlayer(a.players[k], p, alpha), gaitDt, ball));
     this.camera.condensed = this.playback.mode === 'condensed';
     this.camera.update({ ...s, ball: { ...s.ball, position: ball } }, this.wall, dt);
     this.overlay.update(this.wall);
