@@ -44,7 +44,8 @@ export class ConsequenceCard {
     this.el.classList.remove('done');
     this.hideAt = Infinity;
     // A coach's instruction has no single ball event to follow: it shapes the rest of the half.
-    if (m.category === 'coach') this.finish(option.effect.type === 'none' ? 'Die Mannschaft spielt weiter wie bisher.' : 'Die Vorgabe gilt ab jetzt für die ganze zweite Halbzeit.');
+    const fx = option.effect;
+    if (m.category === 'coach') this.finish(fx.type === 'substitution' ? `${this.name(fx.on)} kommt an der Mittellinie für ${this.name(fx.off)}.` : fx.type === 'none' ? 'Die Mannschaft spielt weiter wie bisher.' : 'Die Vorgabe gilt ab jetzt für die ganze zweite Halbzeit.');
   }
 
   private name(id: number): string {

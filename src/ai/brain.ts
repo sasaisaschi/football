@@ -1,5 +1,5 @@
 import type RAPIER from '@dimforge/rapier3d-simd-compat';
-import type { BallAction, PlayerIntent, PlayerProfile, RestartKind, TeamInstruction, Vec2, Vec3 } from '../engine/types';
+import type { BallAction, PlayerIntent, PlayerProfile, RestartKind, SetPiecePlan, TeamInstruction, Vec2, Vec3 } from '../engine/types';
 import type { Rng } from '../engine/rng';
 import type { BodyCommand, PlayerBody } from '../physics/body';
 import type { Legs } from '../physics/legs';
@@ -30,7 +30,7 @@ export type BrainContext = {
   ball: RAPIER.RigidBody;
   profiles: PlayerProfile[];
   /** Set while the ball is dead: who takes the restart and where everybody must stay away from. */
-  restart: { kind: RestartKind; team: 0 | 1; taker: number; spot: Vec2; minDistance: number; ownHalfOnly: boolean; ready: boolean; held: boolean } | null;
+  restart: { kind: RestartKind; team: 0 | 1; taker: number; spot: Vec2; minDistance: number; ownHalfOnly: boolean; ready: boolean; held: boolean; direct?: boolean; plan?: SetPiecePlan } | null;
   /** May the player use his hands? (keeper in own area, ball in play, not a back-pass) */
   handsAllowed: boolean;
   /** Keeper holding the ball in his hands, if any. Nobody may challenge him (Law 12). */
@@ -51,6 +51,8 @@ const HEADER_SET = 0.35;
 const JOCKEY_CLOSE = 1.5;
 /** Sideways distance from the carrier at which a recovering defender runs alongside him (m). */
 const SHOULDER_GAP = 1.1;
+/** Lowest chance (xG) from which a player strikes a direct free kick at goal himself. */
+const DIRECT_FREE_KICK_XG = 0.05;
 /** Extra pace of the lunge into a sliding tackle over the run (m/s). */
 const SLIDE_LUNGE = 0.5;
 
@@ -263,6 +265,9 @@ export class PlayerBrain {
         return { command: { target: action.target, speed: max, face: ball.pos }, effort: 1, swing: null };
       case 'hold-shape':
         return { command: this.steerAround(offBallCommand(this, ctx, ball), ctx), effort: 1, swing: null };
+      case 'guess':
+        // The keeper's penalty reaction is carried out by his goalkeeping (keeper.ts), not as a run.
+        return null;
     }
   }
 
@@ -512,8 +517,10 @@ export class PlayerBrain {
     // A penalty is shot (Law 14; before, the restart filter below made takers pass it). Other restarts are played,
     // not carried; a keeper with the ball at his feet distributes it instead of dribbling.
     const penaltyShots = ctx.restart?.kind === 'penalty' ? options.filter(o => o.kind === 'shot') : [];
+    // A direct free kick within range may be struck at goal (Law 13), as the user can choose too; other restarts are played.
+    const directShot = (o: EvaluatedOption) => o.kind === 'shot' && ctx.restart?.kind === 'free-kick' && !!ctx.restart.direct && o.success >= DIRECT_FREE_KICK_XG;
     if (penaltyShots.length) options = penaltyShots;
-    else if (ctx.restart || this.profile.role === 'GK') options = options.filter(o => o.kind === 'pass' || o.kind === 'clear');
+    else if (ctx.restart || this.profile.role === 'GK') options = options.filter(o => o.kind === 'pass' || o.kind === 'clear' || directShot(o));
     this.lastOptions = options;
     // Option values are expected-threat differences of a few thousandths in midfield; misjudgement has to be
     // on that scale, or it would swamp the evaluation and turn every choice into a coin toss.

@@ -1,4 +1,4 @@
-import type { PlayerProfile, RestartKind, TeamId, Vec2 } from './types';
+import type { PlayerProfile, RestartKind, SetPiecePlan, TeamId, Vec2 } from './types';
 import { PITCH } from '../physics/pitch-geometry';
 import { restartDistance } from '../rules/referee';
 
@@ -16,6 +16,8 @@ export type RestartState = {
   consulted: boolean;
   /** A free kick awarded for a foul or handball may be shot at goal; one for offside or a back-pass is indirect (Law 13). */
   direct: boolean;
+  /** Defending (or attacking) plans chosen for this restart, per team. */
+  plans: Partial<Record<TeamId, SetPiecePlan>>;
 };
 
 /** Delay before the ball is placed, per restart reason. */
@@ -24,6 +26,13 @@ export const PLACE_DELAY: Record<RestartKind, number> = {
 };
 /** After this long the restart is taken even if an opponent is still too close (the referee waves play on). */
 export const RESTART_TIMEOUT = 9;
+/**
+ * Time a taker gives both sides to set up a corner or a free kick near goal (s): runners into the box, the wall, the
+ * marking. Taken as soon as the opponents were 9.15 m away, a corner came before anybody was in position (measured).
+ */
+const SET_UP: Partial<Record<RestartKind, number>> = { corner: 3.5, 'free-kick': 2.5 };
+/** Free kicks further than this from the goal they attack need no set-up (m). */
+const SET_UP_RANGE = 35;
 
 /** Taker: keeper for goal kicks, the best finisher for penalties, otherwise the nearest outfield player. */
 export function chooseTaker(kind: RestartKind, team: TeamId, spot: Vec2, profiles: PlayerProfile[], positions: Map<number, Vec2>, sentOff: Set<number>): number {
@@ -45,7 +54,11 @@ export function chooseTaker(kind: RestartKind, team: TeamId, spot: Vec2, profile
 export function restartReady(r: RestartState, profiles: PlayerProfile[], positions: Map<number, Vec2>, signOf: (team: TeamId) => 1 | -1, now: number, sentOff: Set<number>): boolean {
   if (!r.placed) return false;
   if (now - r.placedAt > RESTART_TIMEOUT) return true;
-  const min = restartDistance(r.kind) - 0.5;
+  const setUp = SET_UP[r.kind] ?? 0;
+  const nearGoal = r.kind !== 'free-kick' || PITCH.halfLength - Math.abs(r.spot.x) + Math.abs(r.spot.z) * 0.5 < SET_UP_RANGE;
+  if (setUp && nearGoal && now - r.placedAt < setUp) return false;
+  // Law 13: 9.15 m (a few centimetres of body sway allowed; the former 0.5 m let a defender stand 8.7 m away).
+  const min = restartDistance(r.kind) - 0.1;
   for (const p of profiles) {
     if (sentOff.has(p.id)) continue;
     const q = positions.get(p.id)!;

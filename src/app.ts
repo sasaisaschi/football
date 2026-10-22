@@ -163,6 +163,8 @@ export class MatchApp {
       if (s) this.hud.mark('goal', this.hud.elapsed(s), e.team, `Tor ${TEAMS[e.team].short}`);
     }
     if (e.type === 'moment' && s) { this.hud.mark('moment', this.hud.elapsed(s), e.team, 'Entscheidung'); this.metrics.moments++; }
+    // The substitute takes over the replaced player's position; the shared profiles follow the worker's.
+    if (e.type === 'substitution') this.profiles[e.on].role = e.role;
   }
 
   /** The picture has reached the frozen moment: panel, tactical markings and a camera that shows everything relevant. */

@@ -18,6 +18,8 @@ export class KeeperSkill {
   private shotSeenAt = -1;
   private dived = false;
   private releaseAt = 0;
+  /** A penalty decision: dive early to this side (−1 his left, +1 his right) as soon as the kick is struck; 0 waits. */
+  private guess: { side: -1 | 0 | 1; until: number } | null = null;
 
   constructor(private readonly brain: PlayerBrain, readonly hands: KeeperHands) {}
 
@@ -33,6 +35,12 @@ export class KeeperSkill {
   think(ctx: BrainContext, normal: () => BrainOutput): BrainOutput {
     const body = this.brain.body;
     const self = body.position();
+    const order = this.brain.userIntent;
+    if (order?.type === 'move' && order.action.kind === 'guess') {
+      this.guess = { side: order.action.side, until: ctx.now + 15 };
+      this.brain.userIntent = null;
+    }
+    if (this.guess && ctx.now > this.guess.until) this.guess = null;
     // The keeper looks like everybody else: his picture of the ball is his own perception.
     this.brain.perception.observe(ctx.truth, self, body.heading);
     const goalSide = (-ctx.sign) as 1 | -1;
@@ -51,6 +59,13 @@ export class KeeperSkill {
     }
     this.releaseAt = 0;
 
+    // Law 14: at a penalty against him the keeper stands on the goal line between the posts, facing the kick.
+    const r = ctx.restart;
+    if (r?.kind === 'penalty' && r.team !== this.brain.profile.team) {
+      const line = { x: -ctx.sign * PITCH.halfLength + ctx.sign * 0.25, z: 0 };
+      return { command: { target: line, speed: 4, face: r.spot }, effort: 1, swing: null };
+    }
+
     const truthBall = ctx.truth.ball;
     const believed = this.brain.perception.ballNow(ctx.now);
     const crossing = KeeperSkill.crossing(believed.pos, believed.vel, self.x);
@@ -64,6 +79,18 @@ export class KeeperSkill {
     }
     this.dived = false;
 
+    if (this.guess && this.guess.side !== 0 && towardsGoal && this.hands.active() && !this.dived && ctx.now >= this.hands.recoverUntil) {
+      // The early dive: at the strike, to the chosen corner, without waiting to read the ball. If the shot goes the
+      // other way, he is gone; if he guessed right, he is there sooner than any reaction would allow.
+      const facing = ctx.sign; // he faces the pitch: his right is +Z when that is +X
+      const z = this.guess.side * facing * (PITCH.goalHalfWidth - 0.9);
+      const dose = Math.max(DIVE_MIN_SPEED, Math.abs(z - self.z) / 0.4);
+      this.hands.reachFor({ x: self.x, y: 0.5, z });
+      this.hands.dive({ x: self.x, z: self.z + Math.sign(z - self.z || 1) }, ctx.now, this.brain.profile.abilities.reflexes, dose);
+      this.dived = true;
+      this.guess = null;
+      return { command: { target: { x: self.x, z }, speed: body.limits.maxSpeed, face: { x: truthBall.pos.x, z: truthBall.pos.z } }, effort: 1, swing: null };
+    }
     if (towardsGoal && onTarget && this.hands.active()) {
       if (this.shotSeenAt < 0) this.shotSeenAt = ctx.now;
       const reaction = 0.2 - 0.1 * this.brain.profile.abilities.reflexes;

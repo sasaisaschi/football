@@ -26,6 +26,7 @@ export function commentaryFor(e: MatchEvent, ctx: CommentaryContext): string | n
     case 'out': return `${RESTART[e.restart]} für ${team(e.team)}.`;
     case 'half-time': return 'Halbzeit.';
     case 'full-time': return `Abpfiff! Endstand ${ctx.score[0]}:${ctx.score[1]}.`;
+    case 'substitution': return `Wechsel bei ${team(e.team)}: ${name(e.on)} kommt für ${name(e.off)}.`;
     case 'decision': return e.chosenBy === 'timeout' ? 'Keine Vorgabe – die Spieler entscheiden selbst.' : e.chosenBy === 'delegated' ? 'Der Trainer überlässt es den Spielern.' : 'Die Entscheidung ist gefallen – jetzt müssen die Spieler sie umsetzen.';
     default: return null;
   }

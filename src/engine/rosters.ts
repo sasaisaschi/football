@@ -46,36 +46,46 @@ const TRAIT_TEMPLATE: Partial<Record<Role, Partial<Traits>>> = {
   RW: { risk: 0.68, teamplay: 0.42 }, LW: { risk: 0.68, teamplay: 0.42 }, ST: { risk: 0.62, confidence: 0.6 },
 };
 
+/** Five substitutes per club (Law 3 allows five changes): keeper, centre-back, two midfielders, a forward. */
+const BENCH: { role: Role; number: number }[] = [
+  { role: 'GK', number: 12 }, { role: 'RCB', number: 15 }, { role: 'CM', number: 14 }, { role: 'RW', number: 17 }, { role: 'ST', number: 19 },
+];
+const BENCH_NAMES = [
+  ['Achterberg', 'Sule', 'Pereira', 'Lindgren', 'Odum'],
+  ['Kerr', 'Baptiste', 'Novak', 'Fofana', 'Iwata'],
+];
+
+type Rng = ReturnType<typeof createRng>;
+
+function makePlayer(id: number, team: TeamId, role: Role, number: number, name: string, squad: PlayerProfile['squad'], rng: Rng, character: Rng): PlayerProfile {
+  const base = TEMPLATE[role];
+  const abilities = {} as Abilities;
+  for (const k of KEYS) {
+    const centre = base[k] ?? (role === 'GK' && k !== 'composure' ? 0.3 : 0.55);
+    abilities[k] = Math.max(0.15, Math.min(0.95, centre + rng.gauss() * 0.07));
+  }
+  const heightM = role === 'GK' ? 1.9 + rng.gauss() * 0.03 : 1.8 + rng.gauss() * 0.05;
+  const foot = rng.next() < 0.22 ? 'left' : 'right';
+  const trait = (centre: number) => Math.max(0.05, Math.min(0.95, centre + character.gauss() * 0.15));
+  const t = TRAIT_TEMPLATE[role] ?? {};
+  const traits = { risk: trait(t.risk ?? 0.5), discipline: trait(t.discipline ?? 0.5), teamplay: trait(t.teamplay ?? 0.5), confidence: trait(t.confidence ?? 0.55) };
+  return { id, team, number, name, role, foot, heightM, massKg: 24 * heightM * heightM, abilities, traits, squad };
+}
+
+/**
+ * Starting elevens (ids 0–21, team 0 first) and the benches (ids 22–31). Benches come from their own random streams,
+ * so every starting player keeps exactly the ratings and traits he had before benches existed.
+ */
 export function createRoster(seed = 1): PlayerProfile[] {
   const rng = createRng(seed);
   const character = createRng(seed * 7919 + 13);
-  const trait = (centre: number) => Math.max(0.05, Math.min(0.95, centre + character.gauss() * 0.15));
   const players: PlayerProfile[] = [];
   for (const team of [0, 1] as TeamId[]) {
-    SHAPE.forEach((slot, i) => {
-      const base = TEMPLATE[slot.role];
-      const abilities = {} as Abilities;
-      for (const k of KEYS) {
-        const centre = base[k] ?? (slot.role === 'GK' && k !== 'composure' ? 0.3 : 0.55);
-        abilities[k] = Math.max(0.15, Math.min(0.95, centre + rng.gauss() * 0.07));
-      }
-      const heightM = slot.role === 'GK' ? 1.9 + rng.gauss() * 0.03 : 1.8 + rng.gauss() * 0.05;
-      players.push({
-        id: players.length,
-        team,
-        number: slot.number,
-        name: NAMES[team][i],
-        role: slot.role,
-        foot: rng.next() < 0.22 ? 'left' : 'right',
-        heightM,
-        massKg: 24 * heightM * heightM,
-        abilities,
-        traits: (() => {
-          const t = TRAIT_TEMPLATE[slot.role] ?? {};
-          return { risk: trait(t.risk ?? 0.5), discipline: trait(t.discipline ?? 0.5), teamplay: trait(t.teamplay ?? 0.5), confidence: trait(t.confidence ?? 0.55) };
-        })(),
-      });
-    });
+    SHAPE.forEach((slot, i) => players.push(makePlayer(players.length, team, slot.role, slot.number, NAMES[team][i], 'starter', rng, character)));
+  }
+  const benchRng = createRng(seed * 104729 + 7), benchCharacter = createRng(seed * 15485863 + 3);
+  for (const team of [0, 1] as TeamId[]) {
+    BENCH.forEach((slot, i) => players.push(makePlayer(players.length, team, slot.role, slot.number, BENCH_NAMES[team][i], 'bench', benchRng, benchCharacter)));
   }
   return players;
 }

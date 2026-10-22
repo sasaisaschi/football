@@ -19,6 +19,19 @@ const OPEN_FOR = 4;
 /** Recent actions remembered for the form line. */
 const RECENT = 6;
 
+/** Share of judged actions that succeed in an average match (passes ≈ 78 %, dribbles and shots less): ≈ 0.76. */
+const TYPICAL_SUCCESS = 0.76;
+
+/**
+ * Where confidence settles for a player with this baseline after many actions at the typical success rate: the fixed
+ * point of `record` (gain, loss, relaxation towards the baseline), worked out in closed form.
+ */
+export function neutralConfidence(baseline: number): number {
+  const p = TYPICAL_SUCCESS;
+  const keep = (1 - RELAX) * (1 - p * GAIN - (1 - p) * LOSS);
+  return ((1 - RELAX) * p * GAIN + RELAX * baseline) / (1 - keep);
+}
+
 export type JudgedAction = 'pass' | 'dribble' | 'shot';
 export type MindView = { traits: Traits; confidence: number; recent: { action: JudgedAction; ok: boolean }[] };
 
@@ -44,8 +57,12 @@ export class PlayerMind {
    */
   bias(kind: OptionKind): number {
     const t = this.traits;
-    if (kind === 'shot' || kind === 'dribble') return (t.risk - 0.5) * 0.006 + (this.confidence - 0.5) * 0.014 - (t.teamplay - 0.5) * 0.004;
-    if (kind === 'pass') return (t.teamplay - 0.5) * 0.004 - (this.confidence - 0.5) * 0.003;
+    // Form is how far confidence stands above or below where it settles for an average run of actions. Measured from
+    // 0.5 it leaned every player towards solo actions, because confidence settles near 0.66: more dribbles, more
+    // turnovers and throw-ins (24 seeds, §10.10).
+    const form = this.confidence - neutralConfidence(t.confidence);
+    if (kind === 'shot' || kind === 'dribble') return (t.risk - 0.5) * 0.006 + form * 0.014 - (t.teamplay - 0.5) * 0.004;
+    if (kind === 'pass') return (t.teamplay - 0.5) * 0.004 - form * 0.003;
     if (kind === 'shield' || kind === 'clear') return -(t.risk - 0.5) * 0.004;
     return 0;
   }

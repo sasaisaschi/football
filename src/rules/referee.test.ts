@@ -4,7 +4,8 @@ import type { Vec2 } from '../engine/types';
 import { BALL_SPEC, PITCH } from '../physics/pitch-geometry';
 import { Referee, type PlayerState } from './referee';
 
-const roster = createRoster(7);
+// The players on the pitch; the substitutes would otherwise stand in the offside picture.
+const roster = createRoster(7).filter(p => p.squad === 'starter');
 const id = (team: 0 | 1, role: string) => roster.find(p => p.team === team && p.role === role)!.id;
 /** Team 0 attacks +X in the first half. */
 function positions(over: Record<number, Vec2> = {}): Map<number, Vec2> {

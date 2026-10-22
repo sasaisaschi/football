@@ -88,6 +88,11 @@ export class Perception {
     return { x: s.pos.x + s.vel.x * age, z: s.pos.z + s.vel.z * age };
   }
 
+  /** A player who left the pitch is no longer in the picture (without this he lingered as a moving ghost). */
+  forget(id: number): void {
+    this.others.delete(id);
+  }
+
   /** Synchronises the whole picture at kick-off or a restart, when everybody sees the set-up. */
   reset(truth: Truth): void {
     this.ball = { pos: { ...truth.ball.pos }, vel: { ...truth.ball.vel }, spin: { ...truth.ball.spin }, seenAt: truth.now };
