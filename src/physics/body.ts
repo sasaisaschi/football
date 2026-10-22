@@ -1,5 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-simd-compat';
-import type { PlayerProfile, Vec2 } from '../engine/types';
+import type { PlayerProfile, Vec2, Vec3 } from '../engine/types';
+import { physicsClock } from './world';
 import { GROUPS } from './groups';
 
 /**
@@ -52,6 +53,10 @@ export class PlayerBody {
   readonly height: number;
   readonly mass: number;
   heading: number;
+  private readonly pos: Vec3 = { x: 0, y: 0, z: 0 };
+  private posEpoch = -1;
+  private readonly vel: Vec3 = { x: 0, y: 0, z: 0 };
+  private velEpoch = -1;
   private slideState: { dir: Vec2; t: number; phase: 'slide' | 'down' | 'rise' } | null = null;
 
   constructor(world: RAPIER.World, profile: PlayerProfile, x: number, z: number, heading: number) {
@@ -78,17 +83,17 @@ export class PlayerBody {
   }
 
   position(): Vec2 {
-    const t = this.body.translation();
+    const t = this.translation();
     return { x: t.x, z: t.z };
   }
 
   velocity(): Vec2 {
-    const v = this.body.linvel();
+    const v = this.linvel();
     return { x: v.x, z: v.z };
   }
 
   speed(): number {
-    const v = this.body.linvel();
+    const v = this.linvel();
     return Math.hypot(v.x, v.z);
   }
 
@@ -104,8 +109,8 @@ export class PlayerBody {
   drive(cmd: BodyCommand, dt: number, effort = 1): void {
     if (this.slideState) { this.slideStep(dt); return; }
     const L = this.limits;
-    const p = this.body.translation();
-    const v = this.body.linvel();
+    const p = this.translation();
+    const v = this.linvel();
     const dx = cmd.target.x - p.x, dz = cmd.target.z - p.z;
     const distance = Math.hypot(dx, dz);
     const arrive = Math.sqrt(2 * L.maxBrake * 0.75 * Math.max(0, distance - 0.1));
@@ -131,7 +136,7 @@ export class PlayerBody {
       const limit = L.accel0 * effort * dt;
       if (n > limit) { dvx *= limit / n; dvz *= limit / n; }
     }
-    this.body.applyImpulse({ x: dvx * this.mass, y: 0, z: dvz * this.mass }, true);
+    this.body.applyImpulse({ x: dvx * this.mass, y: 0, z: dvz * this.mass }, true); this.velEpoch = -1;
 
     let wanted = this.heading;
     if (cmd.face) {
@@ -152,7 +157,7 @@ export class PlayerBody {
   startSlide(dir: Vec2, speed: number): void {
     const n = Math.hypot(dir.x, dir.z) || 1, d = { x: dir.x / n, z: dir.z / n };
     const v = Math.min(speed, this.limits.maxSpeed);
-    this.body.setLinvel({ x: d.x * v, y: 0, z: d.z * v }, true);
+    this.body.setLinvel({ x: d.x * v, y: 0, z: d.z * v }, true); this.velEpoch = -1;
     this.heading = Math.atan2(d.x, d.z);
     // Capsule axis (local Y) turned onto the slide direction: 90° about the horizontal axis across it.
     const s = Math.SQRT1_2;
@@ -191,10 +196,10 @@ export class PlayerBody {
   private slideStep(dt: number): void {
     const s = this.slideState!;
     s.t += dt;
-    const v = this.body.linvel();
+    const v = this.linvel();
     const speed = Math.hypot(v.x, v.z);
     const k = speed > 1e-3 ? Math.max(0, speed - SLIDE.decel * dt) / speed : 0;
-    this.body.applyImpulse({ x: (v.x * k - v.x) * this.mass, y: 0, z: (v.z * k - v.z) * this.mass }, true);
+    this.body.applyImpulse({ x: (v.x * k - v.x) * this.mass, y: 0, z: (v.z * k - v.z) * this.mass }, true); this.velEpoch = -1;
     if (s.phase === 'slide' && (speed < 0.5 || s.t > SLIDE.maxTime)) { s.phase = 'down'; s.t = 0; }
     else if (s.phase === 'down' && s.t > SLIDE.down) { this.standUp(); s.phase = 'rise'; s.t = 0; }
     else if (s.phase === 'rise' && s.t > SLIDE.rise) this.slideState = null;
@@ -207,11 +212,39 @@ export class PlayerBody {
     this.collider.setTranslationWrtParent({ x: 0, y: 0, z: 0 });
   }
 
+  /** The body's position, read from Rapier at most once per physics step (see physicsClock). Do not modify it. */
+  translation(): Readonly<Vec3> {
+    if (this.posEpoch !== physicsClock.epoch) {
+      const t = this.body.translation();
+      this.pos.x = t.x; this.pos.y = t.y; this.pos.z = t.z;
+      this.posEpoch = physicsClock.epoch;
+    }
+    return this.pos;
+  }
+
+  /**
+   * The body's velocity, read at most once per physics step unless it is changed in between: every write to the
+   * velocity (impulses, setLinvel – also from legs, head and hands) must call `velocityChanged()`. Do not modify it.
+   */
+  linvel(): Readonly<Vec3> {
+    if (this.velEpoch !== physicsClock.epoch) {
+      const v = this.body.linvel();
+      this.vel.x = v.x; this.vel.y = v.y; this.vel.z = v.z;
+      this.velEpoch = physicsClock.epoch;
+    }
+    return this.vel;
+  }
+
+  velocityChanged(): void {
+    this.velEpoch = -1;
+  }
+
   /** Used only by the referee/engine to line players up while the ball is dead (kickoff set-up, reset). */
   place(x: number, z: number, heading: number): void {
     if (this.slideState) { this.standUp(); this.slideState = null; }
+    this.posEpoch = -1;
     this.body.setTranslation({ x, y: this.height / 2, z }, true);
-    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.velEpoch = -1;
     this.heading = heading;
   }
 }

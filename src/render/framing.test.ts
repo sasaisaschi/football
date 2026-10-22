@@ -41,3 +41,20 @@ describe('decision camera framing', () => {
     });
   }
 });
+
+describe('decision camera framing on a narrow screen', () => {
+  it('when not everything fits above the bottom panel, the ball and the acting player still do', () => {
+    // 800 × 900 with the panel over the lower 42 %: box defence with the shot line to the goal.
+    const aspect = 800 / 900, safe: SafeArea = { left: -0.92, right: 0.84, bottom: -0.05, top: 0.75 };
+    const points: Vec3[] = [{ x: -30.6, y: 0.11, z: 2 }, ...body(-35, 1), ...body(-31, 2), ...body(-51, 0), ...body(-22, -14), ...body(-40, 18), { x: -52.5, y: 1.2, z: 0 }];
+    const f = frameMoment(points, -1, aspect, FOV, safe);
+    expect(cameraAllowed(f.position)).toBe(true);
+    for (const p of points.slice(0, 3)) {
+      const s = projectWith(f, aspect, FOV, p);
+      expect(s.x).toBeGreaterThanOrEqual(safe.left);
+      expect(s.x).toBeLessThanOrEqual(safe.right);
+      expect(s.y).toBeGreaterThanOrEqual(safe.bottom);
+      expect(s.y).toBeLessThanOrEqual(safe.top);
+    }
+  });
+});

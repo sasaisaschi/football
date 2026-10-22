@@ -98,7 +98,7 @@ try {
   const seed = Number(process.env.CHECK_SEED ?? 7);
   // Without an explicit spacing the app scales it with the half length, as for a user.
   const cooldown = process.env.CHECK_COOLDOWN ? `&cooldown=${process.env.CHECK_COOLDOWN}` : full ? '' : '&cooldown=25';
-  await send('Page.navigate', { url: `http://localhost:${port}/?seed=${seed}&half=${half}${cooldown}&moments=${full ? 5 : 6}&timeout=${full ? 30 : 90}` });
+  await send('Page.navigate', { url: `http://localhost:${port}/?seed=${seed}&half=${half}${cooldown}&moments=${full ? 5 : 6}&timeout=${full ? 30 : 90}&memory=0` });
   const waitFor = async (expr, seconds) => { for (let i = 0; i < seconds * 4; i++) { const v = await evaluate(expr); if (v) return v; await sleep(250); } return null; };
   report.checks.renderer = await evaluate("(()=>{const g=document.createElement('canvas').getContext('webgl2');const d=g&&g.getExtension('WEBGL_debug_renderer_info');return d?g.getParameter(d.UNMASKED_RENDERER_WEBGL):'unknown'})()");
   const startVisible = await waitFor("!!document.querySelector('.start-go')", 30);

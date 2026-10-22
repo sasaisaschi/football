@@ -102,8 +102,8 @@ describe('orchestrator: open play', () => {
     while (e.phase !== 'full-time' && e.time < 600) {
       e.step();
       if (e.phase === 'decision' && e.moment) {
-        // The half-time talk and a penalty are outside the spacing (the talk also outside the half's quota).
-        if (e.moment.kind !== 'team-talk' && e.moment.kind !== 'penalty') times.push({ t: e.time, setPiece: e.moment.category === 'set-piece' });
+        // The coach's moments (half-time talk, substitutions) and a penalty are outside the spacing and the half's quota.
+        if (e.moment.category !== 'coach' && e.moment.kind !== 'penalty') times.push({ t: e.time, setPiece: e.moment.category === 'set-piece' });
         kinds.push({ kind: e.moment.kind, half: e.half });
         e.resolveMoment(e.moment.defaultOptionId, 'timeout');
       }

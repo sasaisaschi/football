@@ -61,6 +61,8 @@ export type PlayerProfile = {
   massKg: number;
   abilities: Abilities;
   traits: Traits;
+  /** In the starting eleven or on the bench at kick-off (a substitute keeps 'bench' after coming on). */
+  squad: 'starter' | 'bench';
 };
 
 export type TeamProfile = { id: TeamId; name: string; short: string; kit: string; shorts: string; keeperKit: string };
@@ -109,9 +111,19 @@ export type MovementAction =
   | { kind: 'mark'; target: number }
   | { kind: 'run-behind'; target: Vec2 }
   | { kind: 'recover'; target: Vec2 }
-  | { kind: 'tactical-foul'; target: number };
+  | { kind: 'tactical-foul'; target: number }
+  /** Keeper at a penalty: dive early to one side (−1 his left, +1 his right) or wait and react (0). */
+  | { kind: 'guess'; side: -1 | 0 | 1 };
 
 export type IntentSource = 'ai' | 'user';
+
+/**
+ * How a team defends a set piece, chosen in a decision moment; without one the players use their default (a wall of
+ * three at a direct free kick within range, their usual marking at a corner). Read by every player of that team.
+ */
+export type SetPiecePlan =
+  | { kind: 'wall'; size: 0 | 2 | 3 | 4 }
+  | { kind: 'corner-defence'; scheme: 'man' | 'zone' | 'counter' };
 
 export type PlayerIntent =
   | { type: 'ball'; action: BallAction; source: IntentSource; decidedAt: number }
@@ -121,7 +133,7 @@ export type MatchEventBase = { id: number; tick: number; time: number };
 export type MatchEvent = MatchEventBase &
   (
     | { type: 'kickoff'; team: TeamId; half: 1 | 2 }
-    | { type: 'swing'; player: number; action: BallAction['kind']; source: IntentSource }
+    | { type: 'swing'; player: number; action: BallAction['kind']; source: IntentSource; receiver?: number }
     | { type: 'touch'; player: number; part: 'boot' | 'head' | 'body' | 'hands'; ballSpeed: number; position: Vec3 }
     | { type: 'catch'; player: number; position: Vec3 }
     | { type: 'release'; player: number }
@@ -138,12 +150,15 @@ export type MatchEvent = MatchEventBase &
     | { type: 'moment'; momentId: number; team: TeamId; kind: MomentKind }
     | { type: 'decision'; momentId: number; optionId: string; chosenBy: DecisionSource }
     | { type: 'instruction'; team: TeamId; instruction: TeamInstruction; source: IntentSource }
+    /** Law 3: `on` replaces `off` and takes over his position (`role`). */
+    | { type: 'substitution'; team: TeamId; off: number; on: number; role: Role }
   );
 export type MatchEventType = MatchEvent['type'];
 
 export type MomentKind =
   | 'finish-or-pass' | 'take-on' | 'counter-attack' | 'counter-press' | 'breakaway-defence' | 'box-defence'
-  | 'throw-in' | 'corner' | 'free-kick' | 'penalty' | 'team-talk';
+  | 'throw-in' | 'corner' | 'free-kick' | 'penalty' | 'team-talk' | 'substitution'
+  | 'penalty-save' | 'free-kick-wall' | 'corner-defence';
 /** What kind of situation a moment is, for quotas, variety and presentation. */
 export type MomentCategory = 'attack' | 'transition' | 'defence' | 'set-piece' | 'coach';
 /** Who settled a decision: the user picking an option, the user handing it to the players, or the countdown. */
@@ -176,6 +191,8 @@ export type DecisionOption = {
     | { type: 'player'; player: number; intent: PlayerIntent }
     | { type: 'players'; orders: { player: number; intent: PlayerIntent }[] }
     | { type: 'team'; team: TeamId; instruction: TeamInstruction; seconds: number }
+    | { type: 'substitution'; team: TeamId; off: number; on: number }
+    | { type: 'set-piece'; team: TeamId; plan: SetPiecePlan }
     | { type: 'none' };
   /** Rough, honest outlook from the current state; never a promise of the outcome. */
   outlook: string;

@@ -95,17 +95,24 @@ const smooth = (t: number) => t * t * (3 - 2 * t);
 
 export class Legs {
   readonly boots: [Boot, Boot];
+  /**
+   * Set by the physics world: are the boot colliders in the broad phase (player near the ball)? While they are not,
+   * the swing still advances every substep but the boots are only placed for the end of the tick, where the picture
+   * and the next tick read them; no collider can feel the substeps in between.
+   */
+  collidersOn = true;
+  private placeNow = true;
   readonly hipHeight: number;
   readonly hipOffset = 0.11;
   readonly legLength: number;
   swing: { plan: StrikePlan; phase: Phase; t: number; from: Vec3 } | null = null;
 
-  constructor(world: RAPIER.World, private readonly owner: PlayerBody) {
+  constructor(world: RAPIER.World, readonly owner: PlayerBody) {
     this.hipHeight = owner.height * 0.51;
     this.legLength = owner.height * 0.53;
     const make = (side: Side): Boot => {
       const rel = this.rest(side);
-      const p = owner.body.translation();
+      const p = owner.translation();
       const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(p.x + rel.x, rel.y, p.z + rel.z));
       const collider = world.createCollider(
         RAPIER.ColliderDesc.capsule(BOOT.halfLength, BOOT.radius)
@@ -124,7 +131,7 @@ export class Legs {
   rest(side: Side): Vec3 {
     const f = this.owner.facing();
     const s = side === 1 ? 1 : -1;
-    const lift = Math.max(0, this.owner.body.translation().y - this.owner.height / 2);
+    const lift = Math.max(0, this.owner.translation().y - this.owner.height / 2);
     return { x: -f.z * s * this.hipOffset, y: BOOT.radius + lift, z: f.x * s * this.hipOffset };
   }
 
@@ -136,7 +143,7 @@ export class Legs {
 
   /** Side whose boot is closer to a world point, judged across the facing direction. */
   sideTowards(x: number, z: number): Side {
-    const p = this.owner.body.translation();
+    const p = this.owner.translation();
     const f = this.owner.facing();
     const right = (x - p.x) * -f.z + (z - p.z) * f.x;
     return right >= 0 ? 1 : 0;
@@ -173,7 +180,7 @@ export class Legs {
    */
   plan(ball: RAPIER.RigidBody, req: StrikeRequest, err: StrikeError = NO_ERROR): StrikePlan | null {
     const tech = TECH[req.technique];
-    const bodyP = this.owner.body.translation(), bodyV = this.owner.body.linvel();
+    const bodyP = this.owner.translation(), bodyV = this.owner.linvel();
     const ballP = ball.translation(), ballV = ball.linvel();
     
     // Ball velocity the boot will meet (gravity acts on a ball in the air during the wind-up).
@@ -296,7 +303,7 @@ export class Legs {
   /** Moves both boots to rest under the hips immediately (after the body was placed while the ball was dead). */
   snap(): void {
     this.swing = null;
-    const p = this.owner.body.translation();
+    const p = this.owner.translation();
     for (const side of [0, 1] as const) {
       const boot = this.boots[side];
       boot.rel = this.rest(side);
@@ -316,7 +323,12 @@ export class Legs {
   }
 
   /** Advances the swing and stages the next kinematic boot poses. Call before every physics (sub)step. */
-  update(dt: number): void {
+  update(dt: number, lastSubstep = true): void {
+    // A player off the pitch (bench, substituted, sent off) has nothing to move.
+    if (!this.owner.body.isEnabled()) return;
+    this.placeNow = this.collidersOn || lastSubstep;
+    // Nothing to advance and nothing to place in between: resting boots far from the ball wait for the tick's end.
+    if (!this.placeNow && !this.swing && this.slideSide === null) return;
     if (this.slideSide !== null) {
       const dir = this.owner.slideDirection();
       if (dir && this.owner.down()) { this.stageSlide(dir, this.slideSide, dt); return; }
@@ -387,7 +399,8 @@ export class Legs {
    * rising lofted strike that met the ball higher than planned and flattened the launch by up to 0.05 rad.
    */
   private stage(boot: Boot, rel: Vec3, axis: Vec3, dt: number): void {
-    const p = this.owner.body.translation(), v = this.owner.body.linvel();
+    if (!this.placeNow) return;
+    const p = this.owner.translation(), v = this.owner.linvel();
     boot.body.setNextKinematicTranslation({ x: p.x + v.x * dt + rel.x, y: rel.y, z: p.z + v.z * dt + rel.z });
     boot.body.setNextKinematicRotation(rotationFromY(axis));
   }

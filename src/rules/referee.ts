@@ -12,7 +12,8 @@ import { BALL_SPEC, PITCH, attackSign, ballOut, goalCrossed, inPenaltyArea } fro
  */
 
 /** `deliberate`: the boot played the ball on purpose (a pass, dribble or first touch), not a block, deflection or poke. */
-export type Touch = { player: number; team: TeamId; part: 'boot' | 'head' | 'body' | 'hands'; time: number; position: Vec3; deliberate?: boolean };
+/** `kicked`: the boot met the ball in a swing (false for a resting boot the ball merely touched); undefined counts as kicked. */
+export type Touch = { player: number; team: TeamId; part: 'boot' | 'head' | 'body' | 'hands'; time: number; position: Vec3; deliberate?: boolean; kicked?: boolean };
 export type Decision =
   | { type: 'goal'; team: TeamId; scorer: number | null; ownGoal: boolean }
   | { type: 'restart'; kind: RestartKind; team: TeamId; spot: Vec2; reason: 'out' | 'offside' | 'foul' | 'handball' | 'back-pass' }
@@ -57,7 +58,10 @@ export class Referee {
   /** Restart that the next touch by `team` puts into play. */
   pendingRestart: { kind: RestartKind; team: TeamId } | null = { kind: 'kickoff', team: 0 };
   readonly yellow = new Set<number>();
+  /** Players not (or no longer) on the pitch: sent off, substituted, or on the bench. */
   readonly sentOff = new Set<number>();
+  /** Red cards (also a second yellow); a subset of `sentOff`. */
+  readonly redCards = new Set<number>();
   /** Last ball contact per player, for "played the ball first" when judging challenges. */
   private readonly lastBallContact = new Map<number, number>();
   /** Set when a keeper released the ball; he may not handle it again until someone else touches it. */
@@ -94,6 +98,9 @@ export class Referee {
       if (this.pendingRestart.team !== touch.team) return out;
       // A throw-in is taken only by throwing: a foot or body that touches the ball before does not restart play.
       if (throwIn && touch.part !== 'hands') return out;
+      // Every other restart is a kick (Laws 8, 13, 14, 16, 17): a body or head bumping into the placed ball does not
+      // take it (the referee puts the ball back if it rolls away).
+      if (!throwIn && (touch.part !== 'boot' || touch.kicked === false)) return out;
       const kind = this.pendingRestart.kind;
       this.pendingRestart = null;
       if (kind === 'throw-in') this.throwInEntering = { team: touch.team, spot: { x: touch.position.x, z: Math.sign(touch.position.z) * (PITCH.halfWidth - BALL_SPEC.radius) } };
@@ -185,7 +192,7 @@ export class Referee {
     else if (tactical || (heading && toGoal < 45)) { card = card === 'none' ? 'yellow' : card; reason = tactical ? 'taktisches Foul' : 'Unterbinden eines aussichtsreichen Angriffs'; }
     if (card === 'yellow' && this.yellow.has(offender)) card = 'red';
     if (card === 'yellow') this.yellow.add(offender);
-    if (card === 'red') this.sentOff.add(offender);
+    if (card === 'red') { this.sentOff.add(offender); this.redCards.add(offender); }
     // Advantage: play on when the fouled team keeps the ball in the attacking half and no red card is due.
     const advantage = !penalty && card !== 'red' && this.lastTouch?.team === victimTeam && attackDir * ball.x > 10;
     return { type: 'foul', offender, victim, spot: { ...vs.pos }, penalty, card, reason, advantage };

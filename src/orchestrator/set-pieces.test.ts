@@ -88,10 +88,15 @@ describe('orchestrator: set pieces stop play before they are taken', () => {
     const { moment } = throwIn();
     for (const option of moment!.options) {
       const e = throwIn();
-      const log = choose(e, option.id, 6);
       const taker = moment!.focusPlayer;
-      expect(log.filter(ev => ev.type === 'in-play')).toHaveLength(1);
-      expect(log.filter(ev => ev.type === 'restart')).toHaveLength(0);
+      const log = choose(e, option.id, 6);
+      // Exactly one restart of play for this throw-in (up to whatever stoppage open play brings next).
+      const nextStop = log.findIndex(ev => ev.type === 'restart');
+      const untilNext = nextStop < 0 ? log : log.slice(0, nextStop);
+      expect(untilNext.filter(ev => ev.type === 'in-play')).toEqual([expect.objectContaining({ restart: 'throw-in', taker })]);
+      // Never the same throw-in again (Law 15 retake loop); a later, different restart may follow from open play.
+      const spot = e.events.find(ev => ev.type === 'restart')!;
+      expect(log.filter(ev => ev.type === 'restart' && spot.type === 'restart' && ev.restart === 'throw-in' && ev.team === spot.team && Math.hypot(ev.position.x - spot.position.x, ev.position.z - spot.position.z) < 1)).toHaveLength(0);
       expect(log.find(ev => ev.type === 'swing')).toMatchObject({ player: taker, action: 'throw', source: 'user' });
       expect(log.find(ev => ev.type === 'touch')).toMatchObject({ player: taker, part: 'hands' });
     }
@@ -142,12 +147,13 @@ describe('orchestrator: set pieces stop play before they are taken', () => {
     expect(stoppedCalls).toBe(1);
   });
 
-  it('a direct free kick near goal offers a shot; an indirect one (offside) does not', () => {
-    const fk = (direct: boolean) => {
+  it('a direct free kick offers a shot when the lane is open; not behind a wall, and never when indirect', () => {
+    const fk = (direct: boolean, defendersNear: boolean) => {
       const e = new MatchEngine({ seed: 6, halfMinutes: 45 });
+      const back = defendersNear ? { rcb: { x: 44, z: -3 }, lcb: { x: 44, z: 5 } } : { rcb: { x: 12, z: -20 }, lcb: { x: 12, z: 20 } };
       stageScenario(e, {
         [role(e, 0, 'ST')]: { x: 31, z: 2 }, [role(e, 0, 'LW')]: { x: 43, z: 12 }, [role(e, 0, 'RW')]: { x: 41, z: -12 }, [role(e, 0, 'CM')]: { x: 22, z: 0 }, [role(e, 0, 'LCM')]: { x: 25, z: 12 },
-        [role(e, 1, 'GK')]: { x: 51, z: 0 }, [role(e, 1, 'RCB')]: { x: 44, z: -3 }, [role(e, 1, 'LCB')]: { x: 44, z: 5 },
+        [role(e, 1, 'GK')]: { x: 51, z: 0 }, [role(e, 1, 'RCB')]: back.rcb, [role(e, 1, 'LCB')]: back.lcb,
       }, { x: 30.5, y: 0.11, z: 3 });
       const spot = { x: 30, z: 3 };
       if (direct) whistle(e, { type: 'foul', offender: role(e, 1, 'CM'), victim: role(e, 0, 'ST'), spot, penalty: false, card: 'none', reason: 'Foulspiel', advantage: false });
@@ -156,13 +162,17 @@ describe('orchestrator: set pieces stop play before they are taken', () => {
       runFor(e, 8);
       return e;
     };
-    const direct = fk(true);
-    expect(direct.moment?.kind).toBe('free-kick');
-    expect(direct.moment!.options.map(o => o.id)).toContain('fk-shot');
-    const log = choose(direct, 'fk-shot', 3);
+    // Defenders far away when the ball is placed: the lane is open.
+    const direct = fk(true, true);
+    const open_ = fk(true, false);
+    expect(open_.moment?.kind).toBe('free-kick');
+    expect(open_.moment!.options.map(o => o.id)).toContain('fk-shot');
+    const log = chooseAndTake(open_, 'fk-shot', 0.5, ev => ev.type === 'swing');
     expect(log.find(ev => ev.type === 'swing')).toMatchObject({ action: 'shot', source: 'user' });
-    // Offside here is awarded to team 0 because the offender is team 1's striker.
-    const indirect = fk(false);
+    // Defenders already lining up in front of the ball: a direct shot is too poor to be offered.
+    if (direct.moment) expect(direct.moment.options.map(o => o.id)).not.toContain('fk-shot');
+    // Offside is an indirect free kick: no shot, whatever the lane.
+    const indirect = fk(false, false);
     if (indirect.moment) expect(indirect.moment.options.map(o => o.id)).not.toContain('fk-shot');
   }, 60_000);
 

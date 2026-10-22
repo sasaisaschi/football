@@ -18,8 +18,13 @@ import { ConsequenceCard } from './ui/consequence';
 import { DecisionPanel } from './ui/decision-panel';
 import { Hud } from './ui/hud';
 import { showResult, type SessionMetrics } from './ui/result-screen';
+import type { AgentMemory } from './ai/agent-memory';
 
-export type AppOptions = { seed: number; halfMinutes: number; cooldown: number; maxPerHalf: number; timeoutSeconds: number; userTeam: TeamId; condense: boolean };
+/** `memory`: what the players remember from earlier matches; `saveMemory` keeps the updated memory after full time. */
+export type AppOptions = {
+  seed: number; halfMinutes: number; cooldown: number; maxPerHalf: number; timeoutSeconds: number; userTeam: TeamId; condense: boolean;
+  memory: AgentMemory | null; saveMemory: (m: AgentMemory) => void;
+};
 
 /** Wall seconds a status line stays. */
 const STATUS_SECONDS = 6;
@@ -62,7 +67,7 @@ export class MatchApp {
     private readonly audio: CrowdAudio,
     readonly options: AppOptions,
   ) {
-    this.client = new SimClient({ seed: options.seed, halfMinutes: options.halfMinutes, userTeam: options.userTeam, cooldown: options.cooldown, maxPerHalf: options.maxPerHalf, timeoutSeconds: options.timeoutSeconds });
+    this.client = new SimClient({ seed: options.seed, halfMinutes: options.halfMinutes, userTeam: options.userTeam, cooldown: options.cooldown, maxPerHalf: options.maxPerHalf, timeoutSeconds: options.timeoutSeconds, memory: options.memory ?? undefined });
     this.camera = new CameraDirector(cam);
     this.hud = new Hud(options.halfMinutes);
     this.panel = new DecisionPanel((id, by) => this.resolve(id, by), i => this.overlay.focus(i));
@@ -87,6 +92,11 @@ export class MatchApp {
     return app;
   }
 
+  /** May the picture be drawn at a reduced rate? Only while condensed play waits for the simulation. */
+  relaxedRendering(): boolean {
+    return this.playback.mode === 'condensed' && !this.panel.open && !this.finished;
+  }
+
   /** Read-only view for the browser check. */
   get debug() {
     return {
@@ -96,7 +106,8 @@ export class MatchApp {
     };
   }
 
-  frame(dt: number): void {
+  /** One animation frame; `draw` false: advance the pacing and events only, without posing the picture. */
+  frame(dt: number, draw = true): void {
     this.wall += dt;
     if (this.client.error) { this.hud.setStatus(`Simulationsfehler: ${this.client.error}`, this.wall, 3600); return; }
     if (this.client.produced < 0 || !this.consequence) return;
@@ -109,7 +120,7 @@ export class MatchApp {
     this.dispatchUpTo(this.playback.tick);
     const m = this.client.moment;
     if (this.playback.mode === 'held' && m && m.id !== this.openedMoment) this.openMoment(m);
-    this.draw(dt);
+    if (draw) this.draw(dt);
     this.panel.tick(this.wall);
     this.consequence.tick(this.wall);
     this.client.displayed(this.playback.tick, this.wall);
@@ -126,7 +137,7 @@ export class MatchApp {
     this.ball.update(ball, s.ball.rotation);
     // The decorative running cycle follows simulated time, but not faster than a sprint's cadence.
     const gaitDt = dt * Math.min(this.playback.speed, 3);
-    s.players.forEach((p, k) => this.figures[k].update(lerpPlayer(a.players[k], p, alpha), gaitDt));
+    s.players.forEach((p, k) => this.figures[k].update(lerpPlayer(a.players[k], p, alpha), gaitDt, ball));
     this.camera.condensed = this.playback.mode === 'condensed';
     this.camera.update({ ...s, ball: { ...s.ball, position: ball } }, this.wall, dt);
     this.overlay.update(this.wall);
@@ -163,6 +174,8 @@ export class MatchApp {
       if (s) this.hud.mark('goal', this.hud.elapsed(s), e.team, `Tor ${TEAMS[e.team].short}`);
     }
     if (e.type === 'moment' && s) { this.hud.mark('moment', this.hud.elapsed(s), e.team, 'Entscheidung'); this.metrics.moments++; }
+    // The substitute takes over the replaced player's position; the shared profiles follow the worker's.
+    if (e.type === 'substitution') this.profiles[e.on].role = e.role;
   }
 
   /** The picture has reached the frozen moment: panel, tactical markings and a camera that shows everything relevant. */
@@ -212,7 +225,11 @@ export class MatchApp {
     this.metrics.wallSeconds = this.wall;
     this.metrics.cpuSeconds = this.client.cpuMs / 1000;
     this.metrics.simSeconds = s.time;
-    showResult(this.host, s.score, this.consequence!.chronicle, this.metrics);
+    let saved: string | null = null;
+    if (this.client.memory) {
+      try { this.options.saveMemory(this.client.memory); } catch (err) { saved = `Spielergedächtnis nicht gespeichert: ${err instanceof Error ? err.message : String(err)}`; }
+    }
+    showResult(this.host, s.score, this.consequence!.chronicle, this.metrics, { before: this.options.memory, after: this.client.memory, profiles: this.profiles, team: this.options.userTeam, error: saved });
   }
 
   dispose(): void {

@@ -8,6 +8,8 @@ import type { Vec2, Vec3 } from './types';
  */
 export function stageScenario(e: MatchEngine, players: Record<number, Vec2>, ball: Vec3, velocity: Vec3 = { x: 0, y: 0, z: 0 }, park = true): void {
   e.profiles.forEach(p => {
+    // Substitutes stay on the bench; only the players on the pitch are lined up.
+    if (e.referee.sentOff.has(p.id)) return;
     const target = players[p.id] ?? (park ? { x: (p.team === 0 ? -1 : 1) * (2 + (p.id % 11) * 1.5), z: -30 + (p.id % 11) } : null);
     if (!target) return;
     const facing = Math.atan2(ball.x - target.x, ball.z - target.z);

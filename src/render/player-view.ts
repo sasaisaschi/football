@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { PlayerProfile, PlayerView, TeamProfile } from '../engine/types';
-import { bodyGeometry, bootGeometry, forearmGeometry, shinGeometry, thighGeometry, upperArmGeometry, type FigureColours } from './figure-geometry';
+import type { Vec3 } from '../engine/types';
+import { bodyGeometry, bootGeometry, forearmGeometry, headGeometry, NECK, shinGeometry, thighGeometry, upperArmGeometry, type FigureColours } from './figure-geometry';
 
 /**
  * Footballer figure (procedural geometry, see figure-geometry.ts). Both legs are solved with two-bone IK towards the
@@ -17,6 +18,8 @@ const CHEST_FRONT = 0.21;
 /** Most a header bends the trunk forward; the rest of the reach is neck and a step (rad). Up to 0.8 the players in a duel bowed like a scrum. */
 const HEADER_LEAN = 0.45;
 const trunk = new THREE.Quaternion(), euler = new THREE.Euler();
+/** Most a running turn banks the body; how far the hip drops on the standing leg in a strike; neck turn (rad, m). */
+const TURN_LEAN = 0.22, KICK_CROUCH = 0.05, NECK_YAW = 1.1;
 
 type Limb = { upper: THREE.Mesh; lower: THREE.Mesh; end: THREE.Mesh | null; l1: number; l2: number };
 
@@ -33,6 +36,10 @@ export class PlayerFigure {
   private readonly hip: number;
   private gait = Math.random() * 6;
   private readonly hipOffset = 0.105;
+  private readonly head: THREE.Mesh;
+  private lastHeading: number | null = null;
+  /** Smoothed sideways lean into a turn (rad). */
+  private turnLean = 0;
 
   constructor(readonly profile: PlayerProfile, team: TeamProfile) {
     const h = profile.heightM;
@@ -52,6 +59,8 @@ export class PlayerFigure {
       const m = new THREE.Mesh(geo, SHARED); m.castShadow = true; parent.add(m); return m;
     };
     mesh(bodyGeometry(h, this.hip, colours, keeper), this.body);
+    this.head = mesh(headGeometry(h, colours), this.body);
+    this.head.position.y = h * NECK;
     const legLen = h * 0.53;
     const leg = (): Limb => ({
       upper: mesh(thighGeometry(legLen * 0.5, colours), this.root),
@@ -86,11 +95,23 @@ export class PlayerFigure {
     this.root.add(this.body);
   }
 
-  /** Pose from an interpolated physics view. `dt` only drives the decorative running cycle. */
-  update(view: PlayerView, dt: number): void {
+  /**
+   * Pose from an interpolated physics view. `dt` only drives the decorative running cycle; `look` is the ball, which
+   * the head follows. Everything that touches the ball (boots, hands, forehead, chest) is placed where physics has it;
+   * the rest (stride, arm swing, lean, gaze) is presentation around it.
+   */
+  update(view: PlayerView, dt: number, look?: Vec3): void {
     this.root.visible = !view.sentOff;
     if (view.sentOff) return;
     const speed = Math.hypot(view.velocity.x, view.velocity.z);
+    // Lean into a turn: the faster he runs and turns, the more the body banks towards the inside.
+    if (this.lastHeading !== null && dt > 0) {
+      const turnRate = Math.atan2(Math.sin(view.heading - this.lastHeading), Math.cos(view.heading - this.lastHeading)) / dt;
+      const target = Math.max(-TURN_LEAN, Math.min(TURN_LEAN, turnRate * speed * 0.035));
+      this.turnLean += (target - this.turnLean) * Math.min(1, dt * 8);
+    }
+    this.lastHeading = view.heading;
+    const kicking = view.swingingBoot !== -1;
     // The capsule's height above standing is a jump: the whole figure leaves the ground with it.
     this.root.position.set(view.position.x, Math.max(0, view.position.y - this.profile.heightM / 2), view.position.z);
     this.root.rotation.set(0, view.heading, 0);
@@ -101,8 +122,11 @@ export class PlayerFigure {
     // Trunk posture: a rotation of the upper body about a pivot. Running lean and a keeper's dive turn about the
     // feet; header, chest control and sliding tackle about the hip, which stays on the legs (in a slide it sinks to
     // the turf). Shoulders and hanging arms turn with the trunk, so the figure stays in one piece.
-    let rx = Math.min(0.25, forward * 0.025), rz = -dive, pivot = 0;
-    const hipY = this.hip - (this.hip - SLIDE_HIP) * view.lying;
+    let rx = Math.min(0.25, forward * 0.025), rz = -dive + this.turnLean, pivot = 0;
+    // Running: the body rises and falls a little with each stride; striking the ball, the standing leg bends.
+    const bob = view.lying === 0 && speed > 1 ? Math.abs(Math.cos(this.gait)) * Math.min(0.035, speed * 0.005) : 0;
+    const hipY = this.hip - (this.hip - SLIDE_HIP) * view.lying - (kicking ? KICK_CROUCH : 0) + bob;
+    if (kicking && !view.upperBody && view.lying === 0) rx = Math.max(rx, 0.12);
     if (view.lying > 0) { rx = -SLIDE_LEAN * view.lying; rz = 0; pivot = this.hip; }
     if (view.upperBody) {
       // Bent so that forehead or chest is where the physical contact part is: towards the forehead for a header;
@@ -120,7 +144,7 @@ export class PlayerFigure {
     const pivotLocal = tmp.set(0, pivot, 0);
     this.body.quaternion.copy(trunk);
     this.body.position.copy(pivotLocal).sub(pivotLocal.clone().applyQuaternion(trunk));
-    if (view.lying > 0) this.body.position.y += hipY - this.hip;
+    this.body.position.y += hipY - this.hip;
     this.gait += dt * (2 + speed * 1.15);
     this.root.updateMatrixWorld(true);
     for (const side of [0, 1] as const) {
@@ -129,11 +153,11 @@ export class PlayerFigure {
       const foot = tmp2.set(view.boots[side].x, view.boots[side].y, view.boots[side].z);
       this.root.worldToLocal(foot);
       if (view.swingingBoot !== side && speed > 0.4 && view.lying === 0) {
-        // Visual stride only.
+        // Visual stride only: longer and with more knee lift the faster he runs; the trailing heel comes up.
         const phase = this.gait + (side ? Math.PI : 0);
-        const stride = Math.min(0.45, speed * 0.06);
+        const stride = Math.min(0.55, speed * 0.07);
         foot.z += Math.sin(phase) * stride;
-        foot.y += Math.max(0, Math.cos(phase)) * stride * 0.5;
+        foot.y += Math.max(0, Math.cos(phase)) * stride * 0.6 + Math.max(0, -Math.sin(phase)) * stride * 0.25;
       }
       solve(this.legs[side], hipLocal, foot, 1);
     }
@@ -146,12 +170,33 @@ export class PlayerFigure {
         handTarget = tmp2.set(view.hands.x, view.hands.y, view.hands.z);
         this.root.worldToLocal(handTarget);
         handTarget.x += -s * 0.08;
+      } else if (view.lying > 0) {
+        // On the ground in a slide: the arms go back and out for support.
+        handTarget = tmp2.set(-s * 0.42, shoulderY - 0.45, -0.25).applyQuaternion(trunk).add(this.body.position);
+      } else if (kicking) {
+        // Balance in a strike: the arm opposite the kicking leg swings out and forward, the other one out and back.
+        const opposite = (view.swingingBoot === 0) === (side === 1);
+        handTarget = tmp2.set(-s * 0.5, shoulderY - 0.32, opposite ? 0.22 : -0.15).applyQuaternion(trunk).add(this.body.position);
       } else {
-        const swing = Math.sin(this.gait + (side ? 0 : Math.PI)) * Math.min(0.35, speed * 0.05);
-        handTarget = tmp2.set(-s * 0.27, shoulderY - 0.62, swing + 0.05).applyQuaternion(trunk).add(this.body.position);
+        // Running arms swing against the legs, more and with a bent elbow at speed.
+        const swing = Math.sin(this.gait + (side ? 0 : Math.PI)) * Math.min(0.42, speed * 0.06);
+        const lift = Math.min(0.18, speed * 0.025) * Math.max(0, Math.sin(this.gait + (side ? 0 : Math.PI)));
+        handTarget = tmp2.set(-s * 0.27, shoulderY - 0.62 + lift, swing + 0.05).applyQuaternion(trunk).add(this.body.position);
       }
       solve(this.arms[side], shoulder, handTarget, -1);
     }
+    this.lookAt(look);
+  }
+
+  /** The head turns (and tilts) towards the ball within what a neck can do; otherwise it looks ahead. */
+  private lookAt(look: Vec3 | undefined): void {
+    if (!look) { this.head.rotation.set(0, 0, 0); return; }
+    this.head.updateMatrixWorld(true);
+    const p = this.body.worldToLocal(tmp.set(look.x, look.y, look.z));
+    const dx = p.x - this.head.position.x, dy = p.y - this.head.position.y, dz = p.z - this.head.position.z;
+    const yaw = Math.max(-NECK_YAW, Math.min(NECK_YAW, Math.atan2(dx, dz)));
+    const pitch = Math.max(-0.5, Math.min(0.35, -Math.atan2(dy, Math.hypot(dx, dz)) * 0.7));
+    this.head.rotation.set(pitch, yaw, 0, 'YXZ');
   }
 }
 

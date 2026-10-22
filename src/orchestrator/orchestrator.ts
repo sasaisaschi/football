@@ -1,6 +1,7 @@
 import type { MatchEngine } from '../engine/match-engine';
 import type { DecisionMoment, MomentCategory, MomentKind, TeamId } from '../engine/types';
-import { teamTalkMoment } from './coach';
+import { substitutionMoment, teamTalkMoment } from './coach';
+import { cornerDefenceMoment, freeKickWallMoment, penaltySaveMoment } from './defence-set-pieces';
 import type { MomentDraft } from './common';
 import { attackingMoment, boxDefenceMoment, breakawayMoment, transitionMoment, type PossessionTrack } from './open-play';
 import { cornerMoment, freeKickMoment, penaltyMoment, throwInMoment } from './set-pieces';
@@ -13,7 +14,9 @@ const CHECK_INTERVAL = 0.1;
  */
 const CATEGORY_LIMIT: Record<MomentCategory, number> = { attack: 3, transition: 1, defence: 2, 'set-piece': 2, coach: 1 };
 /** Set pieces of one kind per half: throw-ins and free kicks are frequent, a corner or a penalty is not. */
-const KIND_LIMIT: Partial<Record<MomentKind, number>> = { 'throw-in': 1, 'free-kick': 1 };
+const KIND_LIMIT: Partial<Record<MomentKind, number>> = { 'throw-in': 1, 'free-kick': 1, 'free-kick-wall': 1, 'corner-defence': 1 };
+/** Substitution moments per match, from this share of the second half on, at least this share of a half apart. */
+const SUB_MOMENTS = 2, SUB_FROM = 0.25, SUB_SPACING = 0.2;
 /** Categories each half keeps room for until late in the half, so that no fixed quota crowds the others out. */
 const RESERVED: readonly MomentCategory[] = ['attack', 'set-piece', 'defence'];
 /** From this share of the half on, reserved room is given up again (a category that did not come by then rarely will). */
@@ -55,6 +58,8 @@ export class Orchestrator {
   private lastTouchTeam: TeamId | null = null;
   private readonly track: PossessionTrack = { possessionChangedAt: -Infinity, lostSpell: 0 };
   private teamTalkDone = false;
+  private subMoments = 0;
+  private lastSubMomentAt = -Infinity;
 
   constructor(readonly config: OrchestratorConfig = DEFAULT_ORCHESTRATOR) {}
 
@@ -94,13 +99,36 @@ export class Orchestrator {
       // The half-time talk is the coach's own moment: outside the half's quota and cooldown.
       return talk ? this.open(e, talk, false) : null;
     }
-    // A penalty is rare and always decisive enough: only the overall limit applies, not the spacing.
     const penalty = r.kind === 'penalty';
+    if (!penalty) {
+      const sub = this.substitution(e);
+      if (sub) return sub;
+    }
+    // A penalty is rare and always decisive enough: only the overall limit applies, not the spacing.
     if (!this.mayOpen(e, penalty ? 0 : SET_PIECE_SPACING)) return null;
-    const kind: MomentKind | null = r.kind === 'throw-in' ? 'throw-in' : r.kind === 'corner' ? 'corner' : r.kind === 'free-kick' ? 'free-kick' : penalty ? 'penalty' : null;
+    const own = r.team === team;
+    const kind: MomentKind | null = own
+      ? (r.kind === 'throw-in' ? 'throw-in' : r.kind === 'corner' ? 'corner' : r.kind === 'free-kick' ? 'free-kick' : penalty ? 'penalty' : null)
+      : (penalty ? 'penalty-save' : r.kind === 'free-kick' ? 'free-kick-wall' : r.kind === 'corner' ? 'corner-defence' : null);
     if (!kind || !this.allowed(e, 'set-piece', kind)) return null;
-    const draft = kind === 'throw-in' ? throwInMoment(e, team) : kind === 'corner' ? cornerMoment(e, team) : kind === 'free-kick' ? freeKickMoment(e, team) : penaltyMoment(e, team);
+    const recognise: Partial<Record<MomentKind, (e: MatchEngine, team: TeamId) => MomentDraft | null>> = {
+      'throw-in': throwInMoment, corner: cornerMoment, 'free-kick': freeKickMoment, penalty: penaltyMoment,
+      'penalty-save': penaltySaveMoment, 'free-kick-wall': freeKickWallMoment, 'corner-defence': cornerDefenceMoment,
+    };
+    const draft = recognise[kind]!(e, team);
     return draft ? this.open(e, draft, true) : null;
+  }
+
+  /** A substitution at a stoppage in the second half: the coach's moment, outside the half's quota. */
+  private substitution(e: MatchEngine): DecisionMoment | null {
+    const halfSeconds = e.config.halfMinutes * 60;
+    if (e.half !== 2 || this.subMoments >= SUB_MOMENTS || e.clockSeconds() < SUB_FROM * halfSeconds) return null;
+    if (e.time - this.lastSubMomentAt < SUB_SPACING * halfSeconds || e.time - this.lastMomentAt < this.config.cooldown * SET_PIECE_SPACING) return null;
+    const draft = substitutionMoment(e, this.config.userTeam);
+    if (!draft) return null;
+    this.subMoments++;
+    this.lastSubMomentAt = e.time;
+    return this.open(e, draft, false);
   }
 
   /** Spacing (this share of the cooldown), overall limit and pacing over the half: no more than about the share of the half already played. */

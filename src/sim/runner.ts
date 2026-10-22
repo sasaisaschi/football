@@ -1,9 +1,10 @@
 import { MatchEngine } from '../engine/match-engine';
 import type { DecisionMoment, DecisionSource, MatchEvent, PlayerProfile, TeamId } from '../engine/types';
 import { Orchestrator } from '../orchestrator/orchestrator';
-import { encodeFrame, frameSize } from './frame-codec';
+import { emptyMemory, updateMemory, type AgentMemory } from '../ai/agent-memory';
+import { encodeEngineFrame, encodeFrame, frameSize } from './frame-codec';
 
-export type RunnerConfig = { seed: number; halfMinutes: number; userTeam: TeamId; cooldown: number; maxPerHalf: number; timeoutSeconds: number };
+export type RunnerConfig = { seed: number; halfMinutes: number; userTeam: TeamId; cooldown: number; maxPerHalf: number; timeoutSeconds: number; memory?: AgentMemory };
 
 /** Ticks simulated since the last batch: frames (one per tick, in order), the events they produced and where the match stands. */
 export type Batch = {
@@ -16,6 +17,8 @@ export type Batch = {
   moment: DecisionMoment | null;
   minds: { confidence: number; recent: { action: 'pass' | 'dribble' | 'shot'; ok: boolean }[] }[];
   done: boolean;
+  /** At full time: what the players take into the next match. */
+  memory?: AgentMemory;
   /** Milliseconds of computing for this batch. */
   cpuMs: number;
 };
@@ -32,7 +35,7 @@ export class SimRunner {
   private events: MatchEvent[] = [];
 
   constructor(readonly config: RunnerConfig) {
-    this.engine = new MatchEngine({ seed: config.seed, halfMinutes: config.halfMinutes });
+    this.engine = new MatchEngine({ seed: config.seed, halfMinutes: config.halfMinutes, memory: config.memory });
     this.orchestrator = new Orchestrator({ userTeam: config.userTeam, cooldown: config.cooldown, maxPerHalf: config.maxPerHalf, timeoutSeconds: config.timeoutSeconds });
     this.engine.director = this.orchestrator.attach();
     this.engine.onEvent(e => this.events.push(e));
@@ -62,7 +65,7 @@ export class SimRunner {
       e.step();
       // A step that opens a moment stops before time moves on: there is no new frame.
       if (e.tick === before) continue;
-      encodeFrame(e.snapshot(), frames, n * this.frameFloats);
+      encodeEngineFrame(e, frames, n * this.frameFloats);
       n++;
     }
     return this.batch(first, n, n === maxTicks ? frames : frames.slice(0, n * this.frameFloats), performance.now() - t0);
@@ -81,6 +84,7 @@ export class SimRunner {
       moment: e.phase === 'decision' ? e.moment : null,
       minds: e.minds.map(m => ({ confidence: m.confidence, recent: m.recent.map(r => ({ action: r.action, ok: r.ok })) })),
       done: e.phase === 'full-time',
+      ...(e.phase === 'full-time' ? { memory: updateMemory(this.config.memory ?? emptyMemory(7), e.minds, e.profiles) } : {}),
     };
   }
 }

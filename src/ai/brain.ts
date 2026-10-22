@@ -1,5 +1,5 @@
 import type RAPIER from '@dimforge/rapier3d-simd-compat';
-import type { BallAction, PlayerIntent, PlayerProfile, RestartKind, TeamInstruction, Vec2, Vec3 } from '../engine/types';
+import type { BallAction, PlayerIntent, PlayerProfile, RestartKind, SetPiecePlan, TeamInstruction, Vec2, Vec3 } from '../engine/types';
 import type { Rng } from '../engine/rng';
 import type { BodyCommand, PlayerBody } from '../physics/body';
 import type { Legs } from '../physics/legs';
@@ -9,7 +9,7 @@ import { approach, trySwing } from './execution';
 import { blockLane, bodyInLine, carrierHasBall, jockey, pressCarrier } from './box-orders';
 import { tackle, tackleApproach } from './challenge';
 import { firstTouch } from './first-touch';
-import { aerialIntercept, headerIntercept, isAirborne } from './aerial';
+import { aerialBefore, aerialIntercept, headerIntercept, isAirborne } from './aerial';
 import { chooseHeader, CONTESTED } from './heading';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { offBallCommand } from './off-ball';
@@ -30,7 +30,7 @@ export type BrainContext = {
   ball: RAPIER.RigidBody;
   profiles: PlayerProfile[];
   /** Set while the ball is dead: who takes the restart and where everybody must stay away from. */
-  restart: { kind: RestartKind; team: 0 | 1; taker: number; spot: Vec2; minDistance: number; ownHalfOnly: boolean; ready: boolean; held: boolean } | null;
+  restart: { kind: RestartKind; team: 0 | 1; taker: number; spot: Vec2; minDistance: number; ownHalfOnly: boolean; ready: boolean; held: boolean; direct?: boolean; plan?: SetPiecePlan } | null;
   /** May the player use his hands? (keeper in own area, ball in play, not a back-pass) */
   handsAllowed: boolean;
   /** Keeper holding the ball in his hands, if any. Nobody may challenge him (Law 12). */
@@ -51,8 +51,34 @@ const HEADER_SET = 0.35;
 const JOCKEY_CLOSE = 1.5;
 /** Sideways distance from the carrier at which a recovering defender runs alongside him (m). */
 const SHOULDER_GAP = 1.1;
+/** Lowest chance (xG) from which a player strikes a direct free kick at goal himself. */
+const DIRECT_FREE_KICK_XG = 0.05;
 /** Extra pace of the lunge into a sliding tackle over the run (m/s). */
 const SLIDE_LUNGE = 0.5;
+
+/**
+ * A rolling ball's believed path, sampled every 0.1 s for 4 s: the same for every player a brain asks about, so it is
+ * worked out once per ball state (asked for oneself and each team-mate in turn, it was ≈ 10 % of a tick, profiled).
+ */
+const GROUND_SAMPLES = 41;
+const ground = { key: [NaN, NaN, NaN, NaN], n: 0, t: new Float64Array(GROUND_SAMPLES + 1), x: new Float64Array(GROUND_SAMPLES + 1), z: new Float64Array(GROUND_SAMPLES + 1) };
+
+function groundPath(pos: Vec2 | Vec3, vel: Vec2 | Vec3): typeof ground {
+  const k0 = ground.key;
+  if (k0[0] === pos.x && k0[1] === pos.z && k0[2] === vel.x && k0[3] === vel.z) return ground;
+  ground.key = [pos.x, pos.z, vel.x, vel.z];
+  ground.n = 0;
+  const speed = Math.max(0.01, Math.hypot(vel.x, vel.z));
+  const stop = speed / BALL_DAMPING;
+  for (let t = 0; t <= 4; t += 0.1) {
+    // Position along the ball's path after t seconds of uniform deceleration (it does not roll backwards).
+    const tt = Math.min(t, stop);
+    const k = tt - (0.5 * BALL_DAMPING * tt * tt) / speed;
+    const i = ground.n++;
+    ground.t[i] = t; ground.x[i] = pos.x + vel.x * k; ground.z[i] = pos.z + vel.z * k;
+  }
+  return ground;
+}
 
 /**
  * One autonomous footballer. Decides from its own perception a few times per second: win the ball, play it,
@@ -100,16 +126,25 @@ export class PlayerBrain {
       const aerial = aerialIntercept(p, vmax, ball.pos, ball.vel, ball.spin);
       if (aerial) return aerial;
     }
-    const speed = Math.max(0.01, Math.hypot(ball.vel.x, ball.vel.z));
-    const stop = speed / BALL_DAMPING;
-    for (let t = 0; t <= 4; t += 0.1) {
-      // Position along the ball's path after t seconds of uniform deceleration (it does not roll backwards).
-      const tt = Math.min(t, stop);
-      const k = tt - (0.5 * BALL_DAMPING * tt * tt) / speed;
-      const at = { x: ball.pos.x + ball.vel.x * k, z: ball.pos.z + ball.vel.z * k };
-      if (Math.hypot(at.x - p.x, at.z - p.z) / vmax + 0.3 <= t) return { t, at };
+    const path = groundPath(ball.pos, ball.vel);
+    for (let i = 0; i < path.n; i++) {
+      if (Math.hypot(path.x[i] - p.x, path.z[i] - p.z) / vmax + 0.3 <= path.t[i]) return { t: path.t[i], at: { x: path.x[i], z: path.z[i] } };
     }
     return { t: 4 + Math.hypot(ball.pos.x - p.x, ball.pos.z - p.z) / vmax, at: ball.pos };
+  }
+
+  /**
+   * Is interceptTime(p, vmax, ball).t below `limit`? Exactly the same answer, but the search stops at `limit`: asked
+   * for every team-mate of every player in every tick, the full search was ≈ 10 % of a tick (profiled).
+   */
+  static arrivesBefore(p: Vec2, vmax: number, ball: { pos: Vec2 | Vec3; vel: Vec2 | Vec3; spin?: Vec3 }, limit: number): boolean {
+    if ('y' in ball.pos && 'y' in ball.vel && isAirborne(ball.pos, ball.vel)) return aerialBefore(p, vmax, ball.pos, ball.vel, ball.spin ?? { x: 0, y: 0, z: 0 }, limit);
+    const path = groundPath(ball.pos, ball.vel);
+    for (let i = 0; i < path.n; i++) {
+      if (path.t[i] >= limit) return false;
+      if (Math.hypot(path.x[i] - p.x, path.z[i] - p.z) / vmax + 0.3 <= path.t[i]) return true;
+    }
+    return 4 + Math.hypot(ball.pos.x - p.x, ball.pos.z - p.z) / vmax < limit;
   }
 
   /** Do I believe I am my team's quickest player to the ball? Decentralised, so two may go, or none. */
@@ -124,7 +159,7 @@ export class PlayerBrain {
       if (p.team !== this.profile.team || p.id === this.profile.id) continue;
       const pos = this.perception.playerNow(p.id, ctx.now);
       if (!pos) continue;
-      if (PlayerBrain.interceptTime(pos, 8.4, ball).t < mine - 0.05) return false;
+      if (PlayerBrain.arrivesBefore(pos, 8.4, ball, mine - 0.05)) return false;
     }
     return true;
   }
@@ -230,6 +265,9 @@ export class PlayerBrain {
         return { command: { target: action.target, speed: max, face: ball.pos }, effort: 1, swing: null };
       case 'hold-shape':
         return { command: this.steerAround(offBallCommand(this, ctx, ball), ctx), effort: 1, swing: null };
+      case 'guess':
+        // The keeper's penalty reaction is carried out by his goalkeeping (keeper.ts), not as a run.
+        return null;
     }
   }
 
@@ -479,8 +517,10 @@ export class PlayerBrain {
     // A penalty is shot (Law 14; before, the restart filter below made takers pass it). Other restarts are played,
     // not carried; a keeper with the ball at his feet distributes it instead of dribbling.
     const penaltyShots = ctx.restart?.kind === 'penalty' ? options.filter(o => o.kind === 'shot') : [];
+    // A direct free kick within range may be struck at goal (Law 13), as the user can choose too; other restarts are played.
+    const directShot = (o: EvaluatedOption) => o.kind === 'shot' && ctx.restart?.kind === 'free-kick' && !!ctx.restart.direct && o.success >= DIRECT_FREE_KICK_XG;
     if (penaltyShots.length) options = penaltyShots;
-    else if (ctx.restart || this.profile.role === 'GK') options = options.filter(o => o.kind === 'pass' || o.kind === 'clear');
+    else if (ctx.restart || this.profile.role === 'GK') options = options.filter(o => o.kind === 'pass' || o.kind === 'clear' || directShot(o));
     this.lastOptions = options;
     // Option values are expected-threat differences of a few thousandths in midfield; misjudgement has to be
     // on that scale, or it would swamp the evaluation and turn every choice into a coin toss.
@@ -491,7 +531,8 @@ export class PlayerBrain {
       // How much of it a player takes on depends on his discipline; his character and form add their own lean.
       const forward = o.kind === 'shot' || (o.kind === 'pass' && 'aim' in o.action && ctx.sign * (o.action.aim.x - pic.ball.pos.x) > 8) || o.kind === 'dribble';
       const riskBonus = (ctx.instruction.risk - 0.5) * (forward ? 0.01 : -0.005) * this.mind.compliance();
-      const score = o.value + riskBonus + this.mind.bias(o.kind) + this.rng.gauss() * noise;
+      const trust = o.kind === 'pass' && o.target !== undefined ? this.mind.bondBias(o.target) : 0;
+      const score = o.value + riskBonus + this.mind.bias(o.kind) + trust + this.rng.gauss() * noise;
       if (score > bestScore) { bestScore = score; best = o; }
     }
     return best.action;

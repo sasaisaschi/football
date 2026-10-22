@@ -24,8 +24,11 @@ function paint(g: THREE.BufferGeometry, colour: (p: THREE.Vector3) => THREE.Colo
 
 const solid = (g: THREE.BufferGeometry, c: THREE.Color) => paint(g, () => c);
 
-/** A capsule from the origin down to −length, tapering from r1 to r2 (limb segment hanging from its joint). */
-function limb(length: number, r1: number, r2: number): THREE.BufferGeometry {
+/**
+ * A capsule from the origin down to −length, tapering from r1 to r2 (limb segment hanging from its joint), with a
+ * muscle bulge of `bulge` metres peaking at `peak` of the length (calf, thigh, forearm).
+ */
+function limb(length: number, r1: number, r2: number, bulge = 0, peak = 0.35): THREE.BufferGeometry {
   // Unit-radius capsule 8 long (y from −4 to 4): the rounded ends take an eighth each.
   const g = new THREE.CapsuleGeometry(1, 6, 4, 10, 6);
   const pos = g.getAttribute('position');
@@ -34,7 +37,8 @@ function limb(length: number, r1: number, r2: number): THREE.BufferGeometry {
     v.fromBufferAttribute(pos, i);
     // Map to 0 … −length with the radius tapering along it.
     const t = (4 - v.y) / 8;
-    const r = r1 + (r2 - r1) * Math.min(1, Math.max(0, t));
+    const k = Math.min(1, Math.max(0, t));
+    const r = r1 + (r2 - r1) * k + bulge * Math.exp(-(((k - peak) / 0.22) ** 2));
     pos.setXYZ(i, v.x * r, -t * length, v.z * r);
   }
   g.computeVertexNormals();
@@ -67,19 +71,31 @@ export function bodyGeometry(h: number, hip: number, c: FigureColours, keeper: b
   const neck = new THREE.CylinderGeometry(0.052, 0.06, 0.1, 10);
   neck.translate(0, top + 0.03, 0);
   parts.push(solid(neck, c.skin));
+  const merged = mergeGeometries(parts.map(g => g.toNonIndexed()))!;
+  merged.computeVertexNormals();
+  return merged;
+}
+
+/** Height of the neck joint the head turns about (fraction of body height). */
+export const NECK = 0.845;
+
+/** Head with hair and nose, built around the neck joint (origin), so it can turn towards the ball. */
+export function headGeometry(h: number, c: FigureColours): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const neckY = h * NECK;
   const head = new THREE.SphereGeometry(0.1, 16, 14);
   head.scale(0.98, 1.18, 1.06);
-  head.translate(0, h * 0.905, 0.008);
+  head.translate(0, h * 0.905 - neckY, 0.008);
   parts.push(solid(head, c.skin));
   const hair = new THREE.SphereGeometry(0.106, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.52);
   hair.scale(0.98, 1.12, 1.08);
   hair.rotateX(-0.25);
-  hair.translate(0, h * 0.915, -0.006);
+  hair.translate(0, h * 0.915 - neckY, -0.006);
   parts.push(solid(hair, c.hair));
   // Nose: a hint of a face, so the figure's facing reads at a glance.
   const nose = new THREE.ConeGeometry(0.018, 0.04, 6);
   nose.rotateX(Math.PI / 2);
-  nose.translate(0, h * 0.9, 0.112);
+  nose.translate(0, h * 0.9 - neckY, 0.112);
   parts.push(solid(nose, c.skin));
   const merged = mergeGeometries(parts.map(g => g.toNonIndexed()))!;
   merged.computeVertexNormals();
@@ -88,11 +104,11 @@ export function bodyGeometry(h: number, hip: number, c: FigureColours, keeper: b
 
 /** Thigh with the shorts' leg opening; shin with the sock; both hang from their joint. */
 export function thighGeometry(length: number, c: FigureColours): THREE.BufferGeometry {
-  return paint(limb(length, 0.082, 0.058), p => (p.y > -length * 0.32 ? c.shorts : c.skin));
+  return paint(limb(length, 0.086, 0.06, 0.012, 0.3), p => (p.y > -length * 0.32 ? c.shorts : c.skin));
 }
 
 export function shinGeometry(length: number, c: FigureColours): THREE.BufferGeometry {
-  return paint(limb(length, 0.058, 0.04), p => (p.y > -length * 0.2 ? c.skin : c.socks));
+  return paint(limb(length, 0.058, 0.038, 0.014, 0.3), p => (p.y > -length * 0.2 ? c.skin : c.socks));
 }
 
 /** Upper arm with a short sleeve (long sleeve for keepers); forearm ending in the hand or glove. */
@@ -101,7 +117,7 @@ export function upperArmGeometry(length: number, c: FigureColours, keeper: boole
 }
 
 export function forearmGeometry(length: number, c: FigureColours, keeper: boolean): THREE.BufferGeometry {
-  const arm = paint(limb(length, 0.042, 0.033), () => (keeper ? c.kit : c.skin));
+  const arm = paint(limb(length, 0.042, 0.031, 0.006, 0.25), () => (keeper ? c.kit : c.skin));
   const hand = new THREE.SphereGeometry(keeper ? 0.062 : 0.045, 10, 8);
   hand.scale(0.8, 1.2, 0.6);
   hand.translate(0, -length - 0.04, 0);

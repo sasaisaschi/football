@@ -61,7 +61,40 @@ export function frameMoment(points: readonly Vec3[], attackDir: 1 | -1, aspect: 
   // never the area the interface itself covers.
   return frameWithin(points, attackDir, aspect, fovDeg, safe)
     ?? frameWithin(points, attackDir, aspect, fovDeg, { left: -0.99, right: Math.min(0.99, safe.right + 0.06), bottom: safe.bottom, top: 0.97 })
+    ?? mostVisible(points, attackDir, aspect, fovDeg, safe)
     ?? fallback(points);
+}
+
+/**
+ * Nothing fits completely (a narrow screen with the panel below, players far apart): the allowed view that shows the
+ * most of the points, the first ones (ball, acting player) counting triple. Before, a fixed gantry position was used and
+ * could leave a player behind the panel (measured at 800 × 900).
+ */
+function mostVisible(points: readonly Vec3[], attackDir: 1 | -1, aspect: number, fovDeg: number, safe: SafeArea): Framing | null {
+  camera.fov = fovDeg;
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+  const target = new THREE.Box3().setFromPoints(points.map(p => new THREE.Vector3(p.x, p.y, p.z))).getCenter(new THREE.Vector3());
+  target.y = Math.min(1, target.y);
+  let best: { score: number; position: THREE.Vector3 } | null = null;
+  for (let a = 0; a < AZIMUTHS; a++) {
+    const azimuth = (a / AZIMUTHS) * Math.PI * 2;
+    for (const elevation of ELEVATIONS) {
+      // The farthest the stadium allows in this direction.
+      let d = 140;
+      for (; d > 6; d -= 2) { place(target, azimuth, elevation, d); if (camera.position.y >= 4 && cameraAllowed(camera.position)) break; }
+      if (d <= 6) continue;
+      let score = 0;
+      points.forEach((p, i) => {
+        v.set(p.x, p.y, p.z).project(camera);
+        if (v.z <= 1 && v.x >= safe.left && v.x <= safe.right && v.y >= safe.bottom && v.y <= safe.top) score += i < 3 ? 3 : 1;
+      });
+      // Equal coverage: prefer looking along the attack.
+      score += 0.1 * -Math.cos(azimuth) * attackDir;
+      if (!best || score > best.score) best = { score, position: camera.position.clone() };
+    }
+  }
+  return best ? { position: best.position, target } : null;
 }
 
 function fallback(points: readonly Vec3[]): Framing {

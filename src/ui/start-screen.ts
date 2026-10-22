@@ -1,10 +1,10 @@
 import './start-screen.css';
 import { TEAMS } from '../engine/rosters';
 
-export type MatchChoice = { halfMinutes: number; condense: boolean };
+export type MatchChoice = { halfMinutes: number; condense: boolean; resetMemory: boolean };
 
 /** Opening card: the fixture, what the user plays, the match length and pacing. Starting it is also the audio gesture. */
-export function showStartScreen(host: HTMLElement, defaultHalf: number, onStart: (c: MatchChoice) => void): void {
+export function showStartScreen(host: HTMLElement, defaultHalf: number, memoryMatches: number, onStart: (c: MatchChoice) => void): void {
   const el = document.createElement('div');
   el.className = 'start';
   el.innerHTML = `
@@ -21,12 +21,20 @@ export function showStartScreen(host: HTMLElement, defaultHalf: number, onStart:
         <div class="start-lengths" role="radiogroup" aria-label="Spieldauer"></div>
         <label class="start-condense"><input type="checkbox" data-condense checked /> Ruhige Phasen verdichten</label>
       </div>
+      <div class="start-memory" data-memory></div>
       <button class="start-go" data-go type="button">Anpfiff</button>
       <small>Verdichtet heißt: jede Sekunde wird berechnet, ruhiges Spiel aber schneller gezeigt. Ohne Verdichtung läuft alles live.</small>
     </div>`;
   el.querySelector('.home')!.textContent = TEAMS[0].name;
   el.querySelector('.away')!.textContent = TEAMS[1].name;
   let halfMinutes = defaultHalf;
+  let resetMemory = false;
+  const memory = el.querySelector<HTMLElement>('[data-memory]')!;
+  if (memoryMatches > 0) {
+    memory.innerHTML = '<span></span><button type="button">Zurücksetzen</button>';
+    memory.querySelector('span')!.textContent = `Die Spieler erinnern sich an ${memoryMatches} ${memoryMatches === 1 ? 'Partie' : 'Partien'}: Selbstvertrauen und Vertrauen untereinander.`;
+    memory.querySelector('button')!.addEventListener('click', () => { resetMemory = true; memory.textContent = 'Gedächtnis wird beim Anpfiff gelöscht – alle starten frisch.'; });
+  } else memory.textContent = 'Erste Partie: Die Spieler beginnen mit ihrem Grundcharakter. Was sie erleben, nehmen sie in die nächste Partie mit.';
   const lengths = el.querySelector('.start-lengths')!;
   for (const [label, minutes] of [['2 × 5 min', 5], ['2 × 15 min', 15], ['2 × 45 min', 45]] as const) {
     const b = document.createElement('button');
@@ -46,7 +54,7 @@ export function showStartScreen(host: HTMLElement, defaultHalf: number, onStart:
   el.querySelector<HTMLButtonElement>('[data-go]')!.addEventListener('click', () => {
     const condense = el.querySelector<HTMLInputElement>('[data-condense]')!.checked;
     el.remove();
-    onStart({ halfMinutes, condense });
+    onStart({ halfMinutes, condense, resetMemory });
   });
   host.append(el);
 }

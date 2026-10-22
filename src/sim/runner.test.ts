@@ -2,7 +2,7 @@ import RAPIER from '@dimforge/rapier3d-simd-compat';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { MatchEngine } from '../engine/match-engine';
 import { Orchestrator } from '../orchestrator/orchestrator';
-import { decodeFrame, encodeFrame, frameSize } from './frame-codec';
+import { decodeFrame, encodeEngineFrame, encodeFrame, frameSize } from './frame-codec';
 import { Playback, type PlaybackInput } from './playback';
 import { SimRunner, type RunnerConfig } from './runner';
 
@@ -17,15 +17,26 @@ describe('chronological simulation runner', () => {
     const e = new MatchEngine({ seed: 3, halfMinutes: 45 });
     for (let i = 0; i < 200; i++) e.step();
     const s = e.snapshot();
-    const buf = new Float32Array(frameSize(22));
+    const buf = new Float32Array(frameSize(e.profiles.length));
     encodeFrame(s, buf);
-    const d = decodeFrame(buf, 0, 22);
+    const d = decodeFrame(buf, 0, e.profiles.length);
     expect(d.tick).toBe(s.tick);
     expect(d.phase).toBe(s.phase);
     expect(d.players[7].position.x).toBeCloseTo(s.players[7].position.x, 4);
     expect(d.players[7].boots[1].z).toBeCloseTo(s.players[7].boots[1].z, 4);
     expect(d.ball.position.y).toBeCloseTo(s.ball.position.y, 4);
     expect(d.restart?.kind ?? null).toBe(s.restart?.kind ?? null);
+    // Written straight from the engine it is the same frame; players off the pitch are only marked as such.
+    const direct = new Float32Array(frameSize(e.profiles.length));
+    const viaSnapshot = new Float32Array(frameSize(e.profiles.length));
+    encodeEngineFrame(e, direct);
+    encodeFrame(s, viaSnapshot);
+    const fromDirect = decodeFrame(direct, 0, e.profiles.length), fromSnapshot = decodeFrame(viaSnapshot, 0, e.profiles.length);
+    expect({ ...fromDirect, players: [] }).toEqual({ ...fromSnapshot, players: [] });
+    fromDirect.players.forEach((p, i) => {
+      if (p.sentOff) expect(fromSnapshot.players[i]).toMatchObject({ sentOff: true, booked: p.booked });
+      else expect(p).toEqual(fromSnapshot.players[i]);
+    });
   });
 
   it('stops at an open moment, computes nothing past it, and continues from exactly that state', () => {
@@ -38,7 +49,7 @@ describe('chronological simulation runner', () => {
         moments++;
         // The last frame is the frozen state; the simulation does not move while the moment is open.
         const tick = r.engine.tick;
-        expect(decodeFrame(b.frames, (b.count - 1) * r.frameFloats, 22).tick).toBe(tick);
+        expect(decodeFrame(b.frames, (b.count - 1) * r.frameFloats, r.profiles.length).tick).toBe(tick);
         expect(r.advance(30).count).toBe(0);
         expect(r.engine.tick).toBe(tick);
         r.resolve(b.moment.defaultOptionId, 'timeout');
