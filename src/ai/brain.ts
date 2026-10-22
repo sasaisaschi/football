@@ -13,10 +13,11 @@ import { aerialIntercept, headerIntercept, isAirborne } from './aerial';
 import { chooseHeader, CONTESTED } from './heading';
 import { evaluateOptions, pressureOn, type EvaluatedOption, type Picture } from './options';
 import { offBallCommand } from './off-ball';
-import { chooseThrow, throwInStand } from './throw-in';
+import { chooseThrow, throwInStand, throwToMate } from './throw-in';
 import { slideDirection } from './slide';
 import { chestControl, meetAtChest } from './chest';
 import { Perception, type Truth } from './perception';
+import type { PlayerMind } from './mind';
 import { offsideLineU, toTeam } from './shape';
 
 /** What the engine tells a brain each tick: things every player can see or knows from the rules. */
@@ -34,6 +35,8 @@ export type BrainContext = {
   handsAllowed: boolean;
   /** Keeper holding the ball in his hands, if any. Nobody may challenge him (Law 12). */
   ballHeldBy: number | null;
+  /** Players sent off (no longer on the pitch). */
+  sentOff: ReadonlySet<number>;
 };
 
 export type BrainOutput = { command: BodyCommand; effort: number; swing: { action: BallAction; source: 'ai' | 'user' } | null };
@@ -63,7 +66,7 @@ export class PlayerBrain {
   private nextDecision = 0;
   lastOptions: EvaluatedOption[] = [];
 
-  constructor(readonly profile: PlayerProfile, readonly body: PlayerBody, readonly legs: Legs, private readonly rng: Rng, readonly head: Head, readonly chest: Head) {
+  constructor(readonly profile: PlayerProfile, readonly body: PlayerBody, readonly legs: Legs, private readonly rng: Rng, readonly head: Head, readonly chest: Head, readonly mind: PlayerMind) {
     this.perception = new Perception(profile, rng);
   }
 
@@ -190,7 +193,11 @@ export class PlayerBrain {
     }
     const order = this.userIntent;
     if (order?.type === 'move') {
-      const out = ctx.now < order.until && !ctx.restart ? this.followOrder(order.action, ctx, ball) : null;
+      // A run into a set-piece zone is taken up while the ball is still dead; once the ball is played and coming
+      // to me, I play it like any other ball. Every other order only applies in play.
+      const run = order.action.kind === 'run-behind';
+      const mine = run && !ctx.restart && ctx.ballHeldBy === null && this.believesBallIsMine(ctx, ball);
+      const out = ctx.now < order.until && (!ctx.restart || run) && !mine ? this.followOrder(order.action, ctx, ball) : null;
       if (out) return out;
       this.userIntent = null;
     }
@@ -404,6 +411,12 @@ export class PlayerBrain {
     const target = inside ? { x: r.spot.x + side * 1, z: stand.z } : stand;
     const command: BodyCommand = { target, speed: this.body.limits.maxSpeed * 0.6, face };
     if (!r.held || !r.ready) return { command, effort: 1, swing: null };
+    const order = this.userIntent?.type === 'ball' && this.userIntent.action.kind === 'throw' ? this.userIntent.action : null;
+    if (order?.receiver !== undefined) {
+      // The user chose the receiver; the throw is worked out from where he is now, not where he was at the decision.
+      this.userIntent = null;
+      return { command, effort: 1, swing: { action: { kind: 'throw', velocity: throwToMate(this.picture(ctx), this.body.height, order.receiver), receiver: order.receiver }, source: 'user' } };
+    }
     const velocity = chooseThrow(this.picture(ctx), this.body.height);
     return { command, effort: 1, swing: { action: { kind: 'throw', velocity }, source: 'ai' } };
   }
@@ -463,8 +476,11 @@ export class PlayerBrain {
         return firstTouch(pic, at);
       }
     }
-    // Restarts are played, not carried; a keeper with the ball at his feet distributes it instead of dribbling.
-    if (ctx.restart || this.profile.role === 'GK') options = options.filter(o => o.kind === 'pass' || o.kind === 'clear');
+    // A penalty is shot (Law 14; before, the restart filter below made takers pass it). Other restarts are played,
+    // not carried; a keeper with the ball at his feet distributes it instead of dribbling.
+    const penaltyShots = ctx.restart?.kind === 'penalty' ? options.filter(o => o.kind === 'shot') : [];
+    if (penaltyShots.length) options = penaltyShots;
+    else if (ctx.restart || this.profile.role === 'GK') options = options.filter(o => o.kind === 'pass' || o.kind === 'clear');
     this.lastOptions = options;
     // Option values are expected-threat differences of a few thousandths in midfield; misjudgement has to be
     // on that scale, or it would swamp the evaluation and turn every choice into a coin toss.
@@ -472,9 +488,10 @@ export class PlayerBrain {
     let best = options[0], bestScore = -Infinity;
     for (const o of options) {
       // The coach's risk setting trades safety for threat: bold teams value forward threat, cautious ones possession.
+      // How much of it a player takes on depends on his discipline; his character and form add their own lean.
       const forward = o.kind === 'shot' || (o.kind === 'pass' && 'aim' in o.action && ctx.sign * (o.action.aim.x - pic.ball.pos.x) > 8) || o.kind === 'dribble';
-      const riskBonus = (ctx.instruction.risk - 0.5) * (forward ? 0.01 : -0.005);
-      const score = o.value + riskBonus + this.rng.gauss() * noise;
+      const riskBonus = (ctx.instruction.risk - 0.5) * (forward ? 0.01 : -0.005) * this.mind.compliance();
+      const score = o.value + riskBonus + this.mind.bias(o.kind) + this.rng.gauss() * noise;
       if (score > bestScore) { bestScore = score; best = o; }
     }
     return best.action;

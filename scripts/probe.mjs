@@ -1,5 +1,7 @@
 // Multi-seed probe: runs short autonomous matches in parallel and reports the statistics per 90 minutes.
-// Usage: npm run probe -- [--seeds 1-6] [--minutes 10] [--parallel 6]
+// Usage: npm run probe -- [--seeds 1-6] [--minutes 10] [--parallel 6] [--orchestrator]
+//   --orchestrator: the orchestrator runs with the app's settings and every moment is settled by its default; the report
+//   then also lists the moments per kind and half (the decisions change play, so the statistics are not comparable).
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,7 +22,7 @@ function run(seed) {
   const out = join(dir, `seed-${seed}.json`);
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [vitest, 'run', 'src/engine/full-match.test.ts'], {
-      env: { ...process.env, SIM_SEED: String(seed), SIM_HALF_MINUTES: String(minutes), SIM_OUT: out },
+      env: { ...process.env, SIM_SEED: String(seed), SIM_HALF_MINUTES: String(minutes), SIM_OUT: out, ...(process.argv.includes('--orchestrator') ? { SIM_ORCHESTRATOR: '1' } : {}) },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     let err = '';
@@ -63,4 +65,9 @@ const report = {
   ballInPlay: +(sum(r => r.ballInPlay) / results.length).toFixed(2),
   msPerStep: +(sum(r => r.msPerStep) / results.length).toFixed(2), wallSeconds: Math.round((Date.now() - started) / 1000),
 };
+if (process.argv.includes('--orchestrator')) {
+  const all = results.flatMap(r => r.moments);
+  const count = key => Object.fromEntries([...new Set(all.map(key))].sort().map(k => [k, all.filter(m => key(m) === k).length]));
+  report.moments = { total: all.length, perMatch: +(all.length / results.length).toFixed(1), byKind: count(m => m.kind), byCategory: count(m => m.category), byHalf: count(m => `half ${m.half}`), perSeed: results.map(r => `${r.seed}: ${r.moments.map(m => m.kind).join(', ')}`) };
+}
 console.log(JSON.stringify(report, null, 1));

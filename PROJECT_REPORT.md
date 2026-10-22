@@ -1,6 +1,6 @@
 # THE 12TH MAN – Technical Report & Development Guide
 
-**Stand:** 20.10.2026 · Phase A (#32) auf `main` abgeschlossen; Phase B als verbindlicher Produkt- und Entwicklungsauftrag beschlossen. Frühere Messwerte bleiben historisch datiert; Phase B ist noch nicht implementiert.
+**Stand:** 20.10.2026 · Phase A (#32) auf `main` abgeschlossen; **Phase B implementiert auf Branch `claude/phase-b-arbeitsauftrag-8042ea` (PR, Abnahme offen)** – Ergebnisse, Messwerte und Nicht-Erreichtes in §10.9. Frühere Messwerte bleiben historisch datiert.
 **Rolle:** verbindliche Source of Truth für Architektur, tatsächlichen Stand, Versionen, Tests, Messwerte und nächste Schritte.
 **Kennzeichnung:** **Implementiert** = Code vorhanden · **Getestet** = durch tatsächlich ausgeführte Tests belegt · **Gemessen** = Zahl aus einem tatsächlichen Lauf · **Geplant** = nicht vorhanden · **Nicht geprüft** = vorhanden, ohne Nachweis.
 
@@ -34,13 +34,15 @@ src/
   physics/   B  Rapier-Welt, Feld/Tore/Netze/Banden/Tribünenfront, Ball, Körper, Schuhe, Torwarthände
   ai/        C  Wahrnehmung, Mannschaftsform, Optionsbewertung, Ausführung, Torwartspiel
   rules/     D  Schiedsrichter: Tor, Aus, Abseits, Fouls, Karten, Elfmeter, Vorteil, Handspiel, Rückpass
-  director/  E  Decisive Moment Director
-  ui/        F  Startbildschirm, HUD/Ticker, Entscheidungspanel, Kommentar aus Ereignissen (CSS neben TS)
-  render/    G  Stadion, Rasen, Spielerfiguren, Ball, TV-Regie
+  orchestrator/ E  Orchestrator: Ablaufsteuerung + Lageerkenner (open-play, set-pieces, coach)
+  sim/       E' Chronologischer SimRunner, Web Worker, Frame-Übertragung, Präsentationsregie (Playback)
+  ui/        F  Start, HUD/Verlauf, Entscheidungs-Seitenleiste, Konsequenzkarte, Ergebnis (CSS neben TS)
+  render/    G  Stadion, Rasen, Spielerfiguren, Ball, TV-Regie, Entscheidungs-Framing, Taktik-Overlays
   audio/     G  synthetisierter Stadionton aus echten Ereignissen
-  app.ts     Spielschleife: fester Physikschritt, Interpolation, Zeitraffer, Ereignisverteilung
+  app.ts     Browser-Sitzung: Worker-Client, Regie, Interpolation, Ereignisverteilung in Bildreihenfolge
   main.ts    Einstieg, Renderer, Licht, URL-Parameter
-scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
+scripts/browser-check.mjs   echter Browserlauf (npm run test:browser; CHECK_FULL=1: ganze Partie)
+scripts/probe.mjs           Mehr-Seed-Statistik (npm run probe; --orchestrator: Momentverteilung)
 ```
 
 **Verbindliche Regeln**
@@ -51,6 +53,7 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 5. **Fester Zeitschritt** 1/60 s, Teilschritte nur bei schnellen Schwüngen; Darstellung interpoliert, Kamera zeitbasiert.
 6. **Reproduzierbar:** jede Zufallsentscheidung über `engine/rng.ts` (Seed); gleicher Seed → gleiche Partie (getestet).
 7. **Keine erfundenen Ereignisse:** Kamera, Ton, Ticker und Kommentar reagieren nur auf `MatchEvent`s.
+8. **Chronologisch, nie vorbei am Moment (Phase B):** Die Engine läuft im Browser in einem Web Worker Tick für Tick; der Worker hält an jedem offenen Moment und rechnet erst nach der Entscheidung weiter. Das Bild läuft der Simulation hinterher (höchstens 90 s) und zeigt nur Berechnetes – schneller oder langsamer, nie erfunden.
 
 ## 4. Features & Status
 
@@ -68,9 +71,12 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 | Positionsspiel 4-3-3, Ballgewinner dezentral, Jockeying, Pressing, Deckung, Ausweichen, Bremsen vor Körpern | Implementiert, getestet (Zonen-Test) | `ai/shape.ts`, `ai/brain.ts` |
 | Schiedsrichter: Tor, Aus, Abseits (Regel-11-Ausnahmen, Seitenwechsel), Fouls, Karten inkl. Notbremse und Gelb-Rot, Elfmeter, Vorteil, Handspiel, Rückpass, 9,15 m | Implementiert, getestet | `rules/referee.ts`, `engine/restarts.ts` |
 | Vollständige autonome Partie (2 Halbzeiten) | Implementiert, getestet | `engine/match-engine.ts` |
-| Decisive Moment Director: Abschluss/Ablage, Durchsetzen, Konter, Gegenpressing, Durchbruch des Gegners, Gefahr vor dem eigenen Strafraum; „KI entscheiden lassen“ | Implementiert, getestet | `director/moment-director.ts` |
-| Entscheidungs-UI mit Countdown, Tasten 1–4, Rückmeldung zum Ausgang | Implementiert, im Browser getestet | `ui/decision-panel.*`, `app.ts` |
-| Stadion, Spielerfiguren mit IK an den Physikschuhen, TV-Regie, Ton, Ticker | Implementiert, im Browser geprüft | `render/*`, `audio/*`, `ui/*` |
+| Orchestrator: offenes Spiel (Abschluss/Ablage, Durchsetzen, Konter, Gegenpressing, Durchbruch, Strafraumgefahr), Standards vor der Ausführung (Einwurf, Ecke, Freistoß, Elfmeter), Halbzeitansprache; Kontingente, Reservierung, Verteilung über die Halbzeit | Implementiert, getestet (Phase B) | `orchestrator/*` |
+| Eckball-Laufwege (Strafraumbesetzung), Einwurf auf gewählten Empfänger, direkter/indirekter Freistoß, Elfmeter wird geschossen | Implementiert, getestet (Phase B) | `ai/corner-routine.ts`, `ai/throw-in.ts`, `engine/restarts.ts`, `ai/brain.ts` |
+| Agenten: Traits und Form aus echten Ereignissen | Implementiert, getestet (Phase B) | `ai/mind.ts` |
+| Chronologische Simulation im Web Worker, Präsentationsregie (live / verdichtet / angehalten) | Implementiert, getestet, im Browser gemessen (Phase B) | `sim/*`, `app.ts` |
+| Entscheidungs-Seitenleiste (Tastatur/Maus, Spielerform), Konsequenzkarte, Verlaufsleiste, Start/Ergebnis mit Chronik | Implementiert, im Browser getestet (Phase B) | `ui/*` |
+| Prozedurale Spielerfigur, Entscheidungs-Framing, taktische 3D-Overlays, Übersichtskamera | Implementiert, getestet, im Browser geprüft (Phase B) | `render/*` |
 
 ## 5. Testing Status (tatsächlich ausgeführt)
 
@@ -91,6 +97,8 @@ scripts/browser-check.mjs   echter Browserlauf (npm run test:browser)
 | 19.10.2026 | Browser-Aufnahme der neuen Mechaniken (Seeds 11, 23; je 2 × 6 min; Vollbild und Nahaufnahme bei jedem Ereignis) | Kopfballsprünge, Brustannahmen, Einwürfe und Grätschen im laufenden Spiel aufgenommen, keine Laufzeitfehler. Gefunden und behoben: Einwurf-Endlosschleife, zerfallende Figur bei Rumpfneigung (§6) |
 | 19.10.2026 | Phase A: `npm run check` | `tsc` ohne Fehler, **20 Testdateien / 103 Tests bestanden**, `vite build` erfolgreich. Neu: `render/presentation.test.ts` (Kamera zeigt Einwürfe an beiden Seitenlinien, Zeitraffer nur in ruhigen Phasen) |
 | 19.10.2026 | Phase A: Abschluss-Browsertest (`npm run test:browser` und Prüfskript für die vier Befunde, Seed 23, 2 × 5 min) | `ok: true`, keine Fehler/Warnungen, **53 FPS**. Einwürfe nahe und ferne Seitenlinie im Fernsehbild, keiner im Zeitraffer; Zeitraffer in 4 von 1284 Stichproben, nie bei ruhendem Ball oder hohem Ball; 9 Statusmeldungen, längste 9,3 s |
+| 20.10.2026 | Phase B: `npm run check` | `tsc` ohne Fehler, **24 Testdateien / 129 Tests bestanden** (2 übersprungen: Langsimulation, Schusslabor), `vite build` erfolgreich (Simulation als eigener Worker-Chunk) |
+| 20.10.2026 | Phase B: `npm run test:browser` (Desktop, schmal, Vollpartie) und `npm run probe` (Momentverteilung, Statistik, Ablation) | siehe §10.9 B6 |
 
 **Testinhalte:** Feldmaße/Regel 9/10, Zufall reproduzierbar; Ballaufprall, Rollweg, keine Kraftakkumulation, Magnus-Richtung, Netz/Pfosten/Latte; Beschleunigungsgrenzen, 22 Körper stabil, bitgleiche Wiederholung; Fußkontakt (Nähe kickt nie, Richtung/Tempo, Spannstoß mit Lift, Richtungsabhängigkeit, Drallkorrektur beim seitlichen Antippen, Fehltreffer mit Drall, Luftloch, Reichweite, Ballannahme); Schiedsrichter (Abseits, Einwurf-Ausnahme, Seitenwechsel, Ecke/Abstoß/Einwurf/Tor/Eigentor, Foul von hinten, Zweikampf ≠ Foul, Notbremse = Rot + Elfmeter, taktisches Foul = Gelb, Gelb-Rot, Mitspieler-Kontakt, Handspiel außerhalb, Rückpass); vollständige Partie ohne ungültige Zustandsübergänge, gleicher Seed = gleiche Partie, kein kollektives Ballverfolgen, Torwart-Ergebnisse variieren, Ballfreigabe innerhalb von 6 s; Director (Moment friert ein, jede angebotene Option wird als echter Schwung ausgeführt, gleiche Lage + andere Entscheidung → anderer Verlauf, gleiche Entscheidung → unterschiedlicher Erfolg, Momente selten und mit Abstand); Quelltext „kein Magnetismus“.
 
@@ -846,6 +854,7 @@ Insgesamt verdoppeln sich die Brustannahmen (31 → 65), und es gibt weniger Ein
 - Der laufende Spielrhythmus der Beine ist rein visuell (ruhende Schuh-Kollider bleiben unter der Hüfte); Kick-Beine folgen exakt der Physik.
 - Ballparameter sind Literaturwerte, keine eigene Messreihe.
 - Bei Kurzspielen zeigt die Uhr echte Simulationszeit (z. B. 2 × 5 min), nicht 90 Minuten.
+- Phase B: Eine 90-Minuten-Partie braucht im Browser ≈ 23 min Rechenzeit (≈ 4,2 ms je Tick, Iris Xe); die Nutzerzeit kann darunter nicht fallen (§10.9 B3). Die Agenten erhöhen Ballbesitzwechsel und Einwürfe (nicht nachkalibriert).
 - Ton ist vollständig synthetisiert (keine Fangesänge/Kommentarstimme).
 - `window.__match` ist ein lesender Zugriff für das Browser-Prüfskript.
 - Bundle: Physik-Chunk 4,6 MB (Rapier-WASM inline).
@@ -864,19 +873,22 @@ Insgesamt verdoppeln sich die Brustannahmen (31 → 65), und es gibt weniger Ein
 9. **Torwart** – Rückpassregel nur bei absichtlichem Zuspiel, Torwart verlässt die Linie nur als Erster am Ball, sprintet zurück; Körperdämpfung und Hände vor dem Körper gemessen und verworfen (6 Seeds, Schusslabor).
 10. **Ballbesitz** – Messwerkzeug `npm run probe`, Ursachenanalyse der Ballverluste, Anspielstationen, Körper ab dem Treffpunkt frei, Ballführer-Reichweite für Verteidiger, flacher Pass bevorzugt, Ballhalten/Abschirmen unter Druck, Verteidiger stellt mit Abstand und stochert nicht durch den Gegner, Torwart gegen Distanzschüsse, Schuss ab xG 0,04 (gemessen über 12 Seeds und Schusslabor).
 11. **Fußballmechaniken** – Kopfball mit echtem Sprung und Kopfballtore, Einwurf mit beiden Händen, Brustannahme, Grätsche mit liegender Kapsel und Foulbewertung (gezielte Tests, noch keine Mehr-Seed-Messung).
+12. **Phase A** – Ballannahme nach Einwürfen, Kamera an der nahen Seitenlinie, Zeitraffer nur in ruhigen Phasen, Statusmeldungen mit Laufzeit.
+13. **Phase B** – Orchestrator mit Stopp vor Standards, Agenten-Traits und Form, chronologische Simulation im Web Worker mit Präsentationsregie, neue Figuren, Entscheidungskamera, Taktik-Overlays, neue Oberfläche (§10.9).
 
 ## 9. Nächste Schritte
 
-1. **Phase B – verbindlicher Gesamtauftrag (§10):** Zustandsabhängiger Orchestrator, interaktive Standardsituationen, hochwertige 3D-/Taktik-Oberfläche, fortlaufende/verdichtete Simulation, sichtbare echte Konsequenzen und Agenten-Persönlichkeitsgrundlage **zusammenhängend** implementieren und im Browser abnehmen. Phase B ist geplant, nicht erledigt.
-2. Nachkalibrierung (Messung mit `npm run probe`, 48 Seeds): Schüsse (≈ 19/90, real ≈ 25), Tore (in drei kurzen Browserpartien keines), Häufigkeit von Kopfballtoren, Grätschen und Fouls, Passzahl (≈ 1360 statt ≈ 1000/90), lange Bälle über 30 m.
-3. Director: weitere Momente (Freistoß-/Elfmeterentscheidung, Wechsel/Taktik zur Halbzeit), Wiederholung (Replay) eines Moments aus den Ereignisdaten.
-4. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
-5. Optionale KI-Rollen (Match Analyst, Pub Host) über Adapter; Physik und Spiel bleiben offline lauffähig.
+1. **Phase B abnehmen** (PR, §10.9): Abnahme durch den Auftraggeber; offen sind vor allem die Spielzeit für 2 × 45 min und die durch die Agenten gestiegenen Ballbesitzwechsel/Einwürfe.
+2. **Simulationstempo:** KI-Kosten je Tick senken (Wahrnehmung/Optionsbewertung), mit Mehr-Seed-Messung – Voraussetzung für 5–10 min bei voller Spielzeit.
+3. Nachkalibrierung (Messung mit `npm run probe`, 48 Seeds): Schüsse (≈ 19/90, real ≈ 25), Tore (in drei kurzen Browserpartien keines), Häufigkeit von Kopfballtoren, Grätschen und Fouls, Passzahl (≈ 1360 statt ≈ 1000/90), lange Bälle über 30 m.
+4. Orchestrator: Wechsel (nach Ersatzbank-Logik), Torwart beim gegnerischen Elfmeter, defensive Eckenvarianten, Wiederholung (Replay) eines Moments aus den Ereignisdaten.
+5. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
+6. Optionale KI-Rollen (Match Analyst, Pub Host) über Adapter; Physik und Spiel bleiben offline lauffähig.
 
 
 ## 10. Phase B – verbindliche Produktvision und Gesamt-Entwicklungsauftrag (beschlossen 20.10.2026)
 
-**Status:** **GEPLANT / VERBINDLICH, NICHT IMPLEMENTIERT.** Festlegung des Auftraggebers nach Review der sechs echten Browser-Screenshots (Start, Anstoß, TV-Spiel, Entscheidungsfenster, nach der Entscheidung, Ergebnis) und Prüfung des Stands auf `main` inklusive PR #32. Dieser Abschnitt hat bei Produktfragen Vorrang vor früheren, nur technisch formulierten UX-Annahmen. Vorhandene Mechaniken, Messungen und Architekturregeln aus §§1–9 bleiben erhalten, soweit unten nicht explizit präzisiert. **Kein Neubau der Physik.**
+**Status:** **VERBINDLICH; IMPLEMENTIERT AUF DEM PHASE-B-BRANCH, ABNAHME OFFEN (Ergebnis §10.9).** Festlegung des Auftraggebers nach Review der sechs echten Browser-Screenshots (Start, Anstoß, TV-Spiel, Entscheidungsfenster, nach der Entscheidung, Ergebnis) und Prüfung des Stands auf `main` inklusive PR #32. Dieser Abschnitt hat bei Produktfragen Vorrang vor früheren, nur technisch formulierten UX-Annahmen. Vorhandene Mechaniken, Messungen und Architekturregeln aus §§1–9 bleiben erhalten, soweit unten nicht explizit präzisiert. **Kein Neubau der Physik.**
 
 ### 10.1 Produktidentität – Was der Mensch tatsächlich spielt
 
@@ -987,3 +999,179 @@ Die Engine besitzt bereits 22 individuelle Fähigkeitsprofile und dezentrale `Pl
 - [ ] **Ein Phase-B-PR** mit Screenshots, Testergebnissen, Architekturänderungen, bewusst nicht umgesetzten Wünschen und aktualisierter Source of Truth. **Kein Merge ohne Abnahme**.
 
 **Wichtige Klarstellung:** Phase B ist eine **Produkt- und Grafikphase** ebenso wie eine Orchestratorphase. Ein technisch vollständiger Matchsimulator mit kosmetisch überarbeitetem Popup ist **nicht** das beauftragte Ergebnis.
+
+### 10.8 Arbeitsplan Phase B (Opus, 20.10.2026)
+
+Ein Branch (`claude/phase-b-arbeitsauftrag-8042ea`), ein PR, interne Meilenstein-Commits. Nach jedem Meilenstein `npm run check`; ab B3 zusätzlich echter Browserlauf. Status der Punkte wird am Ende in §10.9 mit **Implementiert / Getestet / Gemessen / Offen** berichtet.
+
+**B1 – Orchestrator und Zustandsmaschine** (`src/orchestrator/*`, `engine/match-engine.ts`, `engine/types.ts`)
+- `MomentDirector` wird kontrolliert zum `Orchestrator`: Ablaufsteuerung (Prüftakt, Abklingzeit, Kontingente je Kategorie und Halbzeit, Vielfalt) getrennt von den Lageerkennern (`open-play.ts`: Angriff, Umschalten, Abwehr; `set-pieces.ts`: Einwurf, Ecke, Freistoß, Elfmeter; `coach.ts`: Halbzeitansprache).
+- Engine: `consultOrchestrator()` auch bei ruhendem Ball, **genau einmal pro platziertem Standard**, bevor der Ausführende den Ball spielt. `resolveMoment()` kehrt in die Phase vor dem Moment zurück (`stopped` mit unverändertem `restart` bzw. `in-play`) – kein doppelter Wiederanstoß, kein vorzeitiges `in-play`.
+- `DecisionOption.visual` (Akteur, Ballweg, Laufwege, Zielzone) und `DecisionMoment.category/participants` als Datengrundlage für Overlays und Kamera.
+- Standardoptionen nur aus vorhandener Mechanik: Einwurf (kurz / nach vorn / sichern – Wurf mit beiden Händen auf einen gewählten Mitspieler, Tempo erst beim Abwurf berechnet), Ecke (kurz / erster Pfosten / zweiter Pfosten / Rückraum, nur wenn ein Mitspieler die Zone real erreicht; neue legitime Laufwegabsicht für Strafraumbesetzung bei Ecken), Freistoß (direkt nur mit realer Abschlusschance, Pass, hoher Ball), Elfmeter (Schussziel links / Mitte / rechts, Torwart reagiert unverändert), Halbzeit (Teamanweisung für den Rest der Partie). Wechsel: **nicht** implementiert (keine Ersatzbank-Logik) → als offen deklariert.
+- Tests: Zustandsmaschine (Stopp vor Standard, Rückkehr zu Restart, genau ein `in-play`, kein Moment im Schwung), jede angebotene Standardoption wird physisch ausgeführt, verschiedene Optionen → verschiedene Folgezustände, Determinismus.
+
+**B2 – Agentenfundament** (`src/ai/mind.ts`)
+- Stabile Traits je Spieler aus dem Roster-Seed: Risikofreude, Disziplin, Teamorientierung, Grund-Selbstvertrauen.
+- Erfahrungsebene: Form/Selbstvertrauen, deterministisch aus echten Ereignissen (Pass angekommen/verloren, Dribbling behauptet/verloren, Schuss aufs Tor) fortgeschrieben; serialisierbar für spätere Persistenz.
+- Begrenzter, dokumentierter Einfluss nur auf die **Wahl** (Bewertungsbonus), nie auf Ausführung oder Ergebnis. Tests: gleiche Lage, andere Erfahrung → andere real ausgeführte Aktion; Reproduzierbarkeit.
+
+**B3 – Chronologische Verdichtung** (`src/sim/*`, `app.ts`)
+- Engine läuft in einem **Web Worker** chronologisch Tick für Tick (kein Tick-Skipping), hält an jedem offenen Moment an und rechnet nie daran vorbei. Hauptthread rendert aus einem Frame-Puffer (nur Vergangenheit der Simulation).
+- Präsentationsregie: ruhige Phasen im Zeitraffer (Taktikkamera), Aufbau der letzten Sekunden vor einem Moment, Tore/Schüsse und die Konsequenzphase nach einer Entscheidung in Echtzeit.
+- Messung getrennt: Nutzerzeit (Wanduhr), Rechenzeit des Workers, simulierte Zeit. Test des Runners in Node (hält an Momenten, Puffergrenze, gleiche Ticks wie direkte Engine).
+
+**B4 – Grafik** (`src/render/*`)
+- Neue prozedurale Spielerfigur (Rotationskörper-Torso, verjüngte Gliedmaßen, Trikot mit Ärmeln, Hose, Stutzen, geformte Schuhe, Haar, Rückennummer), weiterhin IK an Physikschuhen/-händen; keine fremden Assets (Lizenzfrage entfällt).
+- Licht/Material: Umgebungslicht (PMREM), besserer Rasen, gedämpfte Tribüne, Kameraführung, die das Feld statt der Ränge zeigt.
+- Entscheidungskamera mit Framing-Löser: Ball, Akteur, Ziele und nahe Gegner im freien Bildbereich (ohne Panel), Kamera im Stadioninneren; Test mit echter Projektion.
+- Taktische 3D-Overlays aus `DecisionOption.visual`: Akteur-/Zielringe, Pass-/Schuss-/Laufwege, Zonen, nummeriert passend zu den Tasten; Fokus wechselt mit Hover/Tastatur.
+
+**B5 – Oberfläche** (`src/ui/*`)
+- Entscheidungs-UI als schmale Seitenleiste (Desktop) bzw. Unterkante (schmal), Tastatur (1–4, Pfeile, Enter, 0) und Maus, Countdown, Delegation, Spielerform des Akteurs.
+- Konsequenzkarte aus beobachteten `MatchEvent`s, Verlaufsleiste mit Momenten/Toren, überarbeiteter Start- und Ergebnisbildschirm mit Entscheidungschronik.
+
+**B6 – Abnahme**
+- `scripts/browser-check.mjs` neu: mehrere Momenttypen mit Screenshots vor Entscheidung / bei Auswahl / nach Konsequenz, Prüfung horizontaler Scrollleiste und Panel-Überdeckung, FPS. Vollpartie-Lauf mit Delegation zur Zeitmessung.
+- Mehr-Seed-Probe (Regression der Spielstatistik durch Ecken-Laufwege und Agenten), Momentverteilung über Seeds und Halbzeiten, Bericht und PR.
+
+### 10.9 Ergebnis Phase B (20.10.2026) – Implementiert / Getestet / Gemessen / Offen
+
+Ein Branch, interne Meilenstein-Commits, ein PR. Alle Zahlen stammen aus tatsächlich ausgeführten Läufen auf der Testmaschine (Chrome, Intel Iris Xe, ANGLE/D3D11, 1600 × 900).
+
+#### B1 Orchestrator und Zustandsmaschine – implementiert, getestet
+- `src/director/` → `src/orchestrator/`: `orchestrator.ts` steuert den Ablauf (Prüftakt 0,1 s, Abklingzeit, Höchstzahl je Halbzeit, Verteilung über die Halbzeit: höchstens 1 + Anteil × Höchstzahl). Kontingente je Kategorie: Angriff 3, Umschalten 1, Abwehr 2, Standard 2, Trainer 1; Einwurf und Freistoß je 1. Bis 75 % der Halbzeit bleibt Platz für noch nicht gesehene Kategorien (Angriff, Standard, Abwehr) reserviert. Lageerkenner: `open-play.ts`, `set-pieces.ts`, `coach.ts`.
+- **Zustandsmaschine:** Die Engine fragt den Orchestrator im Spiel jeden Tick und **genau einmal je platziertem Standard**, bevor der Ausführende spielen kann (`RestartState.consulted`). Ablauf `stopped → decision → stopped → in-play`. `resolveMoment()` kehrt in die Phase vor dem Moment zurück (`momentResume`); der Standard bleibt mit demselben Ausführenden und Punkt bestehen. Kein doppelter Wiederanstoß, kein vorzeitiges `in-play`.
+- **Datenmodell:** `MomentKind` + `throw-in | corner | free-kick | penalty | team-talk`, `MomentCategory`, `DecisionMoment.participants`, `DecisionOption.visual` (Akteur, Ballweg, Läufe, Zone, Linienverschiebung), Effekt `players` (mehrere Absichten, z. B. Ecke: Schütze + Läufer), `BallAction.throw.receiver`, `RestartState.direct`.
+- **Standards nur aus realer Mechanik:**
+  - **Einwurf** (gegnerische Hälfte): kurz / nach vorn / zurück, nur auf Mitspieler, die die Arme erreichen. Das Wurftempo wird erst beim Abwurf aus der dann aktuellen Position berechnet (`throwToMate`); geworfen wird wie bisher mit beiden Händen.
+  - **Ecke:** kurz / erster Pfosten / zweiter Pfosten / Rückraum – nur besetzte Zonen (Läufer ≤ 30 m entfernt). Neue Laufwegabsicht **Eckball-Routine** (`ai/corner-routine.ts`, für beide Teams): Die drei Größten aus ST/RCB/LCB gehen an den zweiten Pfosten, zum Elfmeterpunkt und an den ersten Pfosten, ein zentraler Mittelfeldspieler in den Rückraum, der Flügelspieler der Eckenseite bietet sich kurz an. Vorher besetzte bei Ecken fast niemand den Strafraum.
+  - **Freistoß** (gegnerische Hälfte): direkter Schuss nur nach Foul/Handspiel (`direct`), ≤ 30 m und xG ≥ 0,03; sonst Pass oder hoher Ball in den Strafraum.
+  - **Elfmeter:** links unten / rechts unten / halbhoch Mitte; der Torwart reagiert unverändert. **Fehler behoben:** Elfmeter wurden bisher als Pass oder Klärung ausgeführt (Restart-Filter), jetzt werden sie geschossen.
+  - **Halbzeitansprache** vor dem Anstoß der 2. Halbzeit: Teamanweisung für den Rest der Partie (`seconds = 0`), Vorgabe „Weiter so“. **Wechsel: nicht implementiert** (keine Ersatzbank) – deshalb kein wirkungsloser Button.
+- Ein Standard darf einem anderen Moment schon nach einem Drittel der Abklingzeit folgen. Mit voller Abklingzeit bot keine von 8 Partien eine Ecke an (gemessen). Die Diagnose zeigte gültige Eckoptionen, die nur an der Abklingzeit scheiterten.
+- **Tests** (`orchestrator/set-pieces.test.ts`, `orchestrator.test.ts`):
+  - Einwurf stoppt vor dem Wurf und kehrt zum selben Restart zurück.
+  - Jede Einwurfoption wird mit beiden Händen zum Empfänger geworfen, genau ein `in-play`, kein neuer `restart`.
+  - Verschiedene Einwurfoptionen → verschiedene Berührungsfolgen und Ballpositionen (> 2 m); gleiche Option → identischer Verlauf.
+  - Ecke: jede Variante ist ein echter Schuss des Schützen, Landepunkte > 5 m auseinander.
+  - Der Orchestrator wird je Restart genau einmal gefragt.
+  - Direkter Freistoß bietet einen Schuss an, indirekter nicht.
+  - Elfmeter: die KI schießt; die gewählte Seite wirkt im Mittel über 6 Schützen (ein Einzelschuss kann streuen).
+  - Die Halbzeitansprache gilt die ganze 2. Halbzeit.
+  - Einwurf und Ecke entstehen aus einem echten Ball über die Linie. Freistoß und Elfmeter werden mit einer eingespeisten Schiedsrichterentscheidung gestartet, weil sich ein Foul aus Körpern nicht reproduzierbar inszenieren lässt.
+
+#### B2 Agentenfundament – implementiert, getestet
+- `PlayerProfile.traits` (Risikofreude, Disziplin, Teamorientierung, Grund-Selbstvertrauen) aus einem **eigenen** Zufallsstrom des Rosters: Die Fähigkeiten aller Kader bleiben exakt wie vorher.
+- `ai/mind.ts`: `PlayerMind` (Form = Selbstvertrauen + letzte 6 bewertete Aktionen) und `ExperienceTracker`. Der Tracker urteilt aus dem Ereignisstrom: Pass gelungen, wenn ein Mitspieler als Nächster den Ball berührt; Dribbling, wenn der Spieler selbst wieder an den Ball kommt; Schuss, wenn er aufs Tor geht (Tor, Torwart). Deterministisch, serialisierbar (`view()`), ohne Remote-Dienst.
+- **Einfluss nur auf die Wahl:** Bonus auf den Optionswert ≤ ≈ 0,015 xT (Schuss/Dribbling: Risiko, Selbstvertrauen, minus Teamorientierung; Pass: Teamorientierung). Disziplin skaliert, wie viel der Risiko-Vorgabe des Trainers ein Spieler übernimmt (0,5–1,5). Ausführung, Ballphysik und Schiedsrichter bleiben unverändert.
+- **Sichtbar:** Die Entscheidungsleiste zeigt Selbstvertrauen, die letzten Aktionen (gelungen/misslungen) und deutliche Traits des Akteurs – nur aus tatsächlichen Ereignissen, keine erfundenen Emotionen.
+- **Tests** (`ai/mind.test.ts`):
+  - Urteil aus Ereignissen, deterministisch.
+  - Eine abgelaufene offene Aktion wird verworfen. **Absturz gefunden und behoben** (aufgedeckt durch die Mehr-Seed-Probe; er hätte auch den Browser-Worker getroffen).
+  - Traits streuen, Disziplin ändert die Übernahme der Vorgabe.
+  - **Gleiche Lage, andere Erfahrung → real ausgeführter Pass bzw. Dribbling** (Linksaußen, Seed 4), reproduzierbar.
+  - In einer autonomen Partie bewegen echte Aktionen die Form, identisch bei Wiederholung.
+- Offen (bewusst): Beziehungen zwischen Spielern, Lernen über Partien hinweg, Persistenz.
+
+#### B3 Chronologische Verdichtung – implementiert, getestet, gemessen
+- `sim/runner.ts`: eine autoritative Engine, Tick für Tick; hält bei offenem Moment und rechnet nie daran vorbei. `sim/sim-worker.ts`: Web Worker, Vorlauf höchstens 90 s, Stapel à 30 Ticks. `sim/frame-codec.ts`: ≈ 2,3 kB je Tick als Float32. Dazu `sim/sim-client.ts` und `sim/playback.ts`.
+- **Präsentationsregie:** Echtzeit für die letzten 5 s vor einem Moment, 8 s nach jeder Entscheidung, um Schüsse (−1,5/+3,5 s) und Tore (−3/+6 s). Sonst verdichtet ×4–×24 mit Übersichtskamera und Anzeige „VERDICHTET ×n“. Beim Verdichten bleibt das Bild ≥ 6 s hinter der Simulation, damit der Aufbau eines folgenden Moments in Echtzeit gezeigt werden kann. Das geht, weil die Simulation dem Bild vorausläuft – eine Entscheidung kennt sie dabei nie im Voraus.
+- **Phase-A-Schutzplanken:** Die Zeitraffer-Regeln aus `time-lapse.ts` (Strafraum, ruhender Ball, hoher Ball, Zweikampf → normales Tempo) gelten unverändert im Modus „Alles live“ (Schalter auf dem Startbildschirm, Taste `L`, `?condense=0`). Im Standardmodus ersetzt die Verdichtung nach §10.2.6 auch Phasen, die Phase A in Echtzeit zeigte. Das ist eine bewusste, im Bild gekennzeichnete Abweichung.
+- **Tests** (`sim/runner.test.ts`): Frame-Kodierung verlustarm; der Runner hält am Moment, erzeugt währenddessen keinen Tick und setzt danach am nächsten Tick fort; Runner und direkt gesteppte Engine ergeben dieselbe Partie (gleiche Ballposition, gleiche Ereignisfolge); die Regie verdichtet ohne die Simulation zu überholen, zeigt den Aufbau ≥ 4,5 s in Echtzeit und hält am Moment; ohne Verdichtung klassisches Tempo.
+
+**Gemessen – Vollpartie im Browser** (`CHECK_FULL=1 npm run test:browser`, Seed 7, 2 × 45 min, jede Entscheidung nach 2 s delegiert):
+
+| Messgröße | Wert |
+| --- | --- |
+| Abpfiff erreicht, regelkonform | ja (116 Wiederanstöße, 11 Momente, 0 Fehler/Warnungen) |
+| Simulierte Zeit | 90:06 min |
+| **Nutzerzeit (Wanduhr)** | **24:25 min** |
+| Rechenzeit des Workers | 22:47 min (≈ 4,2 ms je Tick) |
+| FPS live / verdichtet | 60,3 / 55 |
+
+**Das UX-Ziel 5–10 min für 90 Minuten wird auf dieser Hardware nicht erreicht.** Die Nutzerzeit liegt nur 7 % über der reinen Rechenzeit: Begrenzend ist die Simulation selbst, nicht die Regie. In Node (ein Kern) kostet ein Tick 2,97 ms, davon 55 % Rapier-Physik (≥ 240 Hz bei rollendem Ball) und 45 % Wahrnehmung/Entscheidung; im Browser-Worker ≈ 4,2 ms. Ausgelassene Ticks sind ausgeschlossen (§10.2.6). Hochgerechnet: 2 × 15 min ≈ 8 min Nutzerzeit (im Ziel), 2 × 5 min ≈ 3 min. Nächste Hebel (nicht umgesetzt, jeweils mit Messung der Spielstatistik): KI-Kosten je Tick senken (Wahrnehmung/Optionsbewertung seltener oder zwischengespeichert), Physik-Teilschritte weiter auf das Nötige beschränken.
+
+#### B4 Grafik – implementiert, im Browser geprüft
+- **Spielerfigur** (`render/figure-geometry.ts`, `player-view.ts`), prozedural:
+  - Rotationskörper-Torso mit Kragen und Seitenstreifen, Schulterkappen, Hose, verjüngte Kapsel-Gliedmaßen, kurze Ärmel (Torwart: lange Ärmel, Handschuhe), Stutzen, geformte Schuhe mit farbiger Sohle, Kopf mit Haar und Nase, Rücken- und Brustnummer.
+  - Alle Teile mit Vertexfarben und **einem** gemeinsamen Material (≈ 12 Draw Calls je Figur).
+  - Keine externen Assets → keine Lizenzfrage, keine Likenesses.
+  - IK an Physikschuhen und -händen sowie Rumpfneigung bei Kopfball, Brustannahme und Grätsche wie bisher.
+- **Stadion/Licht:** Zuschauer im Halbdunkel (Farben ×0,3–0,42, kleinere Figuren), dunklerer Rasen mit Mähstreifen, Startkamera innerhalb des Stadions (vorher hinter der Rückwand). Eine Umgebungs-Lichtkarte wurde getestet und verworfen: Sie erzeugte D3D-Shader-Warnungen in der Konsole.
+- **Kamera:**
+  - TV-Kamera etwas näher (18 statt 21 m Höhe); die Phase-A-Kameratests bleiben grün.
+  - Übersichtskamera beim Verdichten.
+  - **Entscheidungs-Framing** (`render/framing.ts`): sucht über 16 Richtungen × 3 Höhenwinkel die engste Ansicht, in der Ball, Akteur, alle Beteiligten (Kopf und Füße), Ziele und Zonen im freien Bildbereich neben der Leiste liegen. Die Kamera steht dabei über den Rängen, unter den Dächern und innerhalb der Rückwände.
+  - **Fehler gefunden und behoben:** Im ersten Browserlauf stand die Kamera bei einem Durchbruch hinter der Tribünen-Rückwand (graues Bild). Test `framing.test.ts` deckt jetzt 7 Lagen ab.
+- **Taktische Overlays** (`render/tactical-overlay.ts`): Akteur-Ring (pulsierend), Ringe für Mitspieler und Gegner, Ballmarkierung; je Option Ballweg (flach, hoch als Bogen, Schuss, Einwurf, Dribbling), Läufe, Zonen, Linienverschiebung bei Teamanweisungen, Nummer passend zur Taste. Der Fokus folgt Maus und Pfeiltasten, die anderen Optionen treten zurück.
+
+#### B5 Oberfläche – implementiert, im Browser geprüft
+- **Entscheidungs-Seitenleiste** rechts (≤ 380 px; unter 820 px Breite an der Unterkante, höchstens 48 vh): Kategorie, Countdown, Lage, Akteur mit Form, Optionen mit ehrlicher Einschätzung, Markierung „Tendenz der Spieler“ an der Vorgabe, „Den Spielern überlassen“ (`0`), Tasten `1–4`, `↑/↓` + `Enter`, Maus.
+- **HUD:** Spielstand, Modus (LIVE / VERDICHTET ×n / ENTSCHEIDUNG), Verlaufsleiste mit Toren und Momenten, Ticker (während der Entscheidung ausgeblendet).
+- **Konsequenzkarte:** nennt nur beobachtete Ereignisse nach der Entscheidung (wer spielte, wer bekam den Ball, Parade/Block, Aus, Foul, Tor). Ohne klares Ergebnis nach 12 s neutral: „Danach ging es ohne klares Ergebnis weiter.“ Bei Abwehrmomenten endet sie mit dem eigenen Ballkontakt, bei der Halbzeitansprache sofort.
+- **Start- und Ergebnisbildschirm:** drei Schritte, Spieldauer, Schalter Verdichtung; am Ende Messwerte der Sitzung und Chronik aller Entscheidungen mit Ausgang.
+
+#### B6 Abnahme – Messungen
+
+**Momentverteilung in fortlaufenden Partien** (`npm run probe -- --seeds 1-8 --minutes 15 --parallel 8 --orchestrator`; App-Einstellungen für 2 × 15 min: Abklingzeit 25 s, höchstens 5 je Halbzeit; jeder Moment nach Ablauf mit der Vorgabe entschieden):
+
+| | 8 Partien × 2 × 15 min |
+| --- | --- |
+| Momente gesamt / je Partie | 79 / 9,9 |
+| 1. / 2. Halbzeit | 35 / 44 (inkl. 8 Halbzeitansprachen) |
+| Angriff (Abschluss/Ablage 2, Durchsetzen 12) | 14 |
+| Abwehr (Strafraum 20, Durchbruch 9) | 29 |
+| Umschalten (Gegenpressing 12, Konter 4) | 16 |
+| Standard (Einwurf 10, Ecke 2) | 12 |
+| Trainer (Halbzeitansprache) | 8 |
+
+Jede Partie hatte Angriffs-, Abwehr- und mindestens eine Standard- oder Trainersituation. **Freistoß und Elfmeter kamen in dieser Stichprobe nicht vor:** Freistöße für das Nutzerteam lagen in der Diagnose (6 Seeds × 2 × 8 min) alle unterhalb der Schwelle (13 von 14 in der eigenen Hälfte; dort bewusst kein Moment), Elfmeter sind selten (≈ 0,2/90). Beide sind durch gezielte Zustandstests abgedeckt; im Browserlauf (Seed 7, 2 × 15 min) kam ein **echter Elfmeter-Moment** in der fortlaufenden Partie vor. Mit voller Abklingzeit für Standards waren es 0 Ecken in 8 Partien – deshalb gilt für Standards ein Drittel davon (vorher 10 Standards, nachher 12).
+
+**Spielstatistik ohne Orchestrator** (`npm run probe -- --seeds 1-24 --minutes 10 --parallel 8`, pro 90 min; `main` = `bd9c9d1`):
+
+| | `main` | Phase B ohne Agenten-Bias (Ablation) | **Phase B** | real |
+| --- | --- | --- | --- | --- |
+| Tore (Eigentore) | 2,4 (0,4) | 2,3 (0) | **3,0 (0,4)** | ≈ 2,7 |
+| Torschüsse (nach Kombination) | 14,4 (2,3) | 14,6 (1,9) | **19,3 (1,1)** | ≈ 25 |
+| Pässe / Passquote | 1354 / 76 % | 1337 / 76 % | **1264 / 78 %** | ≈ 1000 / 75–85 % |
+| Ballbesitzwechsel | 1213 | 1212 | **1315** | – |
+| Fouls / Elfmeter | 29,8 / 0,2 | 32,1 / 0,2 | **25,3 / 0** | ≈ 22 / 0,3 |
+| Ecken / Einwürfe | 9,8 / 57 | 8,4 / 63,6 | **7,7 / 66,9** | ≈ 10 / 45 |
+
+Bewertung: Die Ablation trennt die Ursachen. Eckball-Routine und die übrigen Standardänderungen allein ändern die Statistik kaum (Einwürfe +6,6 im Rauschbereich ±5). Die Agenten (Risikofreude, Form) machen das Spiel mutiger: mehr Schüsse (näher am realen Wert), weniger Pässe (näher an ≈ 1000), weniger Fouls, aber mehr Ballbesitzwechsel und etwas mehr Einwürfe. Bewusst **nicht nachkalibriert** (60-Minuten-Budget je Mess- und Kalibrieraufgabe, Gefahr des Überkalibrierens); Kandidat für die nächste Kalibrierung.
+
+**Browserläufe** (`npm run test:browser`, Chrome headless, Intel Iris Xe, ANGLE/D3D11):
+
+| Lauf | Ergebnis |
+| --- | --- |
+| Desktop 1600 × 900, Seed 7, 2 × 15 min (Endstand des Codes) | `ok`, 0 Fehler, 0 Warnungen; 11 Momente in 7 Arten (Durchbruch, Gegenpressing, Durchsetzen, Strafraumgefahr, **Elfmeter**, **Halbzeitansprache**, **Einwurf**); jedes Mal Simulation eingefroren, Entscheidung per Taste als `user` protokolliert, **kein Beteiligter vom Panel verdeckt oder außerhalb des Bildes**, keine horizontale Scrollleiste; FPS live 60,3 / verdichtet 56,7; Worker-Rechenzeit 444,6 s |
+| Desktop, früherer Lauf Seed 7, 2 × 15 min (vor den letzten Korrekturen) | zusätzlich eine **Ecke** in der fortlaufenden Partie (in der Vollpartie unten ebenfalls) |
+| Schmal 800 × 900, Seed 7, 2 × 5 min | `ok`, Leiste an der Unterkante, 0 verdeckte Beteiligte (vor der Korrektur 2 verdeckte Füße und ein Bild über die Tribüne), keine Scrollleiste, 60 FPS |
+| Produktions-Build (`npm run build`, `CHECK_PREVIEW=1`), Seed 7, 2 × 5 min | `ok`, Simulation als Worker-Chunk lauffähig, 2 Momente als `user` entschieden, 0 Fehler/Warnungen, 51 FPS live |
+| Vollpartie 2 × 45 min, Seed 7, Delegation nach 2 s | Abpfiff, 0 Fehler/Warnungen, 11 Momente (u. a. Ecke, Halbzeitansprache), Nutzerzeit 24:25 min, Worker 22:47 min, simuliert 90:06 min, FPS 60,3 / 55 |
+
+Beobachtet: Bei 2 von 11 Desktop-Momenten (Durchsetzen → Pass gewählt) kam der Pass nicht mehr zustande, weil der Gegner den Ball vor dem Schwung eroberte; die Konsequenzkarte meldet das korrekt („Der Gegner hat den Ball.“).
+
+Screenshots (je vor der Entscheidung, mit fokussierter Option, nach der Konsequenz): `docs/phase-b/`.
+
+#### Abnahmekriterien §10.7
+
+- [x] Fortlaufende Partien eröffnen Angriffs-, Abwehr-, Umschalt-, Standard- (Einwurf, Ecke, im Browser auch Elfmeter) und Trainersituationen aus dem echten Zustand; Häufigkeit dokumentiert (oben). Freistoß zusätzlich per gezieltem Zustandstest.
+- [x] Einwurf und Ecke: vor der Ausführung pausiert, ≥ 2 legale, physikalisch unterscheidbare Optionen, genau ein `in-play`, keine Neustartschleife (Tests).
+- [x] Verschiedene Entscheidungen aus derselben Lage → messbar verschiedene Folgen (Einwurf, Ecke, offenes Spiel); gleiche Option kann je nach Ausführung anders enden (Schuss aus 19 m über 12 Seeds, Elfmeter über 6 Schützen); gleicher Seed + gleiche Entscheidungen deterministisch (Runner = direkte Engine; Einwurf-Wiederholung identisch).
+- [~] Volle Partie chronologisch, regelkonform bis Abpfiff; Nutzer-, Rechen- und simulierte Zeit getrennt gemessen. **Das 5–10-min-Ziel wird für 2 × 45 min nicht erreicht (24:25 min)**, Ursache gemessen (Rechenzeit je Tick); für 2 × 15 min hochgerechnet ≈ 8 min.
+- [x] Im Browser sind Ball, relevante Spieler, Wege und Optionen gleichzeitig sichtbar: keine mittige Tafel, automatische Prüfung „Panel verdeckt keinen Beteiligten“ auf 1600 × 900 und 800 × 900, keine horizontale Scrollleiste; Screenshots vor Entscheidung, bei Auswahl, nach Konsequenz.
+- [x] Figuren und Szene deutlich hochwertiger (prozedurale Figur, Licht, Kamera, Overlays); keine fremden Assets; FPS gemessen: 60 live / 55–59 verdichtet (Phase A: 53).
+- [x] Agentenmodell beeinflusst eine real ausgeführte Aktion unterschiedlich und reproduzierbar (Pass vs. Dribbling); keine Ergebnissteuerung.
+- [x] Alle vorhandenen Tests grün; neue Tests für Stopp/Fortsetzung, Standards, Framing, Regie, Agenten, Determinismus (129 Tests, 24 Dateien).
+- [x] Ein PR mit Screenshots, Messwerten und bewusst nicht Umgesetztem; **kein Merge ohne Abnahme**.
+
+#### Bewusst nicht umgesetzt / offen
+- **Spielzeit 5–10 min für 2 × 45 min** (siehe B3): erfordert eine schnellere Simulation; keine Abkürzung durch ausgelassene Ticks.
+- **Wechsel**, Ersatzbank, Torwart-Elfmeterwahl (Torwart reagiert nur), Mauer bei Freistößen, defensive Eckenvarianten.
+- **Szenario-/Trainingsmodus** (§10.2, optional): nicht gebaut; die Zustandstests nutzen `stageScenario` nur in Tests.
+- **Agenten:** Beziehungen, partienübergreifendes Lernen, Persistenz.
+- **Grafik:** keine Gesichter/Animationen aus Motion-Capture; Laufzyklus der Beine weiter dekorativ (Physikschuhe ruhen unter der Hüfte, §7).
+- **Statistik:** Ballbesitzwechsel und Einwürfe durch die Agenten erhöht (oben), nicht nachkalibriert.
+- Der Konsequenztext urteilt nur über die ersten 12 s; spätere Folgen werden bewusst nicht einer Entscheidung zugeschrieben.

@@ -1,176 +1,223 @@
 import * as THREE from 'three';
-import { CrowdAudio } from './audio/crowd-audio';
-import { MomentDirector, DEFAULT_DIRECTOR } from './director/moment-director';
-import { MatchEngine } from './engine/match-engine';
+import type { CrowdAudio } from './audio/crowd-audio';
 import { TEAMS } from './engine/rosters';
-import type { DecisionSource, MatchEvent, MatchSnapshot, PlayerView, TeamId } from './engine/types';
-import { PHYSICS_DT } from './physics/world';
+import type { DecisionMoment, DecisionSource, MatchEvent, MatchSnapshot, PlayerProfile, TeamId, Vec3 } from './engine/types';
+import { attackSign } from './physics/pitch-geometry';
 import { createBallView } from './render/ball-view';
 import { CameraDirector } from './render/camera-director';
-import { atStake, CALM_SECONDS } from './render/time-lapse';
+import { frameMoment } from './render/framing';
+import { lerpBall, lerpPlayer } from './render/interpolate';
 import { PlayerFigure } from './render/player-view';
 import type { StadiumView } from './render/stadium-view';
+import { TacticalOverlay } from './render/tactical-overlay';
+import { atStake, CALM_SECONDS } from './render/time-lapse';
+import { Playback } from './sim/playback';
+import { SimClient } from './sim/sim-client';
 import { commentaryFor } from './ui/commentary';
+import { ConsequenceCard } from './ui/consequence';
 import { DecisionPanel } from './ui/decision-panel';
 import { Hud } from './ui/hud';
+import { showResult, type SessionMetrics } from './ui/result-screen';
 
-export type AppOptions = { seed: number; halfMinutes: number; directorCooldown: number; userTeam: TeamId };
+export type AppOptions = { seed: number; halfMinutes: number; cooldown: number; maxPerHalf: number; timeoutSeconds: number; userTeam: TeamId; condense: boolean };
+
+/** Wall seconds a status line stays. */
+const STATUS_SECONDS = 6;
+/** Events after which classic (uncondensed) play stays at normal pace for a few seconds. */
+const CALM_BREAKERS = new Set<MatchEvent['type']>(['foul', 'offside', 'out', 'restart', 'in-play', 'goal', 'catch', 'advantage']);
+/** Above this pace individual sounds (kicks, whistles) would only rattle; the crowd bed stays. */
+const SOUND_PACE = 2;
 
 /**
- * Runs one match in the browser: fixed-step simulation, interpolated rendering, broadcast camera, sound,
- * ticker and the decision panel. Quiet midfield phases play in time-lapse; nothing is skipped or invented.
+ * One session in the browser. The match is computed chronologically in a worker (sim/); this side shows it: the
+ * pacing of the picture (live, condensed, held at a moment), figures, ball, camera, tactical markings, the decision
+ * panel, the consequence card and the final chronicle. Nothing here changes the match; decisions go to the worker.
  */
 export class MatchApp {
-  readonly engine: MatchEngine;
-  private readonly director: MomentDirector;
-  private readonly figures: PlayerFigure[];
+  readonly client: SimClient;
+  readonly playback = new Playback();
+  readonly metrics: SessionMetrics = { wallSeconds: 0, cpuSeconds: 0, simSeconds: 0, moments: 0 };
+  private figures: PlayerFigure[] = [];
+  private profiles: PlayerProfile[] = [];
   private readonly ball = createBallView();
   private readonly camera: CameraDirector;
+  private readonly overlay = new TacticalOverlay();
   private readonly hud: Hud;
   private readonly panel: DecisionPanel;
-  private prev: MatchSnapshot;
-  private curr: MatchSnapshot;
-  private accumulator = 0;
+  private consequence: ConsequenceCard | null = null;
+  private cursor = 0;
   private wall = 0;
-  private timeScale = 1;
   private lastDanger = 0;
   private celebrateUntil = 0;
   private celebrateTeam: TeamId = 0;
-  private pendingOutcome: string | null = null;
+  private openedMoment = -1;
   private finished = false;
+  private shown: MatchSnapshot | null = null;
 
-  constructor(
+  private constructor(
     private readonly scene: THREE.Scene,
-    cam: THREE.PerspectiveCamera,
+    private readonly cam: THREE.PerspectiveCamera,
     private readonly stadium: StadiumView,
-    private readonly overlay: HTMLElement,
+    private readonly host: HTMLElement,
     private readonly audio: CrowdAudio,
-    private readonly options: AppOptions,
+    readonly options: AppOptions,
   ) {
-    this.engine = new MatchEngine({ seed: options.seed, halfMinutes: options.halfMinutes });
-    this.director = new MomentDirector({ ...DEFAULT_DIRECTOR, userTeam: options.userTeam, cooldown: options.directorCooldown });
-    this.engine.director = this.director.attach();
-    this.figures = this.engine.profiles.map(p => {
-      const f = new PlayerFigure(p, TEAMS[p.team]);
-      scene.add(f.root);
-      return f;
-    });
-    scene.add(this.ball.mesh);
+    this.client = new SimClient({ seed: options.seed, halfMinutes: options.halfMinutes, userTeam: options.userTeam, cooldown: options.cooldown, maxPerHalf: options.maxPerHalf, timeoutSeconds: options.timeoutSeconds });
     this.camera = new CameraDirector(cam);
     this.hud = new Hud(options.halfMinutes);
-    this.panel = new DecisionPanel((id, by) => this.resolve(id, by));
-    overlay.append(this.hud.el, this.panel.el);
-    this.prev = this.curr = this.engine.snapshot();
-    this.engine.onEvent(e => this.onEvent(e));
-    this.hud.setStatus(`${TEAMS[0].name} gegen ${TEAMS[1].name} – du entscheidest für ${TEAMS[options.userTeam].name}.`, 0, STATUS_SECONDS);
+    this.panel = new DecisionPanel((id, by) => this.resolve(id, by), i => this.overlay.focus(i));
+    host.append(this.hud.el, this.panel.el);
+    scene.add(this.ball.mesh, this.overlay.group);
+    window.addEventListener('keydown', ev => {
+      if ((ev.key === 'l' || ev.key === 'L') && !this.panel.open) {
+        this.options.condense = !this.options.condense;
+        this.hud.setStatus(this.options.condense ? 'Ruhige Phasen werden verdichtet.' : 'Alles live – keine Verdichtung.', this.wall, STATUS_SECONDS);
+      }
+    });
   }
 
-  private resolve(optionId: string, by: DecisionSource): void {
-    const m = this.engine.moment;
-    if (!m) return;
-    const option = m.options.find(o => o.id === optionId)!;
-    this.engine.resolveMoment(optionId, by);
-    this.pendingOutcome = option.label;
-    // Shown until the outcome replaces it, at most PENDING_SECONDS.
-    this.hud.setStatus(by === 'user' ? `Deine Entscheidung: ${option.label} – jetzt müssen die Spieler es umsetzen.` : by === 'delegated' ? `Du überlässt es den Spielern (${option.label}).` : `Zeit abgelaufen – die Spieler entscheiden selbst (${option.label}).`, this.wall, PENDING_SECONDS);
+  static async create(scene: THREE.Scene, cam: THREE.PerspectiveCamera, stadium: StadiumView, host: HTMLElement, audio: CrowdAudio, options: AppOptions): Promise<MatchApp> {
+    const app = new MatchApp(scene, cam, stadium, host, audio, options);
+    await app.client.ready;
+    app.profiles = app.client.profiles;
+    app.figures = app.profiles.map(p => { const f = new PlayerFigure(p, TEAMS[p.team]); scene.add(f.root); return f; });
+    app.consequence = new ConsequenceCard(app.profiles);
+    host.append(app.consequence.el);
+    app.hud.setStatus(`${TEAMS[0].name} gegen ${TEAMS[1].name} – du entscheidest für ${TEAMS[options.userTeam].name}.`, 0, STATUS_SECONDS);
+    return app;
   }
 
-  private onEvent(e: MatchEvent): void {
-    this.camera.onEvent(e, this.wall);
-    this.audio.onEvent(e, this.options.userTeam);
-    const line = commentaryFor(e, this.engine);
-    if (line) this.hud.log(line, this.hud.clockText(this.engine.snapshot()));
-    if (e.type === 'moment' && this.engine.moment) { this.hud.clearStatus(); this.panel.show(this.engine.moment, this.wall); }
-    if (CALM_BREAKERS.has(e.type) || (e.type === 'swing' && e.action !== 'pass' && e.action !== 'dribble' && e.action !== 'control')) this.lastDanger = this.wall;
-    if (e.type === 'goal') { this.celebrateUntil = this.wall + 6; this.celebrateTeam = e.team; }
-    if (this.pendingOutcome && (e.type === 'goal' || e.type === 'catch' || e.type === 'out' || e.type === 'foul' || e.type === 'offside' || (e.type === 'touch' && this.engine.profiles[e.player].team !== this.options.userTeam))) {
-      const result = e.type === 'goal' ? (e.team === this.options.userTeam ? 'Tor!' : 'Gegentor.') : e.type === 'catch' ? 'Der Torwart hält.' : e.type === 'out' ? 'Der Ball ist im Aus.' : e.type === 'foul' ? 'Der Schiedsrichter pfeift.' : e.type === 'offside' ? 'Abseits.' : 'Der Gegner ist am Ball.';
-      this.hud.setStatus(`Nach „${this.pendingOutcome}“: ${result}`, this.wall, STATUS_SECONDS);
-      this.pendingOutcome = null;
-    }
-    if (e.type === 'full-time') this.showFullTime();
-  }
-
-  /** Time-lapse only in really quiet play, and not for a few seconds after anything notable (see time-lapse.ts). */
-  private chooseTimeScale(s: MatchSnapshot): number {
-    if (atStake(s, this.engine.profiles) || this.wall < this.celebrateUntil) this.lastDanger = this.wall;
-    return this.wall - this.lastDanger > CALM_SECONDS ? 3 : 1;
+  /** Read-only view for the browser check. */
+  get debug() {
+    return {
+      events: this.client.events, produced: this.client.produced, shownTick: this.playback.tick, mode: this.playback.mode, speed: this.playback.speed,
+      moment: this.client.moment, deciding: this.panel.open, finished: this.finished, metrics: this.metrics, cpuMs: this.client.cpuMs,
+      chronicle: this.consequence?.chronicle ?? [], snapshot: this.shown, camera: this.cam, director: this.camera,
+    };
   }
 
   frame(dt: number): void {
     this.wall += dt;
-    if (!this.finished && !this.panel.open) {
-      this.timeScale = this.chooseTimeScale(this.curr);
-      this.accumulator += Math.min(dt, 0.1) * this.timeScale;
-      let steps = 0;
-      while (this.accumulator >= PHYSICS_DT && steps < 12) {
-        this.prev = this.curr;
-        this.engine.step();
-        this.curr = this.engine.snapshot();
-        this.accumulator -= PHYSICS_DT;
-        steps++;
-        if (this.engine.phase === 'decision') { this.accumulator = 0; break; }
-      }
-      if (steps === 12) this.accumulator = 0;
+    if (this.client.error) { this.hud.setStatus(`Simulationsfehler: ${this.client.error}`, this.wall, 3600); return; }
+    if (this.client.produced < 0 || !this.consequence) return;
+    if (!this.panel.open && !this.finished) {
+      this.playback.update(dt, {
+        produced: this.client.produced, momentTick: this.client.momentTick, done: this.client.done,
+        keys: this.client.keys, condense: this.options.condense, classicPace: this.classicPace(),
+      });
     }
+    this.dispatchUpTo(this.playback.tick);
+    const m = this.client.moment;
+    if (this.playback.mode === 'held' && m && m.id !== this.openedMoment) this.openMoment(m);
+    this.draw(dt);
     this.panel.tick(this.wall);
-    const alpha = Math.min(1, this.accumulator / PHYSICS_DT);
-    const s = this.curr;
-    const b = lerp3(this.prev.ball.position, s.ball.position, alpha);
-    this.ball.update(b, s.ball.rotation);
-    s.players.forEach((p, i) => this.figures[i].update(lerpPlayer(this.prev.players[i], p, alpha), dt * this.timeScale));
-    this.camera.update({ ...s, ball: { ...s.ball, position: b } }, this.wall, dt);
-    const excitement = Math.min(1, Math.max(0, (Math.abs(b.x) - 20) / 30));
+    this.consequence.tick(this.wall);
+    this.client.displayed(this.playback.tick, this.wall);
+    if (this.client.done && this.playback.tick >= this.client.produced && !this.finished) this.showFullTime();
+  }
+
+  private draw(dt: number): void {
+    const t = this.playback.tick, i = Math.floor(t);
+    const a = this.client.frame(i), b = this.client.frame(Math.min(i + 1, this.client.produced));
+    const alpha = Math.min(1, t - i);
+    const s = alpha > 0.5 ? b : a;
+    this.shown = s;
+    const ball = lerpBall(a.ball, b.ball, alpha);
+    this.ball.update(ball, s.ball.rotation);
+    // The decorative running cycle follows simulated time, but not faster than a sprint's cadence.
+    const gaitDt = dt * Math.min(this.playback.speed, 3);
+    s.players.forEach((p, k) => this.figures[k].update(lerpPlayer(a.players[k], p, alpha), gaitDt));
+    this.camera.condensed = this.playback.mode === 'condensed';
+    this.camera.update({ ...s, ball: { ...s.ball, position: ball } }, this.wall, dt);
+    this.overlay.update(this.wall);
+    const excitement = Math.min(1, Math.max(0, (Math.abs(ball.x) - 20) / 30));
     const celebrate = this.wall < this.celebrateUntil ? (this.celebrateTeam === 0 ? 1 : -1) : 0;
     this.stadium.update(this.wall, excitement, celebrate);
     this.audio.update(s, this.options.userTeam);
-    this.hud.update(s, this.panel.open ? 1 : this.timeScale, this.wall);
+    this.hud.update(s, this.playback.mode, this.playback.speed, this.panel.open, this.wall);
+  }
+
+  /** Classic pace when the user switched condensing off: time-lapse ×3 only in really quiet play (Phase A guards). */
+  private classicPace(): number {
+    const s = this.shown;
+    if (!s || atStake(s, this.profiles) || this.wall < this.celebrateUntil) this.lastDanger = this.wall;
+    return this.wall - this.lastDanger > CALM_SECONDS ? 3 : 1;
+  }
+
+  private dispatchUpTo(tick: number): void {
+    const events = this.client.events;
+    while (this.cursor < events.length && events[this.cursor].tick <= tick) this.onEvent(events[this.cursor++]);
+  }
+
+  private onEvent(e: MatchEvent): void {
+    const s = this.shown;
+    this.camera.onEvent(e, this.wall);
+    if (this.playback.speed < SOUND_PACE || e.type === 'goal') this.audio.onEvent(e, this.options.userTeam);
+    const line = commentaryFor(e, { profiles: this.profiles, score: s?.score ?? [0, 0] });
+    if (line) this.hud.log(line, s ? this.hud.clockText(s) : '00:00');
+    this.consequence!.onEvent(e);
+    if (CALM_BREAKERS.has(e.type) || (e.type === 'swing' && e.action !== 'pass' && e.action !== 'dribble' && e.action !== 'control')) this.lastDanger = this.wall;
+    if (e.type === 'goal') {
+      this.celebrateUntil = this.wall + 6;
+      this.celebrateTeam = e.team;
+      if (s) this.hud.mark('goal', this.hud.elapsed(s), e.team, `Tor ${TEAMS[e.team].short}`);
+    }
+    if (e.type === 'moment' && s) { this.hud.mark('moment', this.hud.elapsed(s), e.team, 'Entscheidung'); this.metrics.moments++; }
+  }
+
+  /** The picture has reached the frozen moment: panel, tactical markings and a camera that shows everything relevant. */
+  private openMoment(m: DecisionMoment): void {
+    this.openedMoment = m.id;
+    const s = this.client.frame(this.client.momentTick ?? this.playback.tick);
+    s.moment = m;
+    this.hud.clearStatus();
+    this.panel.show(m, this.wall, s, this.profiles);
+    this.overlay.show(m, s, id => this.profiles[id].team);
+    this.overlay.focus(Math.max(0, m.options.findIndex(o => o.id === m.defaultOptionId)));
+    const points: Vec3[] = [s.ball.position];
+    for (const id of m.participants) {
+      const p = s.players[id];
+      if (p.sentOff) continue;
+      points.push({ x: p.position.x, y: 0, z: p.position.z }, { x: p.position.x, y: 2.1, z: p.position.z });
+    }
+    for (const o of m.options) {
+      const v = o.visual;
+      if (v?.ball) points.push({ x: v.ball.to.x, y: v.ball.kind === 'shot' ? 1.2 : 0, z: v.ball.to.z });
+      for (const r of v?.runs ?? []) points.push({ x: r.to.x, y: 0, z: r.to.z });
+      if (v?.zone) points.push({ x: v.zone.x + v.zone.r, y: 0, z: v.zone.z }, { x: v.zone.x - v.zone.r, y: 0, z: v.zone.z });
+      // A line shift is shown where it crosses the actor's channel.
+      if (v?.line) for (const x of [v.line.from, v.line.to]) points.push({ x, y: 0, z: s.players[m.focusPlayer].position.z });
+    }
+    const w = this.host.clientWidth, h = this.host.clientHeight;
+    const fp = this.panel.footprint();
+    // A margin beside the panel and below the score bar, so markings around the outermost players stay clear too.
+    const safe = { left: -0.92, right: 1 - (2 * (fp.right + 64)) / w, bottom: -1 + (2 * (fp.bottom + 40)) / h, top: 1 - (2 * 110) / h };
+    this.camera.decisionFrame = frameMoment(points, attackSign(m.team, s.half), this.cam.aspect, this.cam.fov, safe);
+  }
+
+  private resolve(optionId: string, by: DecisionSource): void {
+    const m = this.client.moment;
+    const s = this.shown;
+    if (!m || !s) return;
+    const option = m.options.find(o => o.id === optionId)!;
+    this.overlay.hide();
+    this.consequence!.start(m, optionId, by, this.hud.clockText(s), s.time, s.possession);
+    this.client.resolve(optionId, by);
+    if (by !== 'user') this.hud.setStatus(by === 'delegated' ? `Du überlässt es den Spielern: ${option.label}.` : `Zeit abgelaufen – die Spieler entscheiden selbst: ${option.label}.`, this.wall, STATUS_SECONDS);
   }
 
   private showFullTime(): void {
     this.finished = true;
-    const el = document.createElement('div');
-    el.className = 'fulltime';
-    const card = document.createElement('div');
-    card.className = 'fulltime-card';
-    const title = document.createElement('h2');
-    title.textContent = 'ABPFIFF';
-    const score = document.createElement('div');
-    score.className = 'fulltime-score';
-    score.textContent = `${TEAMS[0].short} ${this.engine.score[0]} : ${this.engine.score[1]} ${TEAMS[1].short}`;
-    const again = document.createElement('button');
-    again.textContent = 'Neues Spiel';
-    again.addEventListener('click', () => location.reload());
-    card.append(title, score, again);
-    el.append(card);
-    this.overlay.append(el);
+    const s = this.shown!;
+    this.metrics.wallSeconds = this.wall;
+    this.metrics.cpuSeconds = this.client.cpuMs / 1000;
+    this.metrics.simSeconds = s.time;
+    showResult(this.host, s.score, this.consequence!.chronicle, this.metrics);
   }
 
   dispose(): void {
     for (const f of this.figures) this.scene.remove(f.root);
-    this.scene.remove(this.ball.mesh);
+    this.scene.remove(this.ball.mesh, this.overlay.group);
+    this.client.dispose();
   }
-}
-
-/** Wall seconds a status line stays, and a pending decision's line at most until its outcome replaces it. */
-const STATUS_SECONDS = 6, PENDING_SECONDS = 12;
-/** Events after which play runs at normal pace for a few seconds (shots, headers, tackles and throws via their swing). */
-const CALM_BREAKERS = new Set<MatchEvent['type']>(['foul', 'offside', 'out', 'restart', 'in-play', 'goal', 'catch', 'advantage']);
-
-function lerp3(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }, t: number) {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
-}
-
-function lerpPlayer(a: PlayerView, b: PlayerView, t: number): PlayerView {
-  if (Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z) > 3) return b; // placed while the ball was dead
-  const dh = Math.atan2(Math.sin(b.heading - a.heading), Math.cos(b.heading - a.heading));
-  return {
-    ...b,
-    position: lerp3(a.position, b.position, t),
-    heading: a.heading + dh * t,
-    boots: [lerp3(a.boots[0], b.boots[0], t), lerp3(a.boots[1], b.boots[1], t)],
-    hands: a.hands && b.hands ? lerp3(a.hands, b.hands, t) : b.hands,
-    lying: a.lying + (b.lying - a.lying) * t,
-    upperBody: a.upperBody && b.upperBody && a.upperBody.part === b.upperBody.part ? { part: b.upperBody.part, position: lerp3(a.upperBody.position, b.upperBody.position, t) } : b.upperBody,
-  };
 }

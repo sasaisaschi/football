@@ -18,13 +18,13 @@ function turf(): THREE.Mesh {
   const c = canvas.getContext('2d')!;
   const stripes = 18;
   for (let i = 0; i < stripes; i++) {
-    c.fillStyle = i % 2 ? '#2a8a4c' : '#237d43';
+    c.fillStyle = i % 2 ? '#25773f' : '#1f6c38';
     c.fillRect((i * size) / stripes, 0, size / stripes + 1, size / 2);
   }
   // Fine grain so the grass does not look like plastic up close.
   const img = c.getImageData(0, 0, size, size / 2);
   for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 14;
+    const n = (Math.random() - 0.5) * 9;
     img.data[i] += n; img.data[i + 1] += n * 1.2; img.data[i + 2] += n * 0.6;
   }
   c.putImageData(img, 0, 0);

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { MatchEngine } from '../engine/match-engine';
 import { runFor, stageScenario } from '../engine/scenario-helper';
 import type { DecisionMoment, MatchEvent } from '../engine/types';
-import { MomentDirector } from './moment-director';
+import { Orchestrator } from './orchestrator';
 
 beforeAll(async () => {
   await RAPIER.init();
@@ -14,7 +14,7 @@ const role = (e: MatchEngine, team: 0 | 1, r: string) => e.profiles.find(p => p.
 /** User team 0 (attacking +X): striker on the ball 19 m out, two team-mates in support, a few defenders. */
 function attackingSetup(seed: number) {
   const e = new MatchEngine({ seed, halfMinutes: 45 });
-  const director = new MomentDirector({ userTeam: 0, cooldown: 0, maxPerHalf: 99, timeoutSeconds: 12 });
+  const director = new Orchestrator({ userTeam: 0, cooldown: 0, maxPerHalf: 99, timeoutSeconds: 12 });
   const st = role(e, 0, 'ST');
   stageScenario(e, {
     [st]: { x: 33.2, z: -0.12 },
@@ -36,7 +36,7 @@ function attackingSetup(seed: number) {
   return { e, moment, st };
 }
 
-describe('decisive moment director', () => {
+describe('orchestrator: open play', () => {
   it('opens a moment for the user team when its striker faces a genuine finishing choice', () => {
     const { e, moment, st } = attackingSetup(3);
     expect(moment).not.toBeNull();
@@ -95,23 +95,26 @@ describe('decisive moment director', () => {
 
   it('in an autonomous match moments stay rare and spaced', () => {
     const e = new MatchEngine({ seed: 8, halfMinutes: 4 });
-    const director = new MomentDirector({ userTeam: 0, cooldown: 60, maxPerHalf: 3, timeoutSeconds: 12 });
+    const director = new Orchestrator({ userTeam: 0, cooldown: 60, maxPerHalf: 3, timeoutSeconds: 12 });
     e.director = director.attach();
-    const times: number[] = [];
+    const times: { t: number; setPiece: boolean }[] = [];
     const kinds: { kind: string; half: number }[] = [];
     while (e.phase !== 'full-time' && e.time < 600) {
       e.step();
       if (e.phase === 'decision' && e.moment) {
-        times.push(e.time);
+        // The half-time talk and a penalty are outside the spacing (the talk also outside the half's quota).
+        if (e.moment.kind !== 'team-talk' && e.moment.kind !== 'penalty') times.push({ t: e.time, setPiece: e.moment.category === 'set-piece' });
         kinds.push({ kind: e.moment.kind, half: e.half });
         e.resolveMoment(e.moment.defaultOptionId, 'timeout');
       }
     }
     expect(e.phase).toBe('full-time');
     expect(times.length).toBeLessThanOrEqual(6);
+    expect(kinds.filter(k => k.kind === 'team-talk')).toEqual([{ kind: 'team-talk', half: 2 }]);
     // No kind of situation crowds out the others: at most one transition moment (counter, counter-press) per half.
     for (const half of [1, 2]) expect(kinds.filter(k => k.half === half && (k.kind === 'counter-press' || k.kind === 'counter-attack')).length).toBeLessThanOrEqual(1);
-    for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(60 - 0.5);
+    // Open play keeps the full spacing; a set piece may follow after a third of it.
+    for (let i = 1; i < times.length; i++) expect(times[i].t - times[i - 1].t).toBeGreaterThanOrEqual((times[i].setPiece ? 20 : 60) - 0.5);
   }, 300_000);
 
   it('danger in front of our box: pressing is carried out by the defender, delegating is recorded as such', () => {
@@ -123,7 +126,7 @@ describe('decisive moment director', () => {
       stageScenario(e, { [carrier]: { x: -31, z: 2 }, [defender]: { x: -35, z: 1 }, [role(e, 0, 'GK')]: { x: -51, z: 0 } }, { x: -30.6, y: 0.11, z: 2 });
       e.bodies[carrier].heading = -Math.PI / 2;
       e.referee.lastTouch = { player: carrier, team: 1, part: 'boot', time: e.time, position: e.ballPos() };
-      e.director = new MomentDirector({ userTeam: 0, cooldown: 0, maxPerHalf: 99, timeoutSeconds: 12 }).attach();
+      e.director = new Orchestrator({ userTeam: 0, cooldown: 0, maxPerHalf: 99, timeoutSeconds: 12 }).attach();
       runFor(e, 0.5);
       const moment = e.moment;
       e.director = null;
@@ -155,7 +158,7 @@ describe('decisive moment director', () => {
     stageScenario(e, { [carrier]: { x: -31, z: 2 }, [defender]: { x: -35, z: 1 }, [role(e, 0, 'GK')]: { x: -51, z: 0 } }, { x: -30.6, y: 0.11, z: 2 });
     e.bodies[carrier].heading = -Math.PI / 2;
     e.referee.lastTouch = { player: carrier, team: 1, part: 'boot', time: e.time, position: e.ballPos() };
-    e.director = new MomentDirector({ userTeam: 0, cooldown: 0, maxPerHalf: 99, timeoutSeconds: 12 }).attach();
+    e.director = new Orchestrator({ userTeam: 0, cooldown: 0, maxPerHalf: 99, timeoutSeconds: 12 }).attach();
     runFor(e, 0.5);
     e.director = null;
     const target = e.bodies[carrier].position();

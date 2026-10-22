@@ -35,6 +35,21 @@ export type Abilities = {
   handling: number;
 };
 
+/**
+ * Stable character traits, 0…1. They shift how a player weighs his options (and how much of the coach's risk setting he
+ * takes on), never how well he executes or what happens to the ball.
+ */
+export type Traits = {
+  /** Appetite for individual risk: shots and take-ons over safe options. */
+  risk: number;
+  /** How closely he follows the coach's instructions. */
+  discipline: number;
+  /** Team orientation: the pass over the solo action. */
+  teamplay: number;
+  /** Baseline self-confidence his form returns to. */
+  confidence: number;
+};
+
 export type PlayerProfile = {
   id: number;
   team: TeamId;
@@ -45,6 +60,7 @@ export type PlayerProfile = {
   heightM: number;
   massKg: number;
   abilities: Abilities;
+  traits: Traits;
 };
 
 export type TeamProfile = { id: TeamId; name: string; short: string; kit: string; shorts: string; keeperKit: string };
@@ -76,8 +92,11 @@ export type BallAction =
   | { kind: 'control'; touch?: { direction: Vec2; speed: number } }
   /** A header that sends the ball off with this velocity (clearance, lay-off, header at goal, or down to the feet). */
   | { kind: 'header'; velocity: Vec3 }
-  /** Throw-in with both hands from behind and over the head (Law 15): the velocity the ball should leave with. */
-  | { kind: 'throw'; velocity: Vec3 };
+  /**
+   * Throw-in with both hands from behind and over the head (Law 15): the velocity the ball should leave with. With a
+   * `receiver` (a decision) the velocity is worked out from where he is at the moment of the throw.
+   */
+  | { kind: 'throw'; velocity: Vec3; receiver?: number };
 
 /** Off-ball behaviour a player commits to for a while. */
 export type MovementAction =
@@ -122,22 +141,45 @@ export type MatchEvent = MatchEventBase &
   );
 export type MatchEventType = MatchEvent['type'];
 
-export type MomentKind = 'finish-or-pass' | 'take-on' | 'counter-attack' | 'counter-press' | 'breakaway-defence' | 'box-defence';
+export type MomentKind =
+  | 'finish-or-pass' | 'take-on' | 'counter-attack' | 'counter-press' | 'breakaway-defence' | 'box-defence'
+  | 'throw-in' | 'corner' | 'free-kick' | 'penalty' | 'team-talk';
+/** What kind of situation a moment is, for quotas, variety and presentation. */
+export type MomentCategory = 'attack' | 'transition' | 'defence' | 'set-piece' | 'coach';
 /** Who settled a decision: the user picking an option, the user handing it to the players, or the countdown. */
 export type DecisionSource = 'user' | 'delegated' | 'timeout';
+
+/**
+ * Where an option points on the pitch, taken from the frozen state it was offered in: the overlay draws exactly
+ * this, so a marker always belongs to the option and never to a guess about the future.
+ */
+export type OptionVisual = {
+  /** The player who carries the option out. */
+  actor: number;
+  /** Intended ball path from the ball's position. */
+  ball?: { to: Vec2; kind: 'ground' | 'lofted' | 'shot' | 'dribble' | 'throw'; receiver?: number };
+  /** Off-ball runs the option orders. */
+  runs?: { player: number; to: Vec2 }[];
+  /** Target area (corner zones, a pressing area). */
+  zone?: { x: number; z: number; r: number };
+  /** A team instruction moves the defensive line from x to x (from the real shape model). */
+  line?: { team: TeamId; from: number; to: number };
+};
 
 /** One executable alternative offered to the user. Executability is verified before it is offered. */
 export type DecisionOption = {
   id: string;
   label: string;
   detail: string;
-  /** What the choice hands to the players: an intent for one player, or a team instruction for a while. */
+  /** What the choice hands to the players: intents for one or several players, or a team instruction for a while (0 s: for the rest of the match). */
   effect:
     | { type: 'player'; player: number; intent: PlayerIntent }
+    | { type: 'players'; orders: { player: number; intent: PlayerIntent }[] }
     | { type: 'team'; team: TeamId; instruction: TeamInstruction; seconds: number }
     | { type: 'none' };
   /** Rough, honest outlook from the current state; never a promise of the outcome. */
   outlook: string;
+  visual?: OptionVisual;
 };
 
 export type DecisionMoment = {
@@ -145,9 +187,12 @@ export type DecisionMoment = {
   tick: number;
   team: TeamId;
   kind: MomentKind;
+  category: MomentCategory;
   title: string;
   situation: string;
   focusPlayer: number;
+  /** Players the user must see to judge the options (actor, receivers, nearest opponents, keeper). */
+  participants: number[];
   options: DecisionOption[];
   /** Option the players fall back to if the user does not decide in time: what the AI would have done. */
   defaultOptionId: string;
@@ -182,6 +227,8 @@ export type MatchSnapshot = {
   players: PlayerView[];
   possession: TeamId | null;
   lastTouch: number | null;
-  restart: { kind: RestartKind; team: TeamId; position: Vec2 } | null;
+  restart: { kind: RestartKind; team: TeamId; position: Vec2; taker: number; placed: boolean } | null;
   moment: DecisionMoment | null;
+  /** Each player's character and current form (confidence from his real actions in this match). */
+  minds: { confidence: number; recent: { action: 'pass' | 'dribble' | 'shot'; ok: boolean }[] }[];
 };

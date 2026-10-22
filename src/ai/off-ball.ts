@@ -4,6 +4,7 @@ import { PITCH } from '../physics/pitch-geometry';
 import type { BrainContext, PlayerBrain } from './brain';
 import { DEFENDERS, MIDFIELDERS, keeperShape, offsideLineU, shapeTarget, toTeam } from './shape';
 import { supportSpot } from './support';
+import { cornerAssignment, cornerSlotSpot } from './corner-routine';
 
 /** Distance from the own goal within which a second defender covers the ball's line to goal (m). */
 const COVER_ZONE = 24;
@@ -18,6 +19,15 @@ export function offBallCommand(b: PlayerBrain, ctx: BrainContext, ball: { pos: V
   const own = ctx.possession === b.profile.team && teamOnBall(b, ctx, ball);
   const opponents = ctx.profiles.filter(p => p.team !== b.profile.team).map(p => ({ p, pos: b.perception.playerNow(p.id, ctx.now) })).filter(o => o.pos) as { p: PlayerProfile; pos: Vec2 }[];
   if (role === 'GK') return { target: keeperShape(ctx.sign, ball.pos), speed: 6, face: ball.pos };
+  const r = ctx.restart;
+  if (r?.kind === 'corner' && r.team === b.profile.team) {
+    const slot = cornerAssignment(ctx.profiles, r.team, r.taker, ctx.sentOff, r.spot, ctx.sign).get(b.profile.id);
+    if (slot) {
+      const spot = cornerSlotSpot(slot, r.spot);
+      const gap = Math.hypot(spot.x - self.x, spot.z - self.z);
+      return { target: spot, speed: gap > 3 ? b.body.limits.maxSpeed * 0.9 : 2, face: ball.pos };
+    }
+  }
   let target = shapeTarget(role, {
     sign: ctx.sign, ball: ball.pos, inPossession: own, instruction: ctx.instruction,
     offsideLineU: offsideLineU(ctx.sign, opponents.map(o => o.pos)),

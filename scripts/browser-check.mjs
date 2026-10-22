@@ -1,19 +1,27 @@
-// Browser check for THE 12TH MAN: starts the Vite dev server, opens the app in a locally installed
-// Chrome or Edge (headless, GPU via ANGLE) through the DevTools protocol and verifies real behaviour:
-// no console errors, the match clock runs, frames render, a decision moment appears, a click on an option
-// is executed and followed up. Screenshots and a JSON report go to browser-check-output/.
-// Usage: npm run test:browser   (optional env: CHROME_PATH, CHECK_SECONDS, CHECK_SOFTWARE_GL=1)
+// Browser check for THE 12TH MAN: starts the Vite dev server, opens the app in a locally installed Chrome or Edge
+// (headless, GPU via ANGLE) through the DevTools protocol and verifies real behaviour: no console errors, the match
+// runs in the simulation worker, real decision moments of several kinds appear and freeze the simulation, the panel
+// leaves the relevant players visible, there is no horizontal page scroll, a choice by key is executed and its
+// consequence shown. Screenshots (before the decision, with a focused option, after the consequence) and a JSON report
+// go to browser-check-output/.
+// Usage: npm run test:browser   (env: CHROME_PATH, CHECK_SECONDS, CHECK_MOMENTS, CHECK_SOFTWARE_GL=1, CHECK_FULL=1,
+//        CHECK_VIEWPORT=1600x900, CHECK_SEED=7, CHECK_HALF=5, CHECK_COOLDOWN=25, CHECK_PREVIEW=1)
+//   CHECK_FULL=1 plays a full match (2 × 45 min) and hands every moment to the players after 2 s, to measure the
+//   session's wall-clock time, the worker's computing time and the simulated time.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const out = join(root, 'browser-check-output');
+const full = !!process.env.CHECK_FULL;
+const out = join(root, full ? 'browser-check-full' : 'browser-check-output');
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 const port = 5390 + Math.floor(Math.random() * 50);
 const debugPort = 9400 + Math.floor(Math.random() * 50);
-const maxSeconds = Number(process.env.CHECK_SECONDS ?? 240);
+const maxSeconds = Number(process.env.CHECK_SECONDS ?? (full ? 1500 : 420));
+const wantMoments = Number(process.env.CHECK_MOMENTS ?? 5);
+const [vw, vh] = (process.env.CHECK_VIEWPORT ?? '1600x900').split('x').map(Number);
 
 const candidates = [
   process.env.CHROME_PATH,
@@ -29,17 +37,19 @@ if (!browserPath) {
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const report = { browser: browserPath, port, checks: {}, errors: [], warnings: [], notes: [] };
+const report = { browser: browserPath, viewport: `${vw}x${vh}`, checks: {}, moments: [], errors: [], warnings: [], notes: [] };
 const fail = msg => { report.errors.push(msg); };
 
-const vite = spawn(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), '--port', String(port), '--strictPort'], { cwd: root, stdio: 'pipe' });
+// CHECK_PREVIEW=1 serves the production build (run `npm run build` first) instead of the dev server.
+const viteArgs = process.env.CHECK_PREVIEW ? ['preview', '--port', String(port), '--strictPort'] : ['--port', String(port), '--strictPort'];
+const vite = spawn(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), ...viteArgs], { cwd: root, stdio: 'pipe' });
 let viteReady = false;
 vite.stdout.on('data', d => { if (String(d).includes('Local')) viteReady = true; });
 for (let i = 0; i < 300 && !viteReady; i++) await sleep(200); // first start may pre-bundle dependencies
 if (!viteReady) { console.error('Vite dev server did not start'); vite.kill(); process.exit(2); }
 
 const gl = process.env.CHECK_SOFTWARE_GL ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : ['--use-angle=d3d11', '--ignore-gpu-blocklist', '--enable-gpu'];
-const browser = spawn(browserPath, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${join(out, 'profile')}`, '--window-size=1600,900', '--autoplay-policy=no-user-gesture-required', ...gl, 'about:blank'], { stdio: 'ignore' });
+const browser = spawn(browserPath, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${join(out, 'profile')}`, `--window-size=${vw},${vh}`, '--autoplay-policy=no-user-gesture-required', ...gl, 'about:blank'], { stdio: 'ignore' });
 
 let targets = null;
 for (let i = 0; i < 60 && !targets; i++) { try { targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json(); } catch { await sleep(250); } }
@@ -61,11 +71,34 @@ ws.addEventListener('message', ev => {
 const send = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 const evaluate = async expr => (await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })).result?.result?.value;
 const shot = async name => { const r = await send('Page.captureScreenshot', { format: 'png' }); if (r.result) writeFileSync(join(out, `${name}.png`), Buffer.from(r.result.data, 'base64')); };
+const press = async key => {
+  const code = key.length === 1 ? (/\d/.test(key) ? `Digit${key}` : `Key${key.toUpperCase()}`) : key;
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: key === 'ArrowDown' ? 40 : key === 'Enter' ? 13 : key.charCodeAt(0) });
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code });
+};
+const fps = () => evaluate("new Promise(r=>{let n=0;const t0=performance.now();const f=()=>{n++;if(performance.now()-t0<3000)requestAnimationFrame(f);else r(+(n/3).toFixed(1))};requestAnimationFrame(f)})");
+const D = 'window.__match.debug';
+
+/** Screen layout check: participants of the open moment projected through the real camera against the panel's box. */
+const layoutCheck = () => evaluate(`(()=>{
+  const d=${D}, m=d.moment, s=d.snapshot, cam=d.camera; if(!m||!s) return null;
+  const V=cam.position.constructor; const r=document.querySelector('.decision').getBoundingClientRect();
+  const W=innerWidth, H=innerHeight; const pts=[]; const add=(x,y,z,what)=>{const v=new V(x,y,z).project(cam); pts.push({what,x:(v.x+1)/2*W,y:(1-v.y)/2*H});};
+  add(s.ball.position.x,s.ball.position.y,s.ball.position.z,'ball');
+  for(const id of m.participants){const p=s.players[id]; if(p.sentOff) continue; add(p.position.x,0,p.position.z,'feet '+id); add(p.position.x,1.9,p.position.z,'head '+id);}
+  const inside=p=>p.x>=r.left&&p.x<=r.right&&p.y>=r.top&&p.y<=r.bottom; const off=p=>p.x<0||p.x>W||p.y<0||p.y>H;
+  return { covered: pts.filter(inside).map(p=>p.what), offscreen: pts.filter(off).map(p=>p.what), points: pts.length,
+    hScroll: document.documentElement.scrollWidth>innerWidth, panel:{left:Math.round(r.left),top:Math.round(r.top),width:Math.round(r.width),height:Math.round(r.height)} };
+})()`);
 
 try {
   await send('Runtime.enable');
   await send('Page.enable');
-  await send('Page.navigate', { url: `http://localhost:${port}/?seed=7&half=5&cooldown=12` });
+  const half = Number(process.env.CHECK_HALF ?? (full ? 45 : 5));
+  const seed = Number(process.env.CHECK_SEED ?? 7);
+  // Without an explicit spacing the app scales it with the half length, as for a user.
+  const cooldown = process.env.CHECK_COOLDOWN ? `&cooldown=${process.env.CHECK_COOLDOWN}` : full ? '' : '&cooldown=25';
+  await send('Page.navigate', { url: `http://localhost:${port}/?seed=${seed}&half=${half}${cooldown}&moments=${full ? 5 : 6}&timeout=${full ? 30 : 90}` });
   const waitFor = async (expr, seconds) => { for (let i = 0; i < seconds * 4; i++) { const v = await evaluate(expr); if (v) return v; await sleep(250); } return null; };
   report.checks.renderer = await evaluate("(()=>{const g=document.createElement('canvas').getContext('webgl2');const d=g&&g.getExtension('WEBGL_debug_renderer_info');return d?g.getParameter(d.UNMASKED_RENDERER_WEBGL):'unknown'})()");
   const startVisible = await waitFor("!!document.querySelector('.start-go')", 30);
@@ -73,47 +106,84 @@ try {
   if (!startVisible) throw new Error('start screen not shown');
   await sleep(1500);
   await shot('01-start-screen');
+  report.checks.startHorizontalScroll = await evaluate('document.documentElement.scrollWidth>innerWidth');
   await evaluate("document.querySelector('.start-go').click()");
-  await waitFor('!!window.__match', 30);
-  await sleep(3000);
+  await waitFor('!!window.__match && window.__match.debug.produced > 0', 60);
+  const t0 = Date.now();
+  await sleep(3500);
   await shot('02-kickoff');
-  // Clock check outside decisions (the match is frozen while a decision is open).
-  const clockSample = async () => { await waitFor("document.querySelector('.decision')?.hidden !== false", 30); return evaluate("[window.__match.engine.time, document.querySelector('[data-clock]')?.textContent]"); };
-  const [t0, c0] = await clockSample();
+  const sample = () => evaluate(`[${D}.snapshot?.time ?? 0, ${D}.produced, document.querySelector('[data-clock]')?.textContent]`);
+  const [s0, p0, c0] = await sample();
   await sleep(4000);
-  const [t1, c1] = await clockSample();
-  report.checks.clockRuns = { before: c0, after: c1, simSeconds: +(t1 - t0).toFixed(1) };
-  if (!(t1 > t0)) fail(`match clock does not advance (${c0} -> ${c1})`);
-  report.checks.fps = await evaluate("new Promise(r=>{let n=0;const t0=performance.now();const f=()=>{n++;if(performance.now()-t0<3000)requestAnimationFrame(f);else r(+(n/3).toFixed(1))};requestAnimationFrame(f)})");
-  await shot('03-match-tv-camera');
+  const [s1, p1, c1] = await sample();
+  report.checks.clockRuns = { before: c0, after: c1, shownSimSeconds: +(s1 - s0).toFixed(1), workerTicks: p1 - p0 };
+  if (!(s1 > s0)) fail(`match clock does not advance (${c0} -> ${c1})`);
+  report.checks.fpsLive = await fps();
+  await shot('03-match');
 
-  // Wait for a real decision moment produced by the director, then act on it immediately.
-  const moment = await waitFor("(()=>{const p=document.querySelector('.decision');if(!p||p.hidden)return null;return {title:p.querySelector('[data-title]').textContent,options:[...p.querySelectorAll('.decision-option .decision-label')].map(e=>e.textContent)}})()", maxSeconds);
-  report.checks.moment = moment;
-  if (!moment) report.notes.push(`no decision moment within ${maxSeconds}s (moments are rare by design)`);
-  else {
-    const tickA = await evaluate('window.__match.engine.tick');
-    await sleep(400);
-    const tickB = await evaluate('window.__match.engine.tick');
-    report.checks.frozenDuringDecision = tickA === tickB;
-    if (tickA !== tickB) fail('simulation kept running during the decision');
-    await sleep(1200);
-    await shot('04-decision-moment');
-    await evaluate("document.querySelector('.decision-option').click()");
-    await sleep(300);
-    const decided = await evaluate("window.__match.engine.events.filter(e=>e.type==='decision').map(e=>e.chosenBy)");
-    report.checks.decisionRecorded = decided;
-    if (!decided?.includes('user')) fail('click on an option was not recorded as a user decision');
-    await sleep(2500);
-    await shot('05-after-decision');
-    await sleep(6000);
-    report.checks.statusAfterDecision = await evaluate("document.querySelector('[data-status]')?.textContent");
-    report.checks.userSwings = await evaluate("window.__match.engine.events.filter(e=>e.type==='swing'&&e.source==='user').length");
-    report.checks.userInstructions = await evaluate("window.__match.engine.events.filter(e=>e.type==='instruction'&&e.source==='user').length");
-    await shot('06-outcome');
+  const kinds = new Set();
+  let n = 0;
+  while ((Date.now() - t0) / 1000 < maxSeconds) {
+    const state = await evaluate(`(()=>{const d=${D};return {deciding:d.deciding,finished:d.finished,mode:d.mode,speed:d.speed}})()`);
+    if (state?.finished) break;
+    if (state?.mode === 'condensed' && !report.checks.fpsCondensed) { report.checks.fpsCondensed = await fps(); await shot('04-condensed'); }
+    if (!state?.deciding) { await sleep(400); continue; }
+    n++;
+    const m = await evaluate(`(()=>{const m=${D}.moment;return {kind:m.kind,category:m.category,title:m.title,options:m.options.map(o=>o.label),default:m.defaultOptionId}})()`);
+    const entry = { n, ...m };
+    if (full) {
+      await sleep(2000);
+      await press('0');
+      entry.chosen = 'delegated';
+      report.moments.push(entry);
+      continue;
+    }
+    const produced = await evaluate(`${D}.produced`);
+    await sleep(1400); // the camera flies to the decision framing
+    entry.frozen = produced === await evaluate(`${D}.produced`);
+    if (!entry.frozen) fail(`simulation kept running during moment ${n}`);
+    entry.layout = await layoutCheck();
+    if (entry.layout?.hScroll) fail(`horizontal page scroll during moment ${n}`);
+    if (entry.layout?.covered?.length) report.notes.push(`moment ${n} (${m.kind}): panel covers ${entry.layout.covered.join(', ')}`);
+    const tag = `${String(10 + n)}-${m.kind}`;
+    await shot(`${tag}-a-before`);
+    await press('ArrowDown');
+    await sleep(500);
+    entry.focused = await evaluate("document.querySelector('.decision-option.focused .decision-label')?.textContent");
+    await shot(`${tag}-b-focus`);
+    const key = m.options.length > 1 ? '2' : '1';
+    const before = await evaluate(`${D}.events.length`);
+    await press(key);
+    await sleep(600);
+    entry.decision = await evaluate(`${D}.events.slice(${before}).find(e=>e.type==='decision')?.chosenBy ?? null`);
+    if (entry.decision !== 'user') fail(`key ${key} at moment ${n} was not recorded as a user decision (${entry.decision})`);
+    entry.chosen = m.options[Number(key) - 1];
+    await sleep(3500);
+    await shot(`${tag}-c-after`);
+    await sleep(5000);
+    entry.consequence = await evaluate("[...document.querySelectorAll('.consequence li')].map(e=>e.textContent)");
+    entry.userActions = await evaluate(`${D}.events.slice(${before}).filter(e=>(e.type==='swing'&&e.source==='user')||(e.type==='instruction'&&e.source==='user')).length`);
+    if (n === 1) {
+      // A close-up of the figures in play (the broadcast director's close shot), for the figure quality record.
+      await evaluate(`${D}.director.manual='close'`);
+      await sleep(1800);
+      await shot('05-figures-close');
+      await evaluate(`${D}.director.manual=null`);
+    }
+    report.moments.push(entry);
+    kinds.add(m.kind);
+    if (n >= wantMoments && kinds.size >= Math.min(3, wantMoments)) break;
   }
-  report.checks.ticker = await evaluate("[...document.querySelectorAll('[data-ticker] > div')].map(e=>e.textContent)");
-  report.checks.events = await evaluate("(()=>{const c={};for(const e of window.__match.engine.events)c[e.type]=(c[e.type]||0)+1;return c})()");
+  report.checks.momentKinds = [...kinds];
+  if (!full && report.moments.length === 0) fail('no decision moment appeared');
+  if (full) {
+    const done = await waitFor(`${D}.finished`, Math.max(10, maxSeconds - (Date.now() - t0) / 1000));
+    report.checks.fullMatch = { finished: !!done, metrics: await evaluate(`${D}.metrics`), wallSecondsMeasuredByScript: Math.round((Date.now() - t0) / 1000) };
+    if (!done) fail('the full match did not reach full time in the allotted time');
+    await shot('99-result');
+  }
+  report.checks.events = await evaluate(`(()=>{const c={};for(const e of ${D}.events)c[e.type]=(c[e.type]||0)+1;return c})()`);
+  report.checks.workerCpuSeconds = +((await evaluate(`${D}.cpuMs`)) / 1000).toFixed(1);
 } catch (err) {
   fail(`check aborted: ${err}`);
 } finally {

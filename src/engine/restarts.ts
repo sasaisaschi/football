@@ -12,6 +12,10 @@ export type RestartState = {
   placed: boolean;
   placedAt: number;
   taker: number;
+  /** The orchestrator has looked at this placed restart once (it may stop play before it is taken, never twice). */
+  consulted: boolean;
+  /** A free kick awarded for a foul or handball may be shot at goal; one for offside or a back-pass is indirect (Law 13). */
+  direct: boolean;
 };
 
 /** Delay before the ball is placed, per restart reason. */
