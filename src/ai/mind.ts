@@ -35,18 +35,56 @@ export function neutralConfidence(baseline: number): number {
 export type JudgedAction = 'pass' | 'dribble' | 'shot';
 export type MindView = { traits: Traits; confidence: number; recent: { action: JudgedAction; ok: boolean }[] };
 
+/** Trust between two team-mates moves by these steps for a pass that arrived (passer, receiver) or went astray. */
+const BOND_GAIN = 0.1, BOND_RECEIVED = 0.05, BOND_LOSS = 0.08;
+/** How much trust in a receiver is worth in a pass's value (at most ≈ 0.003 expected threat). */
+const BOND_WEIGHT = 0.003;
+/** Population mean of the baseline confidence (rosters.ts): a higher baseline leans towards solo actions. */
+const BASELINE_MEAN = 0.55;
+
 export class PlayerMind {
   confidence: number;
+  /** Baseline confidence: the trait, or what earlier matches made of it (agent-memory.ts). */
+  baseline: number;
   readonly recent: { action: JudgedAction; ok: boolean; time: number }[] = [];
+  /** Trust in team-mates (−1 … 1) from passes between them in this and earlier matches. */
+  readonly bonds = new Map<number, number>();
 
   constructor(readonly traits: Traits) {
+    this.baseline = traits.confidence;
     this.confidence = traits.confidence;
+  }
+
+  /** Starts from a baseline developed in earlier matches. */
+  setBaseline(baseline: number): void {
+    this.baseline = baseline;
+    this.confidence = baseline;
+  }
+
+  bond(mate: number): number {
+    return this.bonds.get(mate) ?? 0;
+  }
+
+  /** Trust moves towards +1 (or −1) by a step, never beyond. */
+  adjustBond(mate: number, step: number): void {
+    const b = this.bond(mate);
+    this.bonds.set(mate, step >= 0 ? b + step * (1 - b) : b + step * (1 + b));
+  }
+
+  /** A pass of mine towards `receiver` arrived (true) or not: trust in him follows. */
+  passTo(receiver: number, ok: boolean): void {
+    this.adjustBond(receiver, ok ? BOND_GAIN : -BOND_LOSS);
+  }
+
+  /** Extra value of passing to a team-mate: more for one I trust. */
+  bondBias(receiver: number): number {
+    return this.bond(receiver) * BOND_WEIGHT;
   }
 
   record(action: JudgedAction, ok: boolean, time: number): void {
     const c = this.confidence;
     const moved = ok ? c + GAIN * (1 - c) : c - LOSS * c;
-    this.confidence = moved + RELAX * (this.traits.confidence - moved);
+    this.confidence = moved + RELAX * (this.baseline - moved);
     this.recent.push({ action, ok, time });
     if (this.recent.length > RECENT) this.recent.shift();
   }
@@ -60,8 +98,10 @@ export class PlayerMind {
     // Form is how far confidence stands above or below where it settles for an average run of actions. Measured from
     // 0.5 it leaned every player towards solo actions, because confidence settles near 0.66: more dribbles, more
     // turnovers and throw-ins (24 seeds, §10.10).
-    const form = this.confidence - neutralConfidence(t.confidence);
-    if (kind === 'shot' || kind === 'dribble') return (t.risk - 0.5) * 0.006 + form * 0.014 - (t.teamplay - 0.5) * 0.004;
+    const form = this.confidence - neutralConfidence(this.baseline);
+    // A self-assured player (high baseline, also grown over earlier matches) leans a little towards solo actions.
+    const assured = (this.baseline - BASELINE_MEAN) * 0.006;
+    if (kind === 'shot' || kind === 'dribble') return (t.risk - 0.5) * 0.006 + form * 0.014 - (t.teamplay - 0.5) * 0.004 + assured;
     if (kind === 'pass') return (t.teamplay - 0.5) * 0.004 - form * 0.003;
     if (kind === 'shield' || kind === 'clear') return -(t.risk - 0.5) * 0.004;
     return 0;
@@ -83,7 +123,7 @@ export class PlayerMind {
  * opponents touch first or that goes out is a failure. Pure function of the events, so a replay gives the same minds.
  */
 export class ExperienceTracker {
-  private open: { player: number; action: JudgedAction; time: number; contacted: boolean } | null = null;
+  private open: { player: number; action: JudgedAction; time: number; contacted: boolean; receiver?: number } | null = null;
 
   constructor(private readonly profiles: readonly PlayerProfile[], private readonly minds: readonly PlayerMind[]) {}
 
@@ -95,7 +135,7 @@ export class ExperienceTracker {
         if (e.action === 'pass' || e.action === 'dribble' || e.action === 'shot') {
           // The dribbler gets to swing at the ball again after his touch: that carry kept the ball.
           if (o && o.player === e.player && o.action === 'dribble' && o.contacted) this.settle(true, e.time);
-          this.open = { player: e.player, action: e.action, time: e.time, contacted: false };
+          this.open = { player: e.player, action: e.action, time: e.time, contacted: false, receiver: e.receiver };
         }
         return;
       case 'touch': {
@@ -108,7 +148,7 @@ export class ExperienceTracker {
         }
         const mate = this.profiles[e.player].team === this.profiles[cur.player].team;
         if (cur.action === 'shot') this.settle(!mate && this.profiles[e.player].role === 'GK', e.time);
-        else this.settle(mate, e.time);
+        else this.settle(mate, e.time, mate ? e.player : undefined);
         return;
       }
       case 'goal':
@@ -125,9 +165,15 @@ export class ExperienceTracker {
     }
   }
 
-  private settle(ok: boolean, time: number): void {
+  /** `got`: the team-mate who received a pass that arrived. Trust grows both ways; a lost pass costs trust in its target. */
+  private settle(ok: boolean, time: number, got?: number): void {
     const o = this.open!;
-    this.minds[o.player].record(o.action, ok, time);
+    const passer = this.minds[o.player];
+    passer.record(o.action, ok, time);
+    if (o.action === 'pass') {
+      if (ok && got !== undefined) { passer.passTo(got, true); this.minds[got].adjustBond(o.player, BOND_RECEIVED); }
+      else if (!ok && o.receiver !== undefined) passer.passTo(o.receiver, false);
+    }
     this.open = null;
   }
 }

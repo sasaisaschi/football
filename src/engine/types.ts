@@ -133,7 +133,7 @@ export type MatchEventBase = { id: number; tick: number; time: number };
 export type MatchEvent = MatchEventBase &
   (
     | { type: 'kickoff'; team: TeamId; half: 1 | 2 }
-    | { type: 'swing'; player: number; action: BallAction['kind']; source: IntentSource }
+    | { type: 'swing'; player: number; action: BallAction['kind']; source: IntentSource; receiver?: number }
     | { type: 'touch'; player: number; part: 'boot' | 'head' | 'body' | 'hands'; ballSpeed: number; position: Vec3 }
     | { type: 'catch'; player: number; position: Vec3 }
     | { type: 'release'; player: number }

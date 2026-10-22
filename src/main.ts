@@ -6,6 +6,7 @@ import { DEFAULT_ORCHESTRATOR } from './orchestrator/orchestrator';
 import { createPitchView } from './render/pitch-view';
 import { createStadiumView } from './render/stadium-view';
 import { showStartScreen } from './ui/start-screen';
+import { MEMORY_STORAGE_KEY, parseMemory, type AgentMemory } from './ai/agent-memory';
 
 /**
  * Optional URL parameters for development and verification (documented in PROJECT_REPORT.md):
@@ -15,6 +16,7 @@ import { showStartScreen } from './ui/start-screen';
  *   ?moments=5           decision moments per half at most (default 5)
  *   ?timeout=15          seconds the user has for a decision (default 15)
  *   ?condense=0          show everything live instead of condensing quiet play
+ *   ?memory=0            players start without (and do not store) memory of earlier matches
  *   ?autostart=1         skip the start screen (used by the browser check)
  */
 const params = new URLSearchParams(location.search);
@@ -67,11 +69,15 @@ let app: MatchApp | null = null;
 let starting = false;
 let last = performance.now();
 let orbit = 0;
+let frameCount = 0;
 
 function loop(now: number): void {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  if (app) app.frame(dt);
+  frameCount++;
+  const relaxed = app?.relaxedRendering() ?? false;
+  const draw = !relaxed || frameCount % 2 === 0;
+  if (app) app.frame(dt, draw);
   else {
     // Establishing shot of the bowl behind the start screen, from inside the stadium under the roofs.
     orbit += dt * 0.04;
@@ -79,8 +85,19 @@ function loop(now: number): void {
     camera.lookAt(Math.cos(orbit) * -8, 0, Math.sin(orbit) * -6);
     stadium.update(now / 1000, 0.15, 0);
   }
-  renderer.render(scene, camera);
+  // While condensed play waits for the simulation, the picture runs at half rate and shadows are redrawn every third
+  // frame: the worker shares the machine's power budget with the 3D picture (measured: 1.64 ms per tick without
+  // rendering, 2.31 ms with it, §10.10). Live play and decisions keep the full rate.
+  renderer.shadowMap.autoUpdate = !relaxed;
+  if (relaxed && frameCount % 6 === 0) renderer.shadowMap.needsUpdate = true;
+  if (draw) renderer.render(scene, camera);
   requestAnimationFrame(loop);
+}
+
+/** The players' memory from earlier matches in this browser (none in the browser check, which must be reproducible). */
+function loadMemory(): AgentMemory | null {
+  if (params.get('memory') === '0') return null;
+  return parseMemory(localStorage.getItem(MEMORY_STORAGE_KEY), 7);
 }
 
 async function startMatch(halfMinutes: number, condense: boolean): Promise<void> {
@@ -96,6 +113,8 @@ async function startMatch(halfMinutes: number, condense: boolean): Promise<void>
     timeoutSeconds: num('timeout', DEFAULT_ORCHESTRATOR.timeoutSeconds),
     userTeam: 0,
     condense,
+    memory: loadMemory(),
+    saveMemory: m => { if (params.get('memory') !== '0') localStorage.setItem(MEMORY_STORAGE_KEY, JSON.stringify(m)); },
   });
   // Read-only handle for the browser check script.
   (window as unknown as { __match?: MatchApp }).__match = app;
@@ -108,4 +127,7 @@ window.addEventListener('keydown', ev => {
 requestAnimationFrame(loop);
 const half = num('half', 15);
 if (params.get('autostart') === '1') void startMatch(half, params.get('condense') !== '0');
-else showStartScreen(overlay, half, choice => void startMatch(choice.halfMinutes, choice.condense));
+else showStartScreen(overlay, half, loadMemory()?.matches ?? 0, choice => {
+  if (choice.resetMemory) localStorage.removeItem(MEMORY_STORAGE_KEY);
+  void startMatch(choice.halfMinutes, choice.condense);
+});

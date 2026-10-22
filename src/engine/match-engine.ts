@@ -8,6 +8,7 @@ import { CHEST_PART, Head } from '../physics/head';
 import { ThrowHands } from '../physics/throw-hands';
 import { throwInStand } from '../ai/throw-in';
 import { ExperienceTracker, PlayerMind } from '../ai/mind';
+import { applyMemory, type AgentMemory } from '../ai/agent-memory';
 import { PITCH, attackSign, BALL_SPEC } from '../physics/pitch-geometry';
 import { PHYSICS_DT, PhysicsWorld, physicsClock, type Contact, type ContactPart } from '../physics/world';
 import { Referee, penaltySpot, restartDistance, type Decision, type PlayerState } from '../rules/referee';
@@ -19,7 +20,8 @@ import type {
   BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, PlayerView, RestartKind, TeamId, TeamInstruction, Vec2, Vec3,
 } from './types';
 
-export type MatchConfig = { seed: number; halfMinutes: number; rosterSeed?: number };
+/** `memory`: what the players remember from earlier matches (agent-memory.ts); without it they start from their traits. */
+export type MatchConfig = { seed: number; halfMinutes: number; rosterSeed?: number; memory?: AgentMemory };
 export type Director = (engine: MatchEngine) => DecisionMoment | null;
 type EventInput = MatchEvent extends infer E ? E extends MatchEvent ? Omit<E, 'id' | 'tick' | 'time'> : never : never;
 
@@ -111,6 +113,7 @@ export class MatchEngine {
     }
     this.referee = new Referee(this.profiles);
     this.experience = new ExperienceTracker(this.profiles, this.minds);
+    if (config.memory) applyMemory(config.memory, this.minds, this.profiles);
     // The substitutes wait off the pitch: no body in play, invisible to everyone until they come on.
     for (const p of this.profiles) if (p.squad === 'bench') { this.leavePitch(p.id); this.referee.sentOff.add(p.id); }
     this.throwHands = new ThrowHands(this.physics.world, this.physics.ball);
@@ -249,7 +252,8 @@ export class MatchEngine {
       if (out.swing) {
         if (out.swing.action.kind === 'throw') this.throwHands.throwBall(out.swing.action.velocity);
         this.lastSwing.set(p.id, { kind: out.swing.action.kind, time: this.time });
-        this.emit({ type: 'swing', player: p.id, action: out.swing.action.kind, source: out.swing.source });
+        const a = out.swing.action;
+        this.emit({ type: 'swing', player: p.id, action: a.kind, source: out.swing.source, ...(a.kind === 'pass' ? { receiver: a.receiver } : {}) });
       }
       const move = this.brains[p.id].userIntent;
       states.set(p.id, { pos: body.position(), vel: body.velocity(), heading: body.heading, hasTacticalFoulIntent: move?.type === 'move' && move.action.kind === 'tactical-foul', sliding: body.down() });

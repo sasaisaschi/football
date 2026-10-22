@@ -531,7 +531,8 @@ export class PlayerBrain {
       // How much of it a player takes on depends on his discipline; his character and form add their own lean.
       const forward = o.kind === 'shot' || (o.kind === 'pass' && 'aim' in o.action && ctx.sign * (o.action.aim.x - pic.ball.pos.x) > 8) || o.kind === 'dribble';
       const riskBonus = (ctx.instruction.risk - 0.5) * (forward ? 0.01 : -0.005) * this.mind.compliance();
-      const score = o.value + riskBonus + this.mind.bias(o.kind) + this.rng.gauss() * noise;
+      const trust = o.kind === 'pass' && o.target !== undefined ? this.mind.bondBias(o.target) : 0;
+      const score = o.value + riskBonus + this.mind.bias(o.kind) + trust + this.rng.gauss() * noise;
       if (score > bestScore) { bestScore = score; best = o; }
     }
     return best.action;

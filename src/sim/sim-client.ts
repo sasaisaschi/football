@@ -1,3 +1,4 @@
+import type { AgentMemory } from '../ai/agent-memory';
 import type { DecisionMoment, DecisionSource, MatchEvent, MatchSnapshot, PlayerProfile } from '../engine/types';
 import { decodeFrame } from './frame-codec';
 import type { KeyTick } from './playback';
@@ -24,6 +25,8 @@ export class SimClient {
   /** Milliseconds the worker spent computing. */
   cpuMs = 0;
   error: string | null = null;
+  /** What the players take into the next match, once the match is over. */
+  memory: AgentMemory | null = null;
   private chunks: Chunk[] = [];
   private floats = 0;
   private readonly worker: Worker;
@@ -74,6 +77,7 @@ export class SimClient {
     }
     if (b.moment) { this.moment = b.moment; this.momentTick = this.produced; }
     if (b.done) this.done = true;
+    if (b.memory) this.memory = b.memory;
   }
 
   /** The frame for a tick (clamped to what exists). */
