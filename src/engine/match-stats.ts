@@ -1,4 +1,5 @@
-import type { BallAction, MatchEvent, PlayerProfile } from './types';
+import type { BallAction, MatchEvent, PlayerProfile, RestartKind } from './types';
+import { PITCH } from '../physics/pitch-geometry';
 
 /**
  * Match statistics from the event stream, shared by `npm run sim` (one full match) and `npm run probe`
@@ -32,6 +33,12 @@ export type MatchStats = {
   throwIns: number;
   goalKicks: number;
   keeperCatches: number;
+  /** Where a goal's move began: open play, or a restart with no change of possession and at most 20 s before the goal. */
+  goalOrigin: Record<'open' | RestartKind, number>;
+  /** Distance to goal of the scorer's last touch (m). */
+  goalDistance: { under11: number; from11to18: number; from18to25: number; over25: number };
+  /** What happened to each struck shot next: goal, the keeper (caught or parried), a defender's block, a team-mate, or out. */
+  shotOutcome: { goal: number; caught: number; parried: number; blocked: number; mate: number; out: number };
 };
 
 /** Longest time from a pass swing to the boot's contact for the touch to be that pass (s), as for a deliberate touch. */
@@ -45,7 +52,14 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
     shots: [0, 0], shotsAfterBuildUp: 0, passes: 0, passesCompleted: 0, possessionChanges: 0,
     lossesAfter: { pass: 0, shot: 0, dribble: 0, clear: 0, tackle: 0, control: 0, header: 0, throw: 0, head: 0, body: 0, hands: 0, none: 0 },
     pingPong: 0, meanSpell: 0, fouls: 0, yellow: 0, red: 0, penalties: 0, offsides: 0, corners: 0, throwIns: 0, goalKicks: 0, keeperCatches: 0,
+    goalOrigin: { open: 0, kickoff: 0, 'throw-in': 0, corner: 0, 'goal-kick': 0, 'free-kick': 0, penalty: 0, 'drop-ball': 0 },
+    goalDistance: { under11: 0, from11to18: 0, from18to25: 0, over25: 0 },
+    shotOutcome: { goal: 0, caught: 0, parried: 0, blocked: 0, mate: 0, out: 0 },
   };
+  // The restart the current move began with (cleared by a change of possession) and the shot still travelling.
+  let origin: { kind: RestartKind; time: number } | null = null;
+  let openShot: { player: number } | null = null;
+  let lastTouchAt: { x: number; z: number } | null = null;
   const lastSwing = new Map<number, { kind: BallAction['kind']; time: number }>();
   let prev: { player: number; time: number; part: 'boot' | 'head' | 'body' | 'hands' } | null = null;
   let spellStart = 0, spellSum = 0;
@@ -60,6 +74,12 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
         if (ev.action === 'shot') { s.shots[team(ev.player)]++; if (movePasses >= 3) s.shotsAfterBuildUp++; }
         break;
       case 'touch': case 'catch': {
+        if (openShot && ev.player !== openShot.player) {
+          const keeper = profiles[ev.player].role === 'GK' && team(ev.player) !== team(openShot.player);
+          if (keeper) s.shotOutcome[ev.type === 'catch' ? 'caught' : 'parried']++;
+          else s.shotOutcome[team(ev.player) === team(openShot.player) ? 'mate' : 'blocked']++;
+          openShot = null;
+        }
         if (openPass && ev.player !== openPass.player) {
           if (team(ev.player) === team(openPass.player)) { s.passesCompleted++; movePasses++; }
           openPass = null;
@@ -72,9 +92,15 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
           s.passes++;
           openPass = { player: ev.player };
         }
+        if (ev.type === 'touch' && ev.part === 'boot' && own?.kind === 'shot' && ev.time - own.time < PASS_CONTACT && kickedSwing.get(ev.player) !== own.time) {
+          kickedSwing.set(ev.player, own.time);
+          openShot = { player: ev.player };
+        }
+        lastTouchAt = { x: ev.position.x, z: ev.position.z };
         if (prev && team(prev.player) !== team(ev.player)) {
           s.possessionChanges++;
           movePasses = 0;
+          origin = null;
           const sw = lastSwing.get(prev.player);
           s.lossesAfter[prev.part !== 'boot' ? prev.part : sw && prev.time - sw.time < 1 ? sw.kind : 'none']++;
           if (lastChange && lastChange.from === team(ev.player) && ev.time - lastChange.time < 1) s.pingPong++;
@@ -87,8 +113,14 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
         if (ev.type === 'catch') s.keeperCatches++;
         break;
       }
-      case 'goal':
+      case 'goal': {
         s.score[ev.team]++;
+        if (openShot) s.shotOutcome.goal++;
+        s.goalOrigin[origin && ev.time - origin.time <= 20 ? origin.kind : 'open']++;
+        if (lastTouchAt) {
+          const d = Math.hypot(Math.sign(ev.position.x) * PITCH.halfLength - lastTouchAt.x, lastTouchAt.z);
+          s.goalDistance[d < 11 ? 'under11' : d < 18 ? 'from11to18' : d < 25 ? 'from18to25' : 'over25']++;
+        }
         if (ev.ownGoal) s.ownGoals++;
         if (ev.ownGoal || !prev) s.goalsFrom.own++;
         else if (team(prev.player) !== ev.team && ev.scorer !== null) {
@@ -100,7 +132,12 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
           s.goalsFrom[prev.part !== 'boot' ? prev.part : sw && prev.time - sw.time < 1 ? sw.kind : 'none']++;
         }
         break;
+      }
+      case 'in-play':
+        origin = { kind: ev.restart, time: ev.time };
+        break;
       case 'out':
+        if (openShot) s.shotOutcome.out++;
         if (ev.restart === 'corner') s.corners++;
         if (ev.restart === 'throw-in') s.throwIns++;
         if (ev.restart === 'goal-kick') s.goalKicks++;
@@ -120,6 +157,8 @@ export function matchStats(events: readonly MatchEvent[], profiles: readonly Pla
       prev = null;
       lastChange = null;
       openPass = null;
+      openShot = null;
+      lastTouchAt = null;
     }
   }
   s.meanSpell = +(spellSum / Math.max(1, s.possessionChanges)).toFixed(1);

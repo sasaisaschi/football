@@ -62,6 +62,10 @@ const report = {
   meanSpellSeconds: +(sum(r => r.meanSpell * r.possessionChanges) / Math.max(1, sum(r => r.possessionChanges))).toFixed(1),
   fouls: p(r => r.fouls), penalties: p(r => r.penalties), offsides: p(r => r.offsides),
   corners: p(r => r.corners), throwIns: p(r => r.throwIns), goalKicks: p(r => r.goalKicks), keeperCatches: p(r => r.keeperCatches),
+  goalOrigin: Object.fromEntries(Object.keys(results[0].goalOrigin).map(k => [k, p(r => r.goalOrigin[k])])),
+  goalDistance: Object.fromEntries(Object.keys(results[0].goalDistance).map(k => [k, p(r => r.goalDistance[k])])),
+  shotOutcome: Object.fromEntries(Object.keys(results[0].shotOutcome).map(k => [k, p(r => r.shotOutcome[k])])),
+  goalsSd: +Math.sqrt(results.reduce((a, r) => a + ((r.score[0] + r.score[1]) * 90 / (2 * minutes) - sum(x => x.score[0] + x.score[1]) * per90) ** 2, 0) / Math.max(1, results.length - 1)).toFixed(2),
   ballInPlay: +(sum(r => r.ballInPlay) / results.length).toFixed(2),
   msPerStep: +(sum(r => r.msPerStep) / results.length).toFixed(2), wallSeconds: Math.round((Date.now() - started) / 1000),
 };
