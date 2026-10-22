@@ -25,6 +25,13 @@ const GROUND_SUBSTEPS = 4;
 /** Ball speed (m/s) below which a ball on the turf is treated as at rest. */
 const AT_REST = 0.2;
 /**
+ * The four substeps are needed while the ball skids (spin builds up through the contact) and while it is fast. A ball
+ * already rolling cleanly (contact point slipping < 0.1 m/s) below 10 m/s follows the same path with two: measured
+ * against four on skidding, rolling, back- and side-spun, lofted and dropped balls from 4 to 32 m/s, the position
+ * differed by at most 3.3 cm after 5 s (up to 60 m travelled); two above 10 m/s differed by up to 0.38 m (§10.10).
+ */
+const ROLLING_SUBSTEPS = 2, ROLLING_SLIP = 0.1, ROLLING_MAX_SPEED = 10;
+/**
  * Boots only ever collide with the ball (groups.ts). A player whose body is further from the ball than this at the
  * start of a tick cannot reach it with a boot within the tick (leg ≈ 1.2 m, ball ≤ 40 m/s · 1/60 s ≈ 0.7 m), so his
  * boot colliders leave the broad phase until the ball comes near: no contact can change, the solver has less to do.
@@ -83,8 +90,14 @@ export class PhysicsWorld {
   substepsNeeded(): number {
     let fastest = 0;
     for (const k of this.kinematics) if (k.strikeSpeedNow) fastest = Math.max(fastest, k.strikeSpeedNow());
-    const floor = this.ballMovingOnTurf() ? GROUND_SUBSTEPS : 1;
+    const floor = this.ballMovingOnTurf() ? (this.ballRollingSlowly() ? ROLLING_SUBSTEPS : GROUND_SUBSTEPS) : 1;
     return Math.min(MAX_SUBSTEPS, Math.max(floor, Math.ceil((fastest * PHYSICS_DT) / MAX_BOOT_TRAVEL)));
+  }
+
+  /** Rolling without slip at the contact point, below ROLLING_MAX_SPEED. */
+  private ballRollingSlowly(): boolean {
+    const v = this.ball.linvel(), w = this.ball.angvel(), r = BALL_SPEC.radius;
+    return Math.hypot(v.x, v.z) < ROLLING_MAX_SPEED && Math.hypot(v.x + w.z * r, v.z - w.x * r) < ROLLING_SLIP;
   }
 
   /** Ball touching the turf and still moving (skidding or rolling). */

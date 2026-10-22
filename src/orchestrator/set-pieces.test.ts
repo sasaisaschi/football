@@ -88,9 +88,12 @@ describe('orchestrator: set pieces stop play before they are taken', () => {
     const { moment } = throwIn();
     for (const option of moment!.options) {
       const e = throwIn();
-      const log = choose(e, option.id, 6);
       const taker = moment!.focusPlayer;
-      expect(log.filter(ev => ev.type === 'in-play')).toHaveLength(1);
+      const log = choose(e, option.id, 6);
+      // Exactly one restart of play for this throw-in (up to whatever stoppage open play brings next).
+      const nextStop = log.findIndex(ev => ev.type === 'restart');
+      const untilNext = nextStop < 0 ? log : log.slice(0, nextStop);
+      expect(untilNext.filter(ev => ev.type === 'in-play')).toEqual([expect.objectContaining({ restart: 'throw-in', taker })]);
       // Never the same throw-in again (Law 15 retake loop); a later, different restart may follow from open play.
       const spot = e.events.find(ev => ev.type === 'restart')!;
       expect(log.filter(ev => ev.type === 'restart' && spot.type === 'restart' && ev.restart === 'throw-in' && ev.team === spot.team && Math.hypot(ev.position.x - spot.position.x, ev.position.z - spot.position.z) < 1)).toHaveLength(0);

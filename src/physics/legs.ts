@@ -324,6 +324,8 @@ export class Legs {
 
   /** Advances the swing and stages the next kinematic boot poses. Call before every physics (sub)step. */
   update(dt: number, lastSubstep = true): void {
+    // A player off the pitch (bench, substituted, sent off) has nothing to move.
+    if (!this.owner.body.isEnabled()) return;
     this.placeNow = this.collidersOn || lastSubstep;
     if (this.slideSide !== null) {
       const dir = this.owner.slideDirection();

@@ -25,11 +25,12 @@ type EventInput = MatchEvent extends infer E ? E extends MatchEvent ? Omit<E, 'i
 
 export const DEFAULT_INSTRUCTION: TeamInstruction = { press: 'mid', lineHeight: 0, risk: 0.5 };
 /**
- * Players further than this from the ball (m) re-plan every REPLAN_TICKS ticks (20 Hz) instead of every tick; their
- * bodies keep following the last plan in every tick, nothing is skipped in the physics. Their perception already
- * lags by about a tenth of a second, and their off-ball positioning was ≈ 15 % of a tick (profiled).
+ * How often a player re-plans: every tick while he plays or goes for the ball or is within NEAR_BALL of it; otherwise
+ * every 2nd tick (30 Hz), and beyond FAR_FROM_BALL every 3rd (20 Hz). The bodies keep following the last plan in every
+ * tick, nothing is skipped in the physics; perception already lags by about a tenth of a second, a human reaction by
+ * about a fifth. Off-ball planning was ≈ 30 % of a tick (profiled).
  */
-const FAR_FROM_BALL = 22, REPLAN_TICKS = 3;
+const NEAR_BALL = 5, FAR_FROM_BALL = 22;
 /** Law 3 (competition rules of the top leagues): five substitutes, used on at most three occasions plus half-time. */
 const MAX_SUBSTITUTIONS = 5, SUB_OCCASIONS = 3;
 
@@ -282,9 +283,12 @@ export class MatchEngine {
   /** A player's plan for this tick: thought anew, or – far from the ball between re-plans – the last plan kept. */
   private plan(p: PlayerProfile, truth: Truth): BrainOutput {
     const last = this.lastPlan[p.id];
-    if (last && !last.swing && this.phase === 'in-play' && p.role !== 'GK' && !this.brains[p.id].userIntent && (this.tick + p.id) % REPLAN_TICKS !== 0) {
+    const brain = this.brains[p.id];
+    if (last && !last.swing && this.phase === 'in-play' && p.role !== 'GK' && !brain.userIntent && !brain.committedToBall) {
       const me = this.bodies[p.id].translation(), b = truth.ball.pos;
-      if (Math.hypot(me.x - b.x, me.z - b.z) > FAR_FROM_BALL) return last;
+      const d = Math.hypot(me.x - b.x, me.z - b.z);
+      const every = d < NEAR_BALL ? 1 : d > FAR_FROM_BALL ? 3 : 2;
+      if ((this.tick + p.id) % every !== 0) return last;
     }
     const out = this.think(p, truth);
     this.lastPlan[p.id] = out;
@@ -450,7 +454,16 @@ export class MatchEngine {
     // He walks off: placed beside the pitch, outside the boards, where he no longer takes part.
     body.place(0, (PITCH.halfWidth + PITCH.runOff + 4) * (this.profiles[player].team === 0 ? 1 : -1), 0);
     body.body.setEnabled(false);
+    // His boots, head, chest and hands leave the simulation too (moving 20 idle bench boots each tick cost ≈ 10 %).
+    this.setPartsEnabled(player, false);
     for (const b of this.brains) b.perception.forget(player);
+  }
+
+  private setPartsEnabled(player: number, on: boolean): void {
+    for (const b of this.legs[player].boots) b.body.setEnabled(on);
+    this.heads[player].body.setEnabled(on);
+    this.chests[player].body.setEnabled(on);
+    this.keepers.get(player)?.hands.body.setEnabled(on);
   }
 
   /** Substitutions made per team, and the stoppages they were made at (Law 3: five changes on three occasions plus half-time). */
@@ -500,6 +513,7 @@ export class MatchEngine {
     const body = this.bodies[on];
     body.body.setEnabled(true);
     body.collider.setEnabled(true);
+    this.setPartsEnabled(on, true);
     if (po.role === 'GK') this.keepers.get(on)?.hands.collider.setEnabled(true);
     const side = po.team === 0 ? 1 : -1;
     body.place(0, side * (PITCH.halfWidth - 0.5), side > 0 ? Math.PI : 0);

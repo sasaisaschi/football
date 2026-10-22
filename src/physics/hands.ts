@@ -155,6 +155,7 @@ export class KeeperHands {
 
   /** Moves the hands towards their target at limited speed. Call before every physics (sub)step. */
   update(dt: number): void {
+    if (!this.keeper.body.isEnabled()) return;
     if (this.diveTime >= 0) this.diveTime = this.diveTime + dt < DIVE.recover ? this.diveTime + dt : -1;
     const step = HANDS.maxSpeed * dt;
     const d = { x: this.target.x - this.rel.x, y: this.target.y - this.rel.y, z: this.target.z - this.rel.z };
