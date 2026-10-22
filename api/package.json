@@ -1,0 +1,20 @@
+{
+  "name": "the-12th-man-narration-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Optional Azure Function: rewords match-intelligence insights with a Microsoft Foundry model. Prepared, not deployed (see PROJECT_REPORT.md §12).",
+  "type": "module",
+  "main": "dist/api/src/functions/*.js",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/ai-projects": "*",
+    "@azure/functions": "^4",
+    "@azure/identity": "^4"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

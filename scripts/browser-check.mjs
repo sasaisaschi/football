@@ -53,7 +53,9 @@ const report = { browser: browserPath, viewport: `${vw}x${vh}`, checks: {}, mome
 const fail = msg => { report.errors.push(msg); };
 
 // CHECK_PREVIEW=1 serves the production build (run `npm run build` first) instead of the dev server.
-const viteArgs = process.env.CHECK_PREVIEW ? ['preview', '--port', String(port), '--strictPort'] : ['--port', String(port), '--strictPort'];
+// CHECK_BASE=/football/ checks a build made with that base path (as on GitHub Pages).
+const base = process.env.CHECK_BASE ?? '/';
+const viteArgs = process.env.CHECK_PREVIEW ? ['preview', '--port', String(port), '--strictPort', '--base', base] : ['--port', String(port), '--strictPort'];
 const vite = spawn(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), ...viteArgs], { cwd: root, stdio: 'pipe' });
 let viteReady = false;
 vite.stdout.on('data', d => { if (String(d).includes('Local')) viteReady = true; });
@@ -115,7 +117,7 @@ try {
   const memory = process.env.CHECK_MEMORY ? '' : '&memory=0';
   // CHECK_QUERY: extra URL parameters, e.g. 'mode=analyst&focus=9&lang=de'.
   const extra = process.env.CHECK_QUERY ? `&${process.env.CHECK_QUERY}` : '';
-  await send('Page.navigate', { url: `http://localhost:${port}/?seed=${seed}&half=${half}${settings}${memory}${extra}` });
+  await send('Page.navigate', { url: `http://localhost:${port}${base}?seed=${seed}&half=${half}${settings}${memory}${extra}` });
   const waitFor = async (expr, seconds) => { for (let i = 0; i < seconds * 4; i++) { const v = await evaluate(expr); if (v) return v; await sleep(250); } return null; };
   report.checks.renderer = await evaluate("(()=>{const g=document.createElement('canvas').getContext('webgl2');const d=g&&g.getExtension('WEBGL_debug_renderer_info');return d?g.getParameter(d.UNMASKED_RENDERER_WEBGL):'unknown'})()");
   const startVisible = await waitFor("!!document.querySelector('.start-go')", 30);

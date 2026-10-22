@@ -51,6 +51,8 @@ export class MatchStatsBoard {
   /** Ball changing teams between touches (a restart is not a change). */
   possessionChanges = 0;
   move: Move | null = null;
+  /** The last restart taken (in-play), for the origin of a goal scored straight from it. */
+  lastRestart: { kind: RestartKind; team: TeamId; time: number } | null = null;
   half: 1 | 2 = 1;
   private readonly swings = new Map<number, { kind: string; time: number; id: number; from: Vec2; pressure: number }>();
   private openPass: { passer: number; team: TeamId; time: number; from: Vec2; pressure: number; speed: number; eventIds: number[] } | null = null;
@@ -113,6 +115,7 @@ export class MatchStatsBoard {
       case 'in-play': {
         const team = this.team(e.taker);
         this.move = { team, time: e.time, origin: e.restart, zone: null, passes: 0, eventIds: [e.id] };
+        this.lastRestart = { kind: e.restart, team, time: e.time };
         return;
       }
       default:

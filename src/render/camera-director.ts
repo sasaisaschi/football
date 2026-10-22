@@ -7,6 +7,13 @@ import type { Framing } from './framing';
 export type Shot = 'main' | 'close' | 'behind-goal' | 'decision' | 'wide' | 'overview';
 
 /**
+ * Vertical field of view (degrees). The live broadcast shot is tighter, like a TV main camera, so the players are large
+ * enough to recognise (at 36° a player was ≈ 40 px tall on a 1600 × 900 screen); every other shot, and the decision
+ * framing that is computed for it, uses the wider angle.
+ */
+export const BROADCAST_FOV = 27, WIDE_FOV = 36;
+
+/**
  * TV direction. The main gantry camera follows play with some anticipation; real events trigger cuts
  * (a decision moment frames the focus player, a goal cuts behind the goal, then wide on the celebration).
  * The camera never shows something that did not happen; it only chooses how to look at it.
@@ -15,10 +22,10 @@ export type Shot = 'main' | 'close' | 'behind-goal' | 'decision' | 'wide' | 'ove
  * How far the main camera's look point follows the ball across the pitch. The gantry stands behind the near
  * touchline (z = +34) and looks down on it at a steep angle: following with 0.55 everywhere, play at the near line
  * (throw-ins, corners) lay 24° below the image centre, outside the 18° half field of view. Towards the near line the
- * look point follows more, up to 0.85 (the touchline 10° below the centre, clear of the status line).
+ * look point follows more, up to 1.0 (with the tighter broadcast angle the touchline stays clear of the status line).
  */
 export function nearSideFollow(z: number): number {
-  return 0.55 + 0.3 * Math.max(0, Math.min(1, (z - 10) / 24));
+  return 0.55 + 0.45 * Math.max(0, Math.min(1, (z - 10) / 24));
 }
 
 export class CameraDirector {
@@ -118,6 +125,11 @@ export class CameraDirector {
     const k = snap && shot !== 'decision' && this.camera.position.distanceTo(this.target) > 20 ? 1 : 1 - Math.exp(-dt * rate);
     this.camera.position.lerp(this.target, k);
     this.lookNow.lerp(this.look, k);
+    const fov = shot === 'main' ? BROADCAST_FOV : WIDE_FOV;
+    if (Math.abs(this.camera.fov - fov) > 0.01) {
+      this.camera.fov += (fov - this.camera.fov) * (shot === 'decision' ? 1 : k);
+      this.camera.updateProjectionMatrix();
+    }
     this.camera.lookAt(this.lookNow);
   }
 }

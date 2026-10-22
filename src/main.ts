@@ -54,6 +54,10 @@ key.shadow.mapSize.set(2048, 2048);
 Object.assign(key.shadow.camera, { left: -70, right: 70, top: 50, bottom: -50, near: 10, far: 220 });
 key.shadow.bias = -0.0004;
 scene.add(key);
+// A second floodlight bank from the opposite corner, without shadows: it lifts the figures off the turf (rim light).
+const rim = new THREE.DirectionalLight(0xbfd4ff, 0.9);
+rim.position.set(55, 60, -60);
+scene.add(rim);
 scene.add(createPitchView());
 const stadium = createStadiumView();
 scene.add(stadium.group);

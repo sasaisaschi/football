@@ -103,6 +103,31 @@ describe('match intelligence pipeline', () => {
     }
   }, 600_000);
 
+  it('a goal from the penalty spot: origin penalty, and no "last pass" from before the penalty', () => {
+    const e = new MatchEngine({ seed: 1, halfMinutes: 45 });
+    const frame = e.snapshot();
+    const board = new IntelBoard(e.profiles, 45);
+    const st = e.profiles.find(p => p.team === 0 && p.role === 'ST' && p.squad === 'starter')!.id;
+    const cm = e.profiles.find(p => p.team === 0 && p.role === 'CM' && p.squad === 'starter')!.id;
+    let id = 0;
+    const at = (time: number, ev: Record<string, unknown>) => board.ingest({ id: ++id, tick: Math.round(time * 60), time, ...ev } as MatchEvent, frame);
+    const pos = { x: 30, y: 0.11, z: 0 };
+    at(10, { type: 'swing', player: cm, action: 'pass', source: 'ai', receiver: st });
+    at(10.1, { type: 'touch', player: cm, part: 'boot', ballSpeed: 12, position: pos });
+    at(11, { type: 'touch', player: st, part: 'boot', ballSpeed: 3, position: pos });
+    at(30, { type: 'restart', restart: 'penalty', team: 0, position: { x: 41.5, z: 0 } });
+    at(33, { type: 'swing', player: st, action: 'shot', source: 'ai' });
+    at(33.1, { type: 'in-play', restart: 'penalty', taker: st });
+    at(33.1, { type: 'touch', player: st, part: 'boot', ballSpeed: 26, position: { x: 41.5, y: 0.11, z: 0 } });
+    // The keeper gets a hand to it and it still goes in: the last touch is his, the move is no longer ours.
+    const gk = e.profiles.find(p => p.team === 1 && p.role === 'GK' && p.squad === 'starter')!.id;
+    at(33.4, { type: 'touch', player: gk, part: 'hands', ballSpeed: 20, position: { x: 51, y: 0.6, z: 2 } });
+    at(33.6, { type: 'goal', team: 0, scorer: st, ownGoal: false, position: { x: 52.6, y: 0.5, z: 2 } });
+    const goal = board.insights.find(i => i.kind === 'goal-story')!;
+    expect(goal.data.origin).toBe('penalty');
+    expect(goal.data.assist).toBeUndefined();
+  });
+
   it('pass difficulty follows its parts: longer, pressed and forward passes are harder', () => {
     expect(passDifficulty(8, 9, 0)).toBe(2);
     expect(passDifficulty(8, 1.5, 0)).toBeGreaterThan(passDifficulty(8, 9, 0));

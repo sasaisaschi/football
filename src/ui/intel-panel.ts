@@ -5,6 +5,8 @@ import { tr } from '../i18n';
 import type { IntelBoard } from '../intel/board';
 import { narrate } from '../intel/narrator';
 import type { Insight, Mode, Personalization } from '../intel/types';
+import { lang } from '../i18n';
+import type { NarrationClient } from '../intel/foundry/narration-client';
 
 /** Wall seconds a fan card stays before the next one may replace it (a goal or decision replaces it at once). */
 const CARD_SECONDS = 7;
@@ -23,8 +25,10 @@ export class IntelPanel {
   private readonly queue: Insight[] = [];
   private readonly series: { time: number; t0: number; t1: number }[] = [];
   private lastRefresh = -Infinity;
+  /** AI wordings that came back from Microsoft Foundry, per insight id and mode/language. */
+  private readonly ai = new Map<string, string>();
 
-  constructor(private readonly board: IntelBoard, private readonly profiles: readonly PlayerProfile[], readonly prefs: Personalization, private readonly onPrefs: (p: Personalization) => void) {
+  constructor(private readonly board: IntelBoard, private readonly profiles: readonly PlayerProfile[], readonly prefs: Personalization, private readonly onPrefs: (p: Personalization) => void, private readonly narration: NarrationClient) {
     this.el.className = 'intel';
     this.el.setAttribute('aria-label', tr('Match intelligence', 'Match Intelligence'));
     this.el.innerHTML = `
@@ -62,8 +66,31 @@ export class IntelPanel {
     this.el.classList.toggle('deciding', deciding);
   }
 
-  private words(i: Insight) {
-    return narrate(i, this.prefs.mode, { profiles: this.profiles, favouriteTeam: this.prefs.favouriteTeam });
+  private aiKey(i: Insight): string {
+    return `${i.id}:${this.prefs.mode}:${lang()}`;
+  }
+
+  /** The local words, and the Foundry wording where one arrived (asked for notable insights only, within the client's limits). */
+  private words(i: Insight): { title: string; text: string; ai: boolean } {
+    const local = narrate(i, this.prefs.mode, { profiles: this.profiles, favouriteTeam: this.prefs.favouriteTeam });
+    const key = this.aiKey(i), ai = this.ai.get(key);
+    if (ai) return { title: local.title, text: ai, ai: true };
+    if (i.priority >= 2 && !this.ai.has(key) && this.narration.canAsk()) {
+      this.ai.set(key, '');
+      void this.narration.narrate(i, this.prefs.mode, lang(), this.profiles).then(text => { if (text) { this.ai.set(key, text); this.lastRefresh = -Infinity; } });
+    }
+    return { ...local, ai: false };
+  }
+
+  /** The AI narration's state in words (analyst view): off, answering, or the error – never hidden. */
+  private aiStatus(): HTMLElement {
+    const s = this.narration.status;
+    const text = s.state === 'off' ? tr('AI narration (Microsoft Foundry): off – no endpoint configured; all texts are generated locally.', 'KI-Formulierung (Microsoft Foundry): aus – kein Endpunkt konfiguriert; alle Texte entstehen lokal.')
+      : s.state === 'ready' ? tr(`AI narration (Microsoft Foundry): on – ${s.answered} answers.`, `KI-Formulierung (Microsoft Foundry): an – ${s.answered} Antworten.`)
+      : tr(`AI narration (Microsoft Foundry): error – ${s.message}. Local texts shown.`, `KI-Formulierung (Microsoft Foundry): Fehler – ${s.message}. Lokale Texte werden gezeigt.`);
+    const e = el('small', 'intel-ai-status', text);
+    e.dataset.state = s.state;
+    return e;
   }
 
   /** Every frame: the fan card's turn, and a redraw at most twice a second. */
@@ -115,6 +142,7 @@ export class IntelPanel {
       const c = el('article', 'intel-card');
       c.dataset.kind = this.card.insight.kind;
       c.append(el('span', 'intel-clock', this.card.insight.clock), el('h3', '', w.title), el('p', '', w.text));
+      if (w.ai) c.append(el('small', 'intel-ai', tr('Worded by Microsoft Foundry', 'Formuliert von Microsoft Foundry')));
       out.push(c);
     } else out.push(el('p', 'intel-empty', tr('The story of the match appears here as it happens.', 'Die Geschichte des Spiels erscheint hier, sobald sie passiert.')));
     const focus = this.focusLine();
@@ -157,13 +185,13 @@ export class IntelPanel {
       const li = el('li');
       li.dataset.kind = i.kind;
       const ev = i.eventIds.length ? tr(`events #${i.eventIds.slice(0, 3).join(', #')}${i.eventIds.length > 3 ? ` +${i.eventIds.length - 3}` : ''}`, `Ereignisse #${i.eventIds.slice(0, 3).join(', #')}${i.eventIds.length > 3 ? ` +${i.eventIds.length - 3}` : ''}`) : tr('rolling statistics', 'laufende Statistik');
-      li.append(el('span', 'intel-clock', i.clock), el('b', '', w.title), el('p', '', w.text), el('small', 'intel-evidence', ev));
+      li.append(el('span', 'intel-clock', i.clock), el('b', '', w.title), el('p', '', w.text), el('small', 'intel-evidence', w.ai ? `${ev} · ${tr('worded by Microsoft Foundry', 'formuliert von Microsoft Foundry')}` : ev));
       feed.append(li);
     }
     const out: HTMLElement[] = [table];
     const focus = this.focusCard();
     if (focus) out.push(focus);
-    out.push(feed);
+    out.push(feed, this.aiStatus());
     return out;
   }
 

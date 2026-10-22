@@ -12,6 +12,8 @@ const CONTROL_PASSES = 8;
 const CHAOS_FACTOR = 1.6, CHAOS_MIN_MINUTES = 3;
 /** Thresholds for notable shots: a big chance, a big save, a fast shot (m/s). */
 const BIG_CHANCE = 0.2, BIG_SAVE = 0.12, FAST_SHOT = 25;
+/** A pass or restart this long before a goal without its own move can still be its origin (s). */
+const ASSIST_WINDOW = 10;
 /** How long a decision's consequences are followed (simulated s), as on the consequence card. */
 const DECISION_FOLLOW = 12;
 /** The same pattern for the same team is not repeated within this time (s). */
@@ -100,10 +102,14 @@ export class PatternDetector {
     const s = this.stats;
     const shot = [...s.shots].reverse().find(x => x.outcome === 'goal' && x.eventIds.includes(e.id));
     const move = s.move && s.move.team === e.team ? s.move : null;
-    const assist = e.scorer === null ? undefined : [...s.passes].reverse().find(p => p.completed && p.nextToucher === e.scorer && p.team === e.team && (!move || p.time >= move.time));
+    // Straight from a restart of the scoring team (a penalty, a rebound off the keeper after it): that is the origin.
+    const restart = !move && s.lastRestart && s.lastRestart.team === e.team && e.time - s.lastRestart.time <= ASSIST_WINDOW ? s.lastRestart : null;
+    // The last pass only counts within this move (or shortly before the goal without one): never a pass from long before.
+    const since = move ? move.time : e.time - ASSIST_WINDOW;
+    const assist = e.scorer === null ? undefined : [...s.passes].reverse().find(p => p.completed && p.nextToucher === e.scorer && p.team === e.team && p.time >= since && (!restart || p.time >= restart.time));
     const data: Insight['data'] = {
       ownGoal: e.ownGoal, score: `${frame.score[0]}:${frame.score[1]}`,
-      passes: move?.passes ?? 0, origin: move?.origin ?? 'none', zone: move?.zone ?? 'none', seconds: move ? Math.round(e.time - move.time) : 0,
+      passes: move?.passes ?? 0, origin: move?.origin ?? restart?.kind ?? 'none', zone: move?.zone ?? 'none', seconds: move ? Math.round(e.time - move.time) : 0,
     };
     if (shot) Object.assign(data, { xg: +shot.xg.toFixed(2), distance: Math.round(shot.distance), kmh: Math.round(shot.speed * 3.6) });
     if (assist) data.assist = assist.passer;

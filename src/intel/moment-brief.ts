@@ -41,7 +41,8 @@ export function briefMoment(m: DecisionMoment, s: MatchSnapshot, profiles: reado
     return { id: p.id, d, closing };
   }).sort((a, b) => a.d - b.d)[0];
   const attacking = s.possession === m.team && m.category !== 'coach';
-  if (near && m.category !== 'coach') {
+  // At a restart the ball is dead: pressure on the taker says nothing.
+  if (near && m.category !== 'coach' && !s.restart) {
     if (attacking) {
       lines.push(near.d < 3
         ? tr(`Under pressure: ${name(near.id)} is ${near.d.toFixed(1)} m away${near.closing > 0.5 ? `, closing at ${near.closing.toFixed(1)} m/s` : ''}.`, `Unter Druck: ${name(near.id)} ist ${near.d.toFixed(1)} m entfernt${near.closing > 0.5 ? ` und kommt mit ${near.closing.toFixed(1)} m/s näher` : ''}.`)

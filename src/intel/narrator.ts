@@ -28,7 +28,7 @@ export function narrate(i: Insight, mode: Mode, ctx: NarrationContext): Narratio
       const shot = d.xg !== undefined ? tr(`Shot from ${d.distance} m at ${d.kmh} km/h, model xG ${d.xg}.`, `Schuss aus ${d.distance} m mit ${d.kmh} km/h, Modell-xG ${d.xg}.`) : '';
       return {
         title: tr(`Goal ${d.score} – how it happened`, `Tor ${d.score} – wie es entstand`),
-        text: tr(`Move began ${origin}, ${d.passes} completed passes in ${d.seconds} s.`, `Angriff begann ${origin}, ${d.passes} angekommene Pässe in ${d.seconds} s.`) + ` ${shot}`
+        text: (Number(d.seconds) > 0 ? tr(`Move began ${origin}, ${d.passes} completed passes in ${d.seconds} s.`, `Angriff begann ${origin}, ${d.passes} angekommene Pässe in ${d.seconds} s.`) : tr(`Scored ${origin}.`, `Erzielt ${origin}.`)) + ` ${shot}`
           + (d.assist !== undefined ? tr(` Last pass: ${name(d.assist)}.`, ` Letzter Pass: ${name(d.assist)}.`) : ''),
       };
     }

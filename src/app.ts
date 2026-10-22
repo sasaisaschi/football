@@ -4,7 +4,7 @@ import { TEAMS } from './engine/rosters';
 import type { DecisionMoment, DecisionSource, MatchEvent, MatchSnapshot, PlayerProfile, TeamId, Vec3 } from './engine/types';
 import { attackSign } from './physics/pitch-geometry';
 import { createBallView } from './render/ball-view';
-import { CameraDirector } from './render/camera-director';
+import { CameraDirector, WIDE_FOV } from './render/camera-director';
 import { frameMoment } from './render/framing';
 import { lerpBall, lerpPlayer } from './render/interpolate';
 import { PlayerFigure } from './render/player-view';
@@ -25,6 +25,7 @@ import { briefMoment } from './intel/moment-brief';
 import type { Personalization } from './intel/types';
 import { NameTag } from './render/name-tag';
 import { IntelPanel } from './ui/intel-panel';
+import { NarrationClient } from './intel/foundry/narration-client';
 
 /** `memory`: what the players remember from earlier matches; `saveMemory` keeps the updated memory after full time. */
 export type AppOptions = {
@@ -103,7 +104,8 @@ export class MatchApp {
     // Match intelligence: the board takes every event and displayed frame; the panel shows it in the viewer's mode.
     const intel = new IntelBoard(app.profiles, options.halfMinutes);
     app.intel = intel;
-    app.intelPanel = new IntelPanel(intel, app.profiles, options.prefs, options.savePrefs);
+    // Optional AI narration through the project's own Foundry endpoint; without VITE_NARRATION_URL it stays off.
+    app.intelPanel = new IntelPanel(intel, app.profiles, options.prefs, options.savePrefs, new NarrationClient(import.meta.env.VITE_NARRATION_URL || undefined));
     host.append(app.intelPanel.el);
     intel.onInsight(i => app.intelPanel!.push(i));
     const focus = options.prefs.focusPlayer;
@@ -238,7 +240,7 @@ export class MatchApp {
     const fp = this.panel.footprint();
     // A margin beside the panel and below the score bar, so markings around the outermost players stay clear too.
     const safe = { left: -0.92, right: 1 - (2 * (fp.right + 64)) / w, bottom: -1 + (2 * (fp.bottom + 40)) / h, top: 1 - (2 * 110) / h };
-    this.camera.decisionFrame = frameMoment(points, attackSign(m.team, s.half), this.cam.aspect, this.cam.fov, safe);
+    this.camera.decisionFrame = frameMoment(points, attackSign(m.team, s.half), this.cam.aspect, WIDE_FOV, safe);
   }
 
   private resolve(optionId: string, by: DecisionSource): void {
