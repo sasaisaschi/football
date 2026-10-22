@@ -1,7 +1,7 @@
 import { MatchEngine } from '../engine/match-engine';
 import type { DecisionMoment, DecisionSource, MatchEvent, PlayerProfile, TeamId } from '../engine/types';
 import { Orchestrator } from '../orchestrator/orchestrator';
-import { encodeFrame, frameSize } from './frame-codec';
+import { encodeEngineFrame, encodeFrame, frameSize } from './frame-codec';
 
 export type RunnerConfig = { seed: number; halfMinutes: number; userTeam: TeamId; cooldown: number; maxPerHalf: number; timeoutSeconds: number };
 
@@ -62,7 +62,7 @@ export class SimRunner {
       e.step();
       // A step that opens a moment stops before time moves on: there is no new frame.
       if (e.tick === before) continue;
-      encodeFrame(e.snapshot(), frames, n * this.frameFloats);
+      encodeEngineFrame(e, frames, n * this.frameFloats);
       n++;
     }
     return this.batch(first, n, n === maxTicks ? frames : frames.slice(0, n * this.frameFloats), performance.now() - t0);

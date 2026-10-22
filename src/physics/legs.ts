@@ -327,6 +327,8 @@ export class Legs {
     // A player off the pitch (bench, substituted, sent off) has nothing to move.
     if (!this.owner.body.isEnabled()) return;
     this.placeNow = this.collidersOn || lastSubstep;
+    // Nothing to advance and nothing to place in between: resting boots far from the ball wait for the tick's end.
+    if (!this.placeNow && !this.swing && this.slideSide === null) return;
     if (this.slideSide !== null) {
       const dir = this.owner.slideDirection();
       if (dir && this.owner.down()) { this.stageSlide(dir, this.slideSide, dt); return; }

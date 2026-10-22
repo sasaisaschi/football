@@ -1,3 +1,4 @@
+import type { MatchEngine } from '../engine/match-engine';
 import type { MatchPhase, MatchSnapshot, PlayerView, RestartKind, TeamId, Vec3 } from '../engine/types';
 
 /**
@@ -29,6 +30,44 @@ export function encodeFrame(s: MatchSnapshot, out: Float32Array, at = 0): void {
 }
 
 const ZERO: Vec3 = { x: 0, y: 0, z: 0 };
+
+/**
+ * The same frame as encodeFrame(e.snapshot()), written straight from the engine: building a whole snapshot (32 players,
+ * minds) for every tick only to flatten it again cost ≈ 4 % of a tick in the worker. Players off the pitch are written
+ * as such without reading their bodies.
+ */
+export function encodeEngineFrame(e: MatchEngine, out: Float32Array, at = 0): void {
+  let i = at;
+  const put = (v: number) => { out[i++] = v; };
+  const v3 = (v: Readonly<Vec3>) => { out[i++] = v.x; out[i++] = v.y; out[i++] = v.z; };
+  const ball = e.physics.ball;
+  put(e.tick); put(e.time); put(e.half); put(e.clockSeconds()); put(PHASES.indexOf(e.phase)); put(e.score[0]); put(e.score[1]);
+  put(e.possession() ?? -1); put(e.referee.lastTouch?.player ?? -1); put(e.heldByPlayer() ?? -1);
+  v3(ball.translation()); v3(ball.linvel());
+  const q = ball.rotation();
+  put(q.x); put(q.y); put(q.z); put(q.w);
+  const r = e.restart;
+  put(r ? RESTARTS.indexOf(r.kind) : -1); put(r?.team ?? -1); put(r?.spot.x ?? 0); put(r?.spot.z ?? 0); put(r?.taker ?? -1); put(r?.placed ? 1 : 0);
+  for (const p of e.profiles) {
+    if (e.referee.sentOff.has(p.id)) {
+      out.fill(0, i, i + PLAYER - 1);
+      out[i + 13] = -1; // no swinging boot
+      i += PLAYER - 1;
+      put(1);
+      if (e.referee.redCards.has(p.id)) out[i - 2] = 2;
+      continue;
+    }
+    const body = e.bodies[p.id], legs = e.legs[p.id];
+    v3(body.translation()); v3(body.linvel()); put(body.heading);
+    v3(legs.boots[0].body.translation()); v3(legs.boots[1].body.translation());
+    put(legs.swing ? legs.swing.plan.side : -1);
+    const hands = e.handsOf(p.id);
+    put(hands ? 1 : 0); v3(hands ?? ZERO);
+    const head = e.heads[p.id].active(), chest = head ? null : e.chests[p.id].active();
+    put(head ? 1 : chest ? 2 : 0); v3(head ?? chest ?? ZERO);
+    put(body.lying()); put(e.referee.redCards.has(p.id) ? 2 : e.referee.yellow.has(p.id) ? 1 : 0); put(0);
+  }
+}
 
 export function decodeFrame(a: Float32Array, at: number, players: number): MatchSnapshot {
   let i = at;

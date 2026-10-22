@@ -16,7 +16,7 @@ import { createRng, type Rng } from './rng';
 import { createRoster, TEAMS } from './rosters';
 import { chooseTaker, PLACE_DELAY, restartReady, type RestartState } from './restarts';
 import type {
-  BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, PlayerView, RestartKind, TeamId, TeamInstruction, Vec2,
+  BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, PlayerView, RestartKind, TeamId, TeamInstruction, Vec2, Vec3,
 } from './types';
 
 export type MatchConfig = { seed: number; halfMinutes: number; rosterSeed?: number };
@@ -570,7 +570,6 @@ export class MatchEngine {
       players: this.profiles.map(p => {
         const body = this.bodies[p.id], legs = this.legs[p.id];
         const pos = body.translation(), vel = body.linvel();
-        const keeper = this.keepers.get(p.id);
         return {
           id: p.id,
           position: { x: pos.x, y: pos.y, z: pos.z },
@@ -578,7 +577,7 @@ export class MatchEngine {
           heading: body.heading,
           boots: [legs.bootWorld(0), legs.bootWorld(1)],
           swingingBoot: legs.swing ? legs.swing.plan.side : -1,
-          hands: keeper ? keeper.hands.world3() : this.throwHands.thrower() === body ? this.throwHands.world3() : null,
+          hands: this.handsOf(p.id),
           upperBody: this.upperBodyView(p.id),
           lying: body.lying(),
           booked: this.referee.redCards.has(p.id) ? 'red' : this.referee.yellow.has(p.id) ? 'yellow' : 'none',
@@ -591,6 +590,17 @@ export class MatchEngine {
       moment: this.moment,
       minds: this.minds.map(m => ({ confidence: m.confidence, recent: m.recent.map(r => ({ action: r.action, ok: r.ok })) })),
     };
+  }
+
+  /** Keeper holding the ball, if any. */
+  heldByPlayer(): number | null {
+    return this.heldBy;
+  }
+
+  /** The hands drawn for a player: a keeper's, or a thrower's at a throw-in. */
+  handsOf(id: number): Vec3 | null {
+    const keeper = this.keepers.get(id);
+    return keeper ? keeper.hands.world3() : this.throwHands.thrower() === this.bodies[id] ? this.throwHands.world3() : null;
   }
 
   private upperBodyView(id: number): PlayerView['upperBody'] {
