@@ -63,8 +63,8 @@ npm install
 npm run dev          # open the printed URL
 ```
 
-1. **Match preparation:** choose your club and the length (**2 × 15 min** takes about 6½ minutes of your time; every second of the 30 match minutes is simulated). Check the team sheet: click a starter, then a bench player, to swap them. Set pressing, defensive line and risk. Pick **Fan** or **Analyst** and an optional focus player.
-2. Press **Kick-off**. The **manager view** follows the background simulation: score and minute, tactics, team with form, statistics, key developments, match events and match intelligence. **Normal / Fast** sets the pace, **Pause** stops the simulation.
+1. **Match preparation:** choose your club. There is one match: **2 × 45 minutes**, each half shown in about 7 minutes (every second simulated; 3D scenes add their own time). Check the team sheet: click a starter, then a bench player, to swap them. Set pressing, defensive line and risk. Pick **Fan** or **Analyst** and an optional focus player.
+2. Press **Kick-off**. The **manager view** follows the background simulation: score and minute, tactics, team with form, statistics, key developments, match events and match intelligence. **Pause** stops the simulation.
 3. A **decisive scene** opens in 3D: the real build-up, a slow-motion freeze, the options on the pitch and *why it matters*. Press **1–4** (or click) to choose, **0** to leave it to the players. The consequence is played from newly computed frames, then you are back in the manager view.
 4. **Substitutions** come as a dialog, the **team talk** in the half-time screen. **I** switches fan/analyst. At full time you get the match report, your decisions and the intelligence feed; **New match** starts again.
 
@@ -77,7 +77,6 @@ URL parameters for testing:
 | `?team=1` | Coach the away side |
 | `?focus=9` | Focus player ID |
 | `?seed=123` | Reproduce a match |
-| `?half=5` | Length of each half in minutes |
 | `?memory=0` | No player memory |
 
 ## Scripts

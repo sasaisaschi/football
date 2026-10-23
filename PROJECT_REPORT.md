@@ -1,6 +1,6 @@
 # THE 12TH MAN – Technical Report & Development Guide
 
-**Stand:** 23.10.2026 · Phasen B–E auf `main` gemergt (#33–#37); **Issue #39 – glaubwürdige Fußballbewegung (Mocap, Angriffskamera, Abseitslinie) – auf Branch `claude/issue-39-football-motion` (PR offen, Abnahme offen)**, §14. Managerablauf und Testanleitung in §13; Benutzeraktionen zur Einreichung in §12.6. Frühere Messwerte bleiben historisch datiert.
+**Stand:** 23.10.2026 · Auf `main` gemergt: Phasen B–E (#33–#37), Issue #39 Fußballbewegung (#40, #42), Referenzgrafik und Bewegungsfehler (#41, #45), Manager-Spielmodus (#44). Offen: Tempo 2 × 7 min (PR „Spieltempo 2 × 7 min“). **Einziger Spielmodus:** volle Partie 2 × 45 simulierte Minuten, jede Halbzeit in 7 Minuten Echtzeit (§16). Grafikstandard nach Referenzbild in §15, Bewegung in §14, Managerablauf in §13. Frühere Messwerte bleiben historisch datiert.
 **Rolle:** verbindliche Source of Truth für Architektur, tatsächlichen Stand, Versionen, Tests, Messwerte und nächste Schritte.
 **Kennzeichnung:** **Implementiert** = Code vorhanden · **Getestet** = durch tatsächlich ausgeführte Tests belegt · **Gemessen** = Zahl aus einem tatsächlichen Lauf · **Geplant** = nicht vorhanden · **Nicht geprüft** = vorhanden, ohne Nachweis.
 
@@ -83,6 +83,8 @@ scripts/probe.mjs           Mehr-Seed-Statistik (npm run probe; --orchestrator: 
 | Managerablauf: Vorbereitung (Aufstellung, Taktik), Manageransicht ohne 3D, Szenen in 3D, Halbzeit, Wechseldialog | Implementiert, getestet, im Browser geprüft (Phase E) | `session/*`, `manager/*`, `app.ts` |
 | Spielerfigur aus Blender Human Base Meshes (CC0), Skelett aus der Physik gestellt; Szenenkamera | Implementiert, getestet, im Browser geprüft (Phase E) | `render/footballer.ts`, `scripts/figure/`, `render/camera-director.ts` |
 | Bewegung aus Motion Capture (CMU), streckengekoppelter Schritt, Schussclip mit Bein-IK auf die Physikschuhe; Angriffskamera, Abseitslinie | Implementiert, getestet, im Browser per Video geprüft (Issue #39) | `render/footballer-motion.ts`, `scripts/figure/cmu_clips.py`, `render/offside-line.ts` |
+| Grafik nach Referenzbild: Referenzkamera, Tageslicht, Stadion, Trikots, Anzeigetafel, Werkzeugleiste, Minimap, Entscheidungsleiste mit Live-Renderings, Ringe und Pass-/Schussbögen; Blickrichtung tempoabhängig, stabile Pose im Stillstand | Implementiert, getestet, im Browser per Screenshot und Video geprüft; vorläufig abgenommen (#41, #45) | `render/reference-camera.ts`, `render/scene-hud.ts`, `ui/decision-panel.ts`, `render/tactical-overlay.ts`, `physics/body.ts` |
+| Einziger Spielmodus: 2 × 45 simulierte Minuten, Halbzeit in 7 min Echtzeit (≈ 6,43-fach), Stillstand bei Entscheidungen | Implementiert (#44; Tempo 2 × 7 im PR „Spieltempo 2 × 7 min“); Typcheck und Build, keine Testläufe | `session/pacing.ts`, `session/driver.ts`, `manager/prep-screen.ts` |
 
 ## 5. Testing Status (tatsächlich ausgeführt)
 
@@ -867,10 +869,11 @@ Insgesamt verdoppeln sich die Brustannahmen (31 → 65), und es gibt weniger Ein
 - Fouls aus Körperkontakten. Bei der Grätsche trifft der Gegner auf die liegende Kapsel (Beine und Hüfte); Schuhe berühren weiterhin nur den Ball, Tritte auf den Fuß gibt es nicht.
 - Der laufende Spielrhythmus der Beine ist rein visuell (ruhende Schuh-Kollider bleiben unter der Hüfte); Kick-Beine folgen exakt der Physik.
 - Ballparameter sind Literaturwerte, keine eigene Messreihe.
-- Bei Kurzspielen zeigt die Uhr echte Simulationszeit (z. B. 2 × 5 min), nicht 90 Minuten; Anzeigetafel, Start und Ergebnis nennen die Länge (§11.4).
+- Kurzpartien (2 × 5, 2 × 15) gibt es nicht mehr; es gibt nur die volle Partie 2 × 45 (§16).
 - **Spielstatistik nach Phase C** (60 Seeds, §11.2): Tore 2,4, Torschüsse 16,3 (real ≈ 25), Ecken 6 (real ≈ 10), Pässe ≈ 1400 (real ≈ 1000), Einwürfe 50 (real ≈ 45); Tore fast nur aus dem offenen Spiel.
 - **Microsoft Foundry:** Die KI-Formulierung ist vorbereitet, aber nicht bereitgestellt; alle Texte entstehen lokal (§12).
-- Eine 90-Minuten-Partie braucht im Browser ≈ 11,7 min Rechenzeit unter Dauerlast (2,16 ms je Tick, Iris Xe; Phase B: 4,2 ms); die Nutzerzeit (14:04 min) kann nicht unter die Rechenzeit fallen (§10.10 R1).
+- **Leistungsgrenze:** Eine 90-Minuten-Partie braucht im Browser ≈ 11,7 min Rechenzeit unter Dauerlast (2,07–2,16 ms je Tick, Iris Xe); die Simulation schafft höchstens ≈ 7,7-fache Echtzeit. Das Ziel 2 × 7 min (6,43-fach) liegt knapp darunter; auf langsamerer Hardware wartet die Anzeige auf die Simulation und die Halbzeit dauert länger (§16). Die frühere Vorgabe 2 × 2,5 min (18-fach) war auf dieser Hardware nicht erreichbar.
+- **3D-Szenen verlängern die Partie:** Vorgeschichte (6 s mit Zeitlupe), Entscheidung (die Spielzeit steht) und Folge laufen in Echtzeit, zusätzlich zu 2 × 7 min.
 - Spieler fern vom Ball planen mit 30/20 Hz neu (Körper weiter mit 60 Hz); bei sauber rollendem Ball unter 10 m/s rechnet die Physik mit 2 statt 4 Teilschritten (gleichwertig gemessen, §10.10 R1).
 - Ton ist vollständig synthetisiert (keine Fangesänge/Kommentarstimme).
 - `window.__match` ist ein lesender Zugriff für das Browser-Prüfskript.
@@ -896,18 +899,17 @@ Insgesamt verdoppeln sich die Brustannahmen (31 → 65), und es gibt weniger Ein
 15. **Phase C** – Kurzpartie 2 × 15 als gemessener 6:30–7:22-min-Modus mit Längenkennzeichnung, Ursachenanalyse der Torquote und Eigentore (Mitspieler am Ball des eigenen Mannes, zwei Torwartfehler, Regel 12), Wechsel der Gegner-KI, Kamera zielt auf den freien Bildbereich (§11).
 16. **Phase D** – Match-Intelligence-Pipeline (Ingest bis Personalize) mit Fan- und Analystenmodus in EN/DE, Erklärung der Entscheidungsszenen, englische Oberfläche, Foundry-Schnittstelle und GitHub-Pages-Workflow vorbereitet (nicht aktiv), Einreichungspaket und Video (§12).
 17. **Phase E** – Umbau zum Fußballmanager: Vorbereitung mit Aufstellung und Taktik, Manageransicht mit Hintergrundsimulation ohne 3D, entscheidende Szenen in 3D aus der echten Vorgeschichte, Halbzeit- und Wechseloberflächen, neue Spielerfigur (Blender Human Base Meshes, CC0) mit Physik-IK, Szenenkamera; Protokoll identisch zum Stand vor dem Umbau (§13).
+18. **Issue #39** – Bewegung aus Motion Capture (CMU), Angriffskamera, Abseitslinie, durchgehende Interpolation (#40, #42; §14).
+19. **Referenzgrafik** – Grafik und Oberfläche nach dem Referenzbild des Auftraggebers, Ursachen von Rückwärtslaufen und Drehen im Stillstand behoben (#41, #45; §15).
+20. **Manager-Spielmodus** – nur noch die volle Partie 2 × 45 min; Tempo zuerst 2 × 2,5 min (#44), jetzt 2 × 7 min (§16).
 
 ## 9. Nächste Schritte
 
-1. **Phase E manuell abnehmen** (§13.10: eine komplette Sitzung spielen, Grafik beurteilen), danach finales Video.
-2. Benutzeraktionen aus §12.6: Microsoft-Technologie (Foundry) bereitstellen, GitHub Pages veröffentlichen, Video hochladen, Kategorie und Lizenz wählen, einreichen bis 28.10.2026, 07:59 MEZ.
-2. Danach (nicht abgaberelevant): Torschüsse 16/90 und Ecken 6/90 nachkalibrieren, Standardtore, Szenariomodus.
-2. **Simulationstempo:** Wahrnehmung, Freilaufsuche und Abfangprüfung algorithmisch weiter verbilligen; Messung auf weiterer Hardware.
-3. Nachkalibrierung (Messung mit `npm run probe`, 48 Seeds): Schüsse (≈ 19/90, real ≈ 25), Tore (in drei kurzen Browserpartien keines), Häufigkeit von Kopfballtoren, Grätschen und Fouls, Passzahl (≈ 1360 statt ≈ 1000/90), lange Bälle über 30 m.
-4. Orchestrator: Wechsel (nach Ersatzbank-Logik), Torwart beim gegnerischen Elfmeter, defensive Eckenvarianten, Wiederholung (Replay) eines Moments aus den Ereignisdaten.
-5. Präsentation: Fangesänge/Kommentar mit lizenzfreien Quellen, Replay-Kamera, hochwertigere Spielermodelle.
-6. Optionale KI-Rollen (Match Analyst, Pub Host) über Adapter; Physik und Spiel bleiben offline lauffähig.
-
+1. **Praktische Spielprüfung durch den Auftraggeber:** eine volle Partie 2 × 45 im Tempo 2 × 7 min spielen; Spielfluss, Bewegungen, KI, Torchancen und Ballphysik beurteilen.
+2. Nach Abnahme: denselben Grafikstandard auf die übrigen Spielsituationen übertragen (Konter, Abwehr, Ecke, Einwurf, Freistoß, Elfmeter, Torwiederholung).
+3. Benutzeraktionen aus §12.6: Microsoft-Technologie (Foundry) bereitstellen, GitHub Pages veröffentlichen, Video hochladen, einreichen bis 28.10.2026, 07:59 MEZ.
+4. Simulationstempo (Wahrnehmung, Freilaufsuche, Abfangprüfung) algorithmisch verbilligen, damit das Tempo auch auf langsamerer Hardware erreicht wird.
+5. Nachkalibrierung mit `npm run probe`: Schüsse, Ecken, Passzahl, Abseits (nach §15 ≈ 10/90).
 
 ## 10. Phase B – verbindliche Produktvision und Gesamt-Entwicklungsauftrag (beschlossen 20.10.2026)
 
@@ -1988,3 +1990,30 @@ Ein scheinbarer Determinismusfehler stellte sich als Artefakt des Prüfskripts h
 - Weitere Spielsituationen (Konter, Abwehr) nutzen dieselbe Kamera und dieselben Clips bereits. Eigene Clips für Ecke, Elfmeter und Freistoß (Anlauf mit Stopp, Torwart) sind der nächste Schritt.
 
 **Produktabnahme:** Die Videos sind der technische Nachweis. Ob die Szene als Fußball überzeugt, entscheidet der Auftraggeber.
+
+## 15. Grafik nach Referenzbild und Bewegungsfehler (23.10.2026, #41, #45)
+
+**Auftrag:** eine Entscheidungsszene so exakt wie technisch möglich nach dem Referenzbild des Auftraggebers; zuerst zwei gemeldete Bewegungsfehler an der Ursache beheben. Engine, KI, Regeln und Managerfunktionen bleiben.
+
+### 15.1 Bewegungsfehler (Ursachen)
+
+- **Rückwärtslaufen:** Die Physik drehte den Körper unabhängig vom Tempo zum Blickziel (meist der Ball). In 2 × 5 min liefen Feldspieler 28 % der Laufzeit rückwärts, 11 % schneller als 3 m/s. Neu (`physics/body.ts`): Wie weit der Körper von der Laufrichtung weg blicken darf, hängt vom Tempo ab (bis 2 m/s frei, ab 5,5 m/s höchstens 20°); der Kopf (`gaze`, bis 80°) schaut weiter zum Ziel, die Wahrnehmung nutzt den Blick. Beim Anlauf zum Ball schaut der Spieler auf den Ball und öffnet den Körper erst auf den letzten 2,2 m (`ai/execution.ts`). Ergebnis: schnelles Rückwärtslaufen −71 %, rückwärts zum Ball −69 %.
+- **Drehen im Stillstand und im eingefrorenen Bild:** Der Animationsmischer von three.js schreibt einen Knochen nur, wenn sich der Clipwert geändert hat. Im Stillstand (Zeitschritt 0) wurden die Schichten über dem Clip (Kopfdrehung, Neigung) daher jedes Bild erneut auf ihr eigenes Ergebnis angewendet; die Figuren drehten sich weiter. Neu: Jedes Bild beginnt mit der reinen Clip-Pose (`render/footballer.ts`), abgesichert durch einen Test. Drehen auf der Stelle läuft mit Schritten; eine Ballannahme bekommt nur einen Teil der Schussbewegung.
+- **Spielstatistik** (18 Seeds, 2 × 10 min, vorher → nachher, je 90 min): Schüsse 18,2 → 19,5, Tore 1,8 → 2,8, Passquote 76 % → 76 %, Abseits 7,0 → 10,0 (Angreifer im Sprint sehen die Abwehrlinie seltener).
+
+### 15.2 Grafik
+
+- **Kamera:** aus dem Referenzbild zurückgerechnet (Pfosten, Latte, Strafraum, Fünfmeterraum, Teilkreis und Spielergrößen; `scripts/reference/camera-fit.mjs`): 12,2 m hoch, 16,9 m hinter und 27,5 m rechts vom Ball, 22,6° Bildwinkel (`render/reference-camera.ts`). Die Linien des Referenzbilds sind in sich nicht widerspruchsfrei (generiertes Bild); die Lösung trifft Linien und Figurengrößen gemeinsam am besten.
+- **Szene:** Tageslicht mit Bildbeleuchtung, olivgrüner Rasen, Stadion mit Publikum im Schatten, Banner, Banden und Bodenbanner; Vereine Riverdale FC (blau) und Stonebridge (rot), Torhüter in Gelb und Grün.
+- **Oberfläche:** Anzeigetafel, Werkzeugleiste (Markierungen, Statistik, Spieler), Minimap, Entscheidungsleiste mit Spielerkarte und Optionskarten; Porträt und Vorschaubilder werden live aus der Szene gerendert. Der blaue Balken unter dem Namen ist die Entscheidungszeit (ein Ausdauermodell gibt es nicht). Farbtokens nach Freigabe angepasst.
+- **Nachweis:** `docs/reference-scene/` (Vergleichsbild, echte Browservideos mit Pass und Schuss, Seed 36).
+- **Grenzen:** Die Figuren sind nicht fotorealistisch wie im Referenzbild (freies Modell im Browser); die übrigen Spielsituationen nutzen den Standard erst nach Abnahme.
+
+## 16. Manager-Spielmodus und Spieltempo (23.10.2026)
+
+- **Einziger Modus** (#44): volle Partie 2 × 45 simulierte Minuten. Längenauswahl (2 × 5 / 15 / 45), Tempowahl (Normal/Schnell) und der URL-Parameter `half` sind entfernt; „Pause“ bleibt.
+- **Zeitverhältnis:** jede Halbzeit in 7 Minuten Echtzeit; die Managersicht läuft fest mit 2700 s / 420 s ≈ **6,43-fach** (`session/pacing.ts`). Zuvor (#44) 2,5 Minuten bzw. 18-fach.
+- **Entscheidungen:** Die Spielzeit steht, solange eine Entscheidung offen ist.
+- **3D-Szenen:** laufen in Echtzeit (Vorgeschichte 6 s mit Zeitlupe vor dem Stillstand, danach die Folge) und kommen zu den 2 × 7 Minuten hinzu, ebenso die Halbzeitpause mit Ansprache.
+- **Leistungsgrenze:** Die Simulation rechnet im Browser-Worker ≈ 2,1 ms je Tick (Iris Xe, in Phase E gemessen), also höchstens ≈ 7,7-fache Echtzeit. 6,43-fach liegt darunter, mit wenig Reserve; auf langsamerer Hardware wartet die Anzeige auf die Simulation, und die Halbzeit dauert dann länger. Physik und Regeln wurden dafür nicht verändert. Die frühere Vorgabe 18-fach war nicht erreichbar (eine Halbzeit hätte ≈ 5,5 statt 2,5 min gedauert).
+- **Geprüft:** Typcheck und Build. Laut Auftrag keine Simulationen, Browseraufnahmen oder umfangreichen Tests; die Spielprüfung übernimmt der Auftraggeber.
