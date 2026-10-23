@@ -4,9 +4,8 @@ import { TEAMS } from '../engine/rosters';
 import type { MatchEvent, MatchSnapshot, PlayerProfile, TeamId, TeamInstruction } from '../engine/types';
 import { tr } from '../i18n';
 import type { IntelBoard } from '../intel/board';
-import type { ManagerPace } from '../session/pacing';
 import { lengthLabel } from '../ui/match-length';
-import { choices, rating } from './controls';
+import { rating } from './controls';
 
 /** State of the background simulation as the manager sees it. */
 export type SimStatus = { paused: boolean; waiting: boolean; done: boolean; aheadSeconds: number; cpuSeconds: number };
@@ -32,7 +31,7 @@ export class ManagerView {
 
   constructor(private readonly o: {
     halfMinutes: number; userTeam: TeamId; profiles: PlayerProfile[]; instruction: TeamInstruction; intel: IntelBoard; intelPanel: HTMLElement;
-    pace: ManagerPace; onPace: (p: ManagerPace) => void; onPause: (paused: boolean) => void;
+    onPause: (paused: boolean) => void;
   }) {
     this.instruction = { ...o.instruction };
     const t = TEAMS[o.userTeam];
@@ -48,7 +47,6 @@ export class ManagerView {
         </div>
         <div class="mgr-sim">
           <span class="mgr-sim-state" data-state></span>
-          <div class="mgr-seg mgr-pace" data-pace role="radiogroup" aria-label="${tr('Pace', 'Tempo')}"></div>
           <button type="button" class="mgr-pause" data-pause>${tr('Pause', 'Pause')}</button>
         </div>
       </header>
@@ -72,7 +70,6 @@ export class ManagerView {
     this.q('[data-len]').textContent = lengthLabel(o.halfMinutes).short;
     this.q('[data-intel]').append(o.intelPanel);
     o.intelPanel.classList.add('intel-docked');
-    choices(this.q('[data-pace]'), [[tr('Normal', 'Normal'), 'normal'], [tr('Fast', 'Schnell'), 'fast']] as const, o.pace, (p: ManagerPace) => o.onPace(p));
     const pause = this.q<HTMLButtonElement>('[data-pause]');
     pause.addEventListener('click', () => {
       const paused = pause.dataset.paused !== '1';

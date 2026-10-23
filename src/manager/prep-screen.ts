@@ -4,7 +4,7 @@ import { applyLineup, createRoster, TEAMS, type LineupSwap } from '../engine/ros
 import type { PlayerProfile, TeamId, TeamInstruction } from '../engine/types';
 import { lang, LANG_STORAGE_KEY, tr, type Lang } from '../i18n';
 import type { Mode } from '../intel/types';
-import { lengthLabel } from '../ui/match-length';
+import { HALF_MINUTES } from '../session/pacing';
 import { choices, playerRow } from './controls';
 
 /** Everything the coach prepares before kick-off. */
@@ -17,13 +17,6 @@ export type MatchChoice = {
 };
 /** Remembered for the next visit (the length comes from the URL or the default). */
 export type StoredChoice = Pick<MatchChoice, 'userTeam' | 'mode' | 'focusPlayer' | 'instruction'>;
-
-/** Measured user time of a session in the manager flow (PROJECT_REPORT.md §13); shown so the coach knows what to expect. */
-const LENGTH_NOTE = (minutes: 5 | 15 | 45) => ({
-  5: tr('A quick try.', 'Zum Ausprobieren.'),
-  15: tr('Every second of 30 match minutes is simulated.', 'Jede Sekunde von 30 Spielminuten wird simuliert.'),
-  45: tr('The whole match, every second simulated.', 'Die ganze Partie, jede Sekunde simuliert.'),
-})[minutes];
 
 /** What each setting does to the players, in the terms the agents actually use (ai/off-ball.ts, ai/shape.ts, ai/brain.ts). */
 const PRESS_NOTE = (p: TeamInstruction['press']) => ({
@@ -46,7 +39,7 @@ const riskNote = (r: number) => r >= 0.65 ? tr('Forwards stay high, the shape st
  * intelligence mode, focus player and length. Every control acts on the match: the sheet goes through
  * `applyLineup` (the same rules as in the engine), the tactics are the TeamInstruction the players read from kick-off.
  */
-export function showPrepScreen(host: HTMLElement, defaultHalf: number, memoryMatches: number, stored: StoredChoice, onStart: (c: MatchChoice) => void): void {
+export function showPrepScreen(host: HTMLElement, memoryMatches: number, stored: StoredChoice, onStart: (c: MatchChoice) => void): void {
   const el = document.createElement('div');
   el.className = 'prep';
   el.innerHTML = `
@@ -59,8 +52,7 @@ export function showPrepScreen(host: HTMLElement, defaultHalf: number, memoryMat
       <section class="mgr-card prep-match">
         <h2>${tr('Match', 'Partie')}</h2>
         <label>${tr('Your club', 'Dein Verein')}</label><div class="mgr-seg" data-club role="radiogroup"></div>
-        <label>${tr('Length', 'Spieldauer')}</label><div class="mgr-seg" data-length role="radiogroup"></div>
-        <p class="mgr-note" data-length-note></p>
+        <p class="mgr-note">${tr('Full match · 2 × 45 min, each half in 2.5 minutes. The match stands still while you decide.', 'Volle Spielzeit · 2 × 45 min, jede Halbzeit in 2,5 Minuten. Während deiner Entscheidungen steht das Spiel still.')}</p>
         <label>${tr('Match intelligence', 'Match Intelligence')}</label><div class="mgr-seg" data-mode role="radiogroup"></div>
         <label>${tr('Focus player', 'Fokusspieler')}</label><select class="mgr-select" data-focus></select>
         <p class="mgr-note" data-memory></p>
@@ -97,7 +89,7 @@ export function showPrepScreen(host: HTMLElement, defaultHalf: number, memoryMat
   el.querySelector('.home')!.textContent = TEAMS[0].name;
   el.querySelector('.away')!.textContent = TEAMS[1].name;
   const q = <T extends HTMLElement>(s: string) => el.querySelector<T>(s)!;
-  const choice: MatchChoice = { halfMinutes: defaultHalf, resetMemory: false, userTeam: stored.userTeam, mode: stored.mode, focusPlayer: stored.focusPlayer, instruction: { ...stored.instruction }, lineup: [] };
+  const choice: MatchChoice = { halfMinutes: HALF_MINUTES, resetMemory: false, userTeam: stored.userTeam, mode: stored.mode, focusPlayer: stored.focusPlayer, instruction: { ...stored.instruction }, lineup: [] };
 
   choices(q('.prep-lang'), [['EN', 'en'], ['DE', 'de']] as const, lang(), (l: Lang) => {
     if (l === lang()) return;
@@ -157,11 +149,6 @@ export function showPrepScreen(host: HTMLElement, defaultHalf: number, memoryMat
     choice.userTeam = t; selected = null; renderSheet();
   });
   choices(q('[data-mode]'), [[tr('Fan', 'Fan'), 'fan'], [tr('Analyst', 'Analyst'), 'analyst']] as const, stored.mode, (m: Mode) => { choice.mode = m; });
-  const half = ([5, 15, 45] as const).includes(defaultHalf as 5) ? defaultHalf as 5 | 15 | 45 : 15;
-  choices(q('[data-length]'), [['2 × 5 min', 5], ['2 × 15 min', 15], ['2 × 45 min', 45]] as const, half, (minutes: 5 | 15 | 45) => {
-    choice.halfMinutes = minutes;
-    q('[data-length-note]').textContent = `${lengthLabel(minutes).long}. ${LENGTH_NOTE(minutes)}`;
-  });
 
   choices(q('[data-press]'), [[tr('Low', 'Tief'), 'low'], [tr('Medium', 'Mittel'), 'mid'], [tr('High', 'Hoch'), 'high']] as const, choice.instruction.press, (p: TeamInstruction['press']) => {
     choice.instruction.press = p;
