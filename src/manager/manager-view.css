@@ -15,7 +15,6 @@
 .mgr-sim-state[data-state='paused']::before { background: var(--c-warn); box-shadow: none; }
 .mgr-sim-state[data-state='waiting']::before { background: var(--c-accent); }
 .mgr-sim-state[data-state='done']::before { background: var(--c-text-muted); box-shadow: none; }
-.mgr-pace button { padding: var(--space-1) var(--space-3); }
 .mgr-pause { background: var(--c-panel-raised); color: var(--c-text); border: 1px solid var(--c-line); border-radius: var(--radius-md); padding: var(--space-1) var(--space-3); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
 .mgr-pause[data-paused='1'] { border-color: var(--c-warn); color: var(--c-warn); }
 .mgr-progress { position: relative; height: 6px; background: var(--c-panel-raised); border-radius: var(--radius-sm); }

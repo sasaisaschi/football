@@ -14,9 +14,12 @@ export const BUILD_UP = 6;
 export const LAG = 8;
 /** The last seconds before the freeze run in slow motion at this pace. */
 export const SLOW_MO_SECONDS = 0.8, SLOW_MO_PACE = 0.35;
-/** Pace of the manager view (× real time); the simulation itself is the limit for "fast". */
-export const MANAGER_PACE = { normal: 3, fast: 60 } as const;
-export type ManagerPace = keyof typeof MANAGER_PACE;
+/** The one match there is: 2 × 45 simulated minutes, each half shown in 2.5 minutes of real time. */
+export const HALF_MINUTES = 45, HALF_REAL_SECONDS = 150;
+/** Pace of the manager view (× real time): 45 minutes in 2.5 minutes. The simulation's own speed is the upper limit. */
+export const MANAGER_PACE = (HALF_MINUTES * 60) / HALF_REAL_SECONDS;
+/** Half-time: the simulation goes on to the second half's kick-off as fast as it can. */
+export const INTERVAL_PACE = 60;
 
 export type SimState = {
   /** Last tick the simulation has produced. */

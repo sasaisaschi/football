@@ -103,7 +103,7 @@ export class MatchApp {
     }, model);
     app.manager = new ManagerView({
       halfMinutes: options.halfMinutes, userTeam: options.userTeam, profiles: app.profiles, instruction: options.instruction, intel: app.intel, intelPanel: app.intelPanel.el,
-      pace: app.driver.pace, onPace: p => { app.driver.pace = p; }, onPause: p => { app.paused = p; app.driver.paused = p; app.client.pause(p); },
+      onPause: p => { app.paused = p; app.driver.paused = p; app.client.pause(p); },
     });
     host.append(app.manager.el, app.stage.el, app.panel.el, app.consequence.el);
     app.driver.kickOff();

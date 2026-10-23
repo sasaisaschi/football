@@ -6,6 +6,7 @@ import { DEFAULT_ORCHESTRATOR } from './orchestrator/orchestrator';
 import { createPitchView } from './render/pitch-view';
 import { createStadiumView } from './render/stadium-view';
 import { createDaylight } from './render/daylight';
+import { HALF_MINUTES } from './session/pacing';
 import { showPrepScreen, type MatchChoice, type StoredChoice } from './manager/prep-screen';
 import { DEFAULT_INSTRUCTION } from './engine/match-config';
 import type { TeamInstruction } from './engine/types';
@@ -15,7 +16,6 @@ import { LANG_STORAGE_KEY, parseLang, setLang } from './i18n';
 /**
  * Optional URL parameters for development and verification (documented in PROJECT_REPORT.md):
  *   ?seed=123            reproduce a match
- *   ?half=5              preselect the half length in minutes
  *   ?cooldown=20         simulated seconds between decision moments (default 75)
  *   ?moments=5           decision moments per half at most (default 5)
  *   ?timeout=15          seconds the user has for a decision (default 15)
@@ -166,9 +166,8 @@ window.addEventListener('keydown', ev => {
 });
 
 requestAnimationFrame(loop);
-const half = num('half', 15);
-if (params.get('autostart') === '1') void startMatch({ halfMinutes: half, resetMemory: false, lineup: [], ...storedChoice() });
-else showPrepScreen(overlay, half, loadMemory()?.matches ?? 0, storedChoice(), choice => {
+if (params.get('autostart') === '1') void startMatch({ halfMinutes: HALF_MINUTES, resetMemory: false, lineup: [], ...storedChoice() });
+else showPrepScreen(overlay, loadMemory()?.matches ?? 0, storedChoice(), choice => {
   if (choice.resetMemory) localStorage.removeItem(MEMORY_STORAGE_KEY);
   storeChoice(choice);
   void startMatch(choice);
