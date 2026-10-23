@@ -14,7 +14,7 @@ import { SceneView } from './render/scene-view';
 import { loadFootballer } from './render/footballer';
 import type { StadiumView } from './render/stadium-view';
 import { SessionDriver } from './session/driver';
-import { HZ, LAG, SLOW_MO_PACE, SLOW_MO_SECONDS } from './session/pacing';
+import { HZ, SLOW_MO_PACE, SLOW_MO_SECONDS } from './session/pacing';
 import { SimClient } from './sim/sim-client';
 import { commentaryFor } from './ui/commentary';
 import { ConsequenceCard } from './ui/consequence';
@@ -84,7 +84,7 @@ export class MatchApp {
     });
   }
 
-  static async create(scene: THREE.Scene, cam: THREE.PerspectiveCamera, stadium: StadiumView, host: HTMLElement, audio: CrowdAudio, options: AppOptions): Promise<MatchApp> {
+  static async create(scene: THREE.Scene, cam: THREE.PerspectiveCamera, stadium: StadiumView, host: HTMLElement, audio: CrowdAudio, key: THREE.DirectionalLight, options: AppOptions): Promise<MatchApp> {
     const app = new MatchApp(cam, host, audio, options);
     await app.client.ready;
     app.profiles = app.client.profiles;
@@ -95,7 +95,7 @@ export class MatchApp {
     app.consequence = new ConsequenceCard(app.profiles);
     // The figure model (public/models/footballer.glb); without it there is no scene to show, so a failure stops here.
     const model = await loadFootballer(`${import.meta.env.BASE_URL}models/footballer.glb`);
-    app.stage = new SceneView(scene, cam, stadium, audio, app.profiles, { userTeam: options.userTeam, halfMinutes: options.halfMinutes, focusPlayer: options.prefs.focusPlayer, clock: s => app.intel.clock(s) }, model);
+    app.stage = new SceneView(scene, cam, stadium, audio, app.profiles, { userTeam: options.userTeam, halfMinutes: options.halfMinutes, focusPlayer: options.prefs.focusPlayer, clock: s => app.intel.clock(s), key }, model);
     app.manager = new ManagerView({
       halfMinutes: options.halfMinutes, userTeam: options.userTeam, profiles: app.profiles, instruction: options.instruction, intel: app.intel, intelPanel: app.intelPanel.el,
       pace: app.driver.pace, onPace: p => { app.driver.pace = p; }, onPause: p => { app.paused = p; app.driver.paused = p; app.client.pause(p); },
@@ -109,6 +109,7 @@ export class MatchApp {
   get rendering(): boolean {
     return SCENE_PHASES.has(this.driver.flow.phase);
   }
+
 
   /** Read-only view for the browser check. */
   get debug() {
@@ -136,7 +137,7 @@ export class MatchApp {
       this.shownFrame = s;
       this.manager.update(s, {
         paused: this.paused, waiting: this.client.moment !== null, done: this.client.done,
-        aheadSeconds: Math.max(0, (this.client.produced - t) / HZ - (this.client.done ? 0 : LAG)), cpuSeconds: this.client.cpuMs / 1000,
+        aheadSeconds: Math.max(0, (this.client.produced - t) / HZ), cpuSeconds: this.client.cpuMs / 1000,
       }, this.intel.clock(s), this.wall);
       this.intelPanel.update(s, this.wall);
       this.interval?.ready(this.driver.canStartSecondHalf());

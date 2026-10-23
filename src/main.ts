@@ -126,7 +126,7 @@ async function startMatch(choice: MatchChoice): Promise<void> {
   starting = true;
   audio.start();
   const { halfMinutes } = choice;
-  app = await MatchApp.create(scene, camera, stadium, overlay, audio, {
+  app = await MatchApp.create(scene, camera, stadium, overlay, audio, key, {
     seed: num('seed', Math.floor(Math.random() * 1e9)),
     halfMinutes,
     // The app's spacing was set for 2 × 45 minutes; shorter halves get proportionally shorter spacing (at least 20 s).

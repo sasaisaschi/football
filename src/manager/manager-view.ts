@@ -149,7 +149,7 @@ export class ManagerView {
     this.q<HTMLElement>('[data-progress]').style.width = `${(this.clock(s) / (this.o.halfMinutes * 120)) * 100}%`;
     const state = this.q('[data-state]');
     const label = status.done ? tr('Full time computed', 'Partie fertig berechnet') : status.paused ? tr('Paused', 'Pausiert')
-      : status.waiting ? tr('Stopped at a decisive moment', 'Angehalten an einem entscheidenden Moment') : tr(`Simulating · ${Math.round(status.aheadSeconds)} s ahead`, `Simuliert · ${Math.round(status.aheadSeconds)} s voraus`);
+      : status.waiting ? tr('Stopped at a decisive moment', 'Angehalten an einem entscheidenden Moment') : tr(`Simulating · ${Math.round(status.aheadSeconds)} s ahead of the view`, `Simuliert · ${Math.round(status.aheadSeconds)} s vor der Anzeige`);
     state.textContent = label;
     state.dataset.state = status.paused ? 'paused' : status.waiting ? 'waiting' : status.done ? 'done' : 'running';
     if (wall - this.lastUpdate < 0.5) return;
@@ -169,6 +169,8 @@ export class ManagerView {
       r.querySelector('.mgr-name')!.textContent = p.name;
       r.querySelector('.mgr-role')!.textContent = p.role;
       const form = r.querySelector<HTMLElement>('.mgr-form i')!;
+      // A substitute who has not played has no form from this match yet.
+      if (v?.sentOff && !this.wentOff.has(p.id)) r.querySelector<HTMLElement>('.mgr-form')!.style.visibility = 'hidden';
       form.style.width = `${rating(conf)}%`;
       form.dataset.level = conf > 0.66 ? 'good' : conf < 0.45 ? 'low' : 'ok';
       r.querySelector('.mgr-form')!.setAttribute('title', `${tr('Confidence', 'Selbstvertrauen')} ${rating(conf)}`);

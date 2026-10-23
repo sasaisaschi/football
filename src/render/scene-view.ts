@@ -17,6 +17,9 @@ import { TacticalOverlay } from './tactical-overlay';
 /** What the scene draws a frame from: the simulation's computed frames. */
 export interface FrameSource { frame(tick: number): MatchSnapshot; readonly produced: number }
 
+/** Direction to the key floodlight (main.ts) and half the size of the area its shadows cover in a scene (m). */
+const KEY_OFFSET = new THREE.Vector3(-40, 80, 50), SHADOW_HALF = 34;
+
 const CATEGORY = (m: DecisionMoment) => ({ attack: tr('Attack', 'Angriff'), transition: tr('Transition', 'Umschalten'), defence: tr('Defence', 'Abwehr'), 'set-piece': tr('Set piece', 'Standard'), coach: tr('Coach', 'Trainer') })[m.category];
 
 /**
@@ -43,7 +46,7 @@ export class SceneView {
     private readonly stadium: StadiumView,
     private readonly audio: CrowdAudio,
     private readonly profiles: PlayerProfile[],
-    private readonly o: { userTeam: TeamId; halfMinutes: number; focusPlayer: number | null; clock: (s: MatchSnapshot) => string },
+    private readonly o: { userTeam: TeamId; halfMinutes: number; focusPlayer: number | null; clock: (s: MatchSnapshot) => string; key: THREE.DirectionalLight },
     model: Awaited<ReturnType<typeof loadFootballer>>,
   ) {
     this.camera = new CameraDirector(cam);
@@ -140,6 +143,7 @@ export class SceneView {
     const gaitDt = dt * pace;
     s.players.forEach((p, k) => this.figures[k].update(lerpPlayer(a.players[k], p, alpha), gaitDt, ball));
     this.camera.update({ ...s, ball: { ...s.ball, position: ball } }, wall, dt);
+    this.followShadows(ball);
     this.overlay.update(wall, this.cam);
     const excitement = Math.min(1, Math.max(0, (Math.abs(ball.x) - 20) / 30));
     const celebrate = wall < this.celebrateUntil ? (this.celebrateTeam === 0 ? 1 : -1) : 0;
@@ -148,6 +152,19 @@ export class SceneView {
     this.nameTag?.update(s, this.cam);
     this.bug.querySelector('[data-score]')!.textContent = `${s.score[0]} : ${s.score[1]}`;
     this.bug.querySelector('[data-clock]')!.textContent = this.o.clock(s);
+  }
+
+  /**
+   * The floodlight's shadows are drawn for the part of the pitch the scene shows, not for the whole pitch: the same
+   * shadow map then has about ten times the resolution where the players are, and their shadows get crisp edges.
+   */
+  private followShadows(ball: Vec3): void {
+    const key = this.o.key, cam = key.shadow.camera;
+    const at = new THREE.Vector3(ball.x, 0, ball.z).lerp(new THREE.Vector3(this.cam.position.x, 0, this.cam.position.z), 0.15);
+    key.target.position.copy(at);
+    key.position.copy(at).add(KEY_OFFSET);
+    key.target.updateMatrixWorld();
+    if (cam.right !== SHADOW_HALF) { Object.assign(cam, { left: -SHADOW_HALF, right: SHADOW_HALF, top: SHADOW_HALF, bottom: -SHADOW_HALF }); cam.updateProjectionMatrix(); }
   }
 
   dispose(): void {

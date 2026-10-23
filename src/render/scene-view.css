@@ -1,6 +1,9 @@
 /* A decisive scene: letterbox, slim score bug, title card. The 3D picture underneath is the only thing that moves. */
 .scene { position: absolute; inset: 0; pointer-events: none; z-index: 4; font-family: var(--font-ui); }
 .scene[hidden] { display: none; }
+/* Vignette: draws the eye to the middle, more while the moment is frozen (measured: post-processing cost 16–33 % FPS). */
+.scene::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 75% 70% at 50% 52%, transparent 55%, color-mix(in srgb, var(--c-night) 55%, transparent) 100%); opacity: 0.8; transition: opacity 600ms ease; }
+.scene[data-phase='decide']::before { opacity: 1; }
 .scene-bar { position: absolute; left: 0; right: 0; height: 0; background: var(--c-night); transition: height 600ms cubic-bezier(0.2, 0.7, 0.2, 1); }
 .scene-bar.top { top: 0; }
 .scene-bar.bottom { bottom: 0; }

@@ -121,13 +121,13 @@ try {
     const phase = st.phase;
     seconds[phase === 'build-up' || phase === 'consequence' ? 'scene' : phase] = (seconds[phase === 'build-up' || phase === 'consequence' ? 'scene' : phase] ?? 0) + dt;
     if (phase === 'manager' && st.canvas !== 'hidden') canvasInManager++;
-    if (phase === 'manager' && !managerShot && (now - t0) > 6000) { managerShot = true; await shot('03-manager-view'); }
+    if (phase === 'manager' && !managerShot && report.scenes.length > 0 && lastPhase === 'manager') { managerShot = true; await sleep(1500); await shot('03-manager-view'); }
     if (phase === 'build-up' && lastPhase !== 'build-up') {
       const m = await evaluate(`(()=>{const m=window.__match.driver.moment;return m?{id:m.id,kind:m.kind,category:m.category,title:m.title,options:m.options.map(o=>o.label)}:null})()`);
       scene = { ...m, openedAt: Math.round((now - t0) / 1000) };
       report.scenes.push(scene);
       if (shots < maxShots) { await sleep(1800); await shot(`${String(10 + shots)}-${m.kind}-a-build-up`); }
-      if (report.scenes.length === 1) report.checks.fpsScene = await fps();
+      scene.fps = await fps();
     }
     if (phase === 'decide' && scene && !scene.decided) {
       const producedAtFreeze = await evaluate(`${D}.produced`);
@@ -192,6 +192,8 @@ try {
   if (!inv.sameOrder || inv.flowDecisions !== inv.moments) fail(`moments ${inv.moments}, decisions ${inv.decisions}, flow ${inv.flowDecisions}`);
   if (canvasInManager > 0) fail(`3D canvas visible in the manager view (${canvasInManager} samples)`);
   report.checks.session = { wallSeconds: Math.round(wall), secondsIn: Object.fromEntries(Object.entries(seconds).map(([k, v]) => [k, Math.round(v)])), metrics: await evaluate(`${D}.metrics`), cpuSeconds: +((await evaluate(`${D}.cpuMs`)) / 1000).toFixed(1), maxKeptFrames: maxFrames, maxHeapMb };
+  const sceneFps = report.scenes.map(x => x.fps).filter(Boolean);
+  report.checks.fpsScenes = { mean: sceneFps.length ? +(sceneFps.reduce((a, b) => a + b, 0) / sceneFps.length).toFixed(1) : null, min: sceneFps.length ? Math.min(...sceneFps) : null, samples: sceneFps };
   report.checks.result = await evaluate("({score:document.querySelector('[data-score]')?.textContent,decisions:document.querySelectorAll('.result-list li').length,recap:document.querySelectorAll('.result-recap li').length,again:!!document.querySelector('[data-again]')})");
   report.checks.intel = await evaluate(`(()=>{const i=${D}.intel;return i?{mode:i.mode,insights:i.insights.length,kinds:[...new Set(i.insights.map(x=>x.kind))],ingested:i.ingested}:null})()`);
   // The match protocol, for comparison with the Node reference (scripts/protocol.mjs) and with other builds.
