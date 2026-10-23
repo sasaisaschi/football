@@ -10,7 +10,7 @@ import { CameraDirector, WIDE_FOV } from './camera-director';
 import { frameMoment } from './framing';
 import { lerpBall, lerpPlayer } from './interpolate';
 import { NameTag } from './name-tag';
-import { PlayerFigure } from './player-view';
+import { Footballer, loadFootballer } from './footballer';
 import type { StadiumView } from './stadium-view';
 import { TacticalOverlay } from './tactical-overlay';
 
@@ -28,7 +28,7 @@ export class SceneView {
   readonly el = document.createElement('div');
   readonly overlay = new TacticalOverlay();
   readonly camera: CameraDirector;
-  private readonly figures: PlayerFigure[];
+  private readonly figures: Footballer[];
   private readonly ball = createBallView();
   private nameTag: NameTag | null = null;
   private celebrateUntil = 0;
@@ -44,9 +44,10 @@ export class SceneView {
     private readonly audio: CrowdAudio,
     private readonly profiles: PlayerProfile[],
     private readonly o: { userTeam: TeamId; halfMinutes: number; focusPlayer: number | null; clock: (s: MatchSnapshot) => string },
+    model: Awaited<ReturnType<typeof loadFootballer>>,
   ) {
     this.camera = new CameraDirector(cam);
-    this.figures = profiles.map(p => { const f = new PlayerFigure(p, TEAMS[p.team]); scene.add(f.root); return f; });
+    this.figures = profiles.map(p => { const f = new Footballer(p, TEAMS[p.team], model); scene.add(f.root); return f; });
     scene.add(this.ball.mesh, this.overlay.group);
     if (o.focusPlayer !== null) { this.nameTag = new NameTag(profiles[o.focusPlayer], TEAMS[profiles[o.focusPlayer].team].kit); scene.add(this.nameTag.sprite); }
     this.el.className = 'scene';
@@ -150,7 +151,7 @@ export class SceneView {
   }
 
   dispose(): void {
-    for (const f of this.figures) this.scene.remove(f.root);
+    for (const f of this.figures) { this.scene.remove(f.root); f.dispose(); }
     this.scene.remove(this.ball.mesh, this.overlay.group);
     if (this.nameTag) { this.scene.remove(this.nameTag.sprite); this.nameTag.dispose(); }
   }

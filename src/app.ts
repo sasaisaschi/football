@@ -11,6 +11,7 @@ import type { Personalization } from './intel/types';
 import { CoachDialog, IntervalScreen } from './manager/coach-screens';
 import { ManagerView } from './manager/manager-view';
 import { SceneView } from './render/scene-view';
+import { loadFootballer } from './render/footballer';
 import type { StadiumView } from './render/stadium-view';
 import { SessionDriver } from './session/driver';
 import { HZ, LAG, SLOW_MO_PACE, SLOW_MO_SECONDS } from './session/pacing';
@@ -92,7 +93,9 @@ export class MatchApp {
     app.intelPanel = new IntelPanel(app.intel, app.profiles, options.prefs, options.savePrefs, new NarrationClient(import.meta.env.VITE_NARRATION_URL || undefined));
     app.intel.onInsight(i => app.intelPanel.push(i));
     app.consequence = new ConsequenceCard(app.profiles);
-    app.stage = new SceneView(scene, cam, stadium, audio, app.profiles, { userTeam: options.userTeam, halfMinutes: options.halfMinutes, focusPlayer: options.prefs.focusPlayer, clock: s => app.intel.clock(s) });
+    // The figure model (public/models/footballer.glb); without it there is no scene to show, so a failure stops here.
+    const model = await loadFootballer(`${import.meta.env.BASE_URL}models/footballer.glb`);
+    app.stage = new SceneView(scene, cam, stadium, audio, app.profiles, { userTeam: options.userTeam, halfMinutes: options.halfMinutes, focusPlayer: options.prefs.focusPlayer, clock: s => app.intel.clock(s) }, model);
     app.manager = new ManagerView({
       halfMinutes: options.halfMinutes, userTeam: options.userTeam, profiles: app.profiles, instruction: options.instruction, intel: app.intel, intelPanel: app.intelPanel.el,
       pace: app.driver.pace, onPace: p => { app.driver.pace = p; }, onPause: p => { app.paused = p; app.driver.paused = p; app.client.pause(p); },
