@@ -1,6 +1,6 @@
 import type { DecisionMoment, DecisionSource, MatchEvent } from '../engine/types';
 import { isSceneMoment, SessionFlow } from './flow';
-import { buildUpStep, BUILD_UP, consequenceStep, HZ, MANAGER_PACE, managerCap, managerStep, readyForMoment, type ManagerPace, type SimState } from './pacing';
+import { buildUpStep, BUILD_UP, consequenceStep, HZ, INTERVAL_PACE, MANAGER_PACE, managerCap, managerStep, readyForMoment, type SimState } from './pacing';
 import { Timeline } from './timeline';
 
 /** What the session needs from the simulation (the worker client in the browser, a runner in tests). */
@@ -40,7 +40,6 @@ const NO_TALK_AFTER = 2;
 export class SessionDriver {
   readonly flow = new SessionFlow();
   readonly timeline: Timeline;
-  pace: ManagerPace = 'fast';
   paused = false;
   private halfTimeAt: number | null = null;
   private intervalShown = false;
@@ -73,7 +72,7 @@ export class SessionDriver {
     const f = this.flow, s = this.state();
     switch (f.phase) {
       case 'manager': {
-        if (!this.paused) this.timeline.advanceTo(managerStep(this.tick, dt, MANAGER_PACE[this.pace], s));
+        if (!this.paused) this.timeline.advanceTo(managerStep(this.tick, dt, MANAGER_PACE, s));
         if (this.halfTimeAt !== null && !this.intervalShown) { this.intervalShown = true; f.halfTime(); this.hooks.interval(); return; }
         const m = this.sim.moment;
         if (m && readyForMoment(this.tick, s) && !f.open) {
@@ -86,7 +85,7 @@ export class SessionDriver {
       }
       case 'interval': {
         // The simulation goes on to the second half's kick-off, where the team talk opens.
-        this.timeline.advanceTo(managerStep(this.tick, dt, MANAGER_PACE.fast, s));
+        this.timeline.advanceTo(managerStep(this.tick, dt, INTERVAL_PACE, s));
         const m = this.sim.moment;
         if (m && !f.open && readyForMoment(this.tick, s) && !isSceneMoment(m)) { f.coachMoment(m); this.hooks.coach(m); }
         return;
