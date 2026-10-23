@@ -89,3 +89,27 @@ export function createRoster(seed = 1): PlayerProfile[] {
   }
   return players;
 }
+
+/** A change to the starting eleven before kick-off: bench player `on` starts in place of starter `off` (Law 3: the team sheet). */
+export type LineupSwap = { off: number; on: number };
+
+/**
+ * Applies the coach's team sheet before kick-off. The bench player takes over the starter's position (as in
+ * `substitute`), the starter goes to the bench with his own position. Keepers only for keepers. Throws on an illegal
+ * sheet, so a control without effect cannot exist.
+ */
+export function applyLineup(profiles: PlayerProfile[], swaps: readonly LineupSwap[]): void {
+  const used = new Set<number>();
+  for (const { off, on } of swaps) {
+    const po = profiles[off], pn = profiles[on];
+    if (!po || !pn) throw new Error(`Lineup: unknown player ${off} or ${on}`);
+    if (po.team !== pn.team) throw new Error('Lineup: players of different teams');
+    if (po.squad !== 'starter' || pn.squad !== 'bench') throw new Error(`Lineup: ${pn.name} must be on the bench and ${po.name} in the eleven`);
+    if ((po.role === 'GK') !== (pn.role === 'GK')) throw new Error('Lineup: a keeper can only be swapped for a keeper');
+    if (used.has(off) || used.has(on)) throw new Error('Lineup: a player appears twice');
+    used.add(off); used.add(on);
+    const role = po.role;
+    po.squad = 'bench'; pn.squad = 'starter';
+    po.role = pn.role; pn.role = role;
+  }
+}
