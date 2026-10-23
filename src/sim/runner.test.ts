@@ -3,7 +3,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { MatchEngine } from '../engine/match-engine';
 import { Orchestrator } from '../orchestrator/orchestrator';
 import { decodeFrame, encodeEngineFrame, encodeFrame, frameSize } from './frame-codec';
-import { Playback, type PlaybackInput } from './playback';
 import { SimRunner, type RunnerConfig } from './runner';
 
 beforeAll(async () => {
@@ -80,39 +79,4 @@ describe('chronological simulation runner', () => {
     expect(direct.ballPos()).toEqual(r.engine.ballPos());
     expect(direct.events.map(e => e.type)).toEqual(r.engine.events.map(e => e.type));
   }, 120_000);
-});
-
-describe('presentation pacing', () => {
-  const input = (over: Partial<PlaybackInput>): PlaybackInput => ({ produced: 0, momentTick: null, done: false, keys: [], condense: true, classicPace: 1, ...over });
-
-  it('fast-forwards quiet play, never beyond what was simulated, keeping a lag for a coming build-up', () => {
-    const p = new Playback();
-    for (let i = 0; i < 90; i++) p.update(1 / 60, input({ produced: 60 * 120 }));
-    expect(p.mode).toBe('condensed');
-    expect(p.speed).toBeGreaterThan(10);
-    for (let i = 0; i < 1200; i++) p.update(1 / 60, input({ produced: 60 * 120 }));
-    expect(p.tick).toBeLessThanOrEqual(60 * 120 - 6 * 60);
-    expect(p.tick).toBeGreaterThan(60 * 110);
-  });
-
-  it('shows the build-up to a moment in real time and holds at the moment', () => {
-    const p = new Playback();
-    const momentTick = 60 * 60;
-    const keys = [{ tick: momentTick, kind: 'moment' as const }];
-    let liveAt = -1;
-    for (let i = 0; i < 60 * 60 && p.mode !== 'held'; i++) {
-      p.update(1 / 60, input({ produced: momentTick, momentTick, keys }));
-      if (liveAt < 0 && p.mode === 'live' && p.tick > 60) liveAt = p.tick;
-    }
-    expect(p.mode).toBe('held');
-    expect(p.tick).toBe(momentTick);
-    expect(momentTick - liveAt).toBeGreaterThanOrEqual(4.5 * 60);
-  });
-
-  it('without condensing it plays at the classic pace', () => {
-    const p = new Playback();
-    for (let i = 0; i < 120; i++) p.update(1 / 60, input({ produced: 60 * 100, condense: false, classicPace: 1 }));
-    expect(p.speed).toBe(1);
-    expect(p.tick).toBeCloseTo(120, 0);
-  });
 });

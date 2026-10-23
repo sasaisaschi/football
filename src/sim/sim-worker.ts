@@ -5,12 +5,14 @@ import { SimRunner, type Batch, type RunnerConfig } from './runner';
 
 /**
  * The simulation thread. It computes the match chronologically as fast as the CPU allows, but never further ahead of
- * what is on screen than AHEAD_SECONDS, and never past an open decision moment: it then waits for the user's choice.
+ * what is shown than AHEAD_SECONDS, and never past an open decision moment: it then waits for the user's choice.
  */
 export type ToWorker =
   | { type: 'start'; config: RunnerConfig }
   | { type: 'resolve'; optionId: string; by: DecisionSource }
-  | { type: 'display'; tick: number };
+  | { type: 'display'; tick: number }
+  /** The manager paused the match: the simulation stops computing until resumed. */
+  | { type: 'pause'; paused: boolean };
 export type FromWorker =
   | { type: 'ready'; profiles: SimRunner['profiles']; batch: Batch }
   | { type: 'batch'; batch: Batch }
@@ -18,13 +20,14 @@ export type FromWorker =
 
 /** Ticks per batch: about half a simulated second. */
 const CHUNK = 30;
-/** How far the simulation may run ahead of the picture (simulated seconds). */
-const AHEAD_SECONDS = 90;
+/** How far the simulation may run ahead of what is shown (simulated seconds); frames beyond that would only fill memory. */
+const AHEAD_SECONDS = 30;
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 let runner: SimRunner | null = null;
 let displayTick = 0;
 let pumping = false;
+let paused = false;
 // Yield to incoming messages without the 4 ms clamp of nested timers.
 const channel = new MessageChannel();
 let resume: (() => void) | null = null;
@@ -36,11 +39,11 @@ function post(msg: FromWorker, batch?: Batch): void {
 }
 
 async function pump(): Promise<void> {
-  if (pumping || !runner) return;
+  if (pumping || paused || !runner) return;
   pumping = true;
   try {
     const r = runner;
-    while (r.engine.phase !== 'decision' && r.engine.phase !== 'full-time' && r.engine.tick - displayTick < AHEAD_SECONDS * 60) {
+    while (!paused && r.engine.phase !== 'decision' && r.engine.phase !== 'full-time' && r.engine.tick - displayTick < AHEAD_SECONDS * 60) {
       const batch = r.advance(CHUNK);
       post({ type: 'batch', batch }, batch);
       await yieldNow();
@@ -63,6 +66,9 @@ scope.onmessage = async (ev: MessageEvent<ToWorker>) => {
       void pump();
     } else if (msg.type === 'resolve') {
       runner?.resolve(msg.optionId, msg.by);
+      void pump();
+    } else if (msg.type === 'pause') {
+      paused = msg.paused;
       void pump();
     } else if (msg.type === 'display') {
       displayTick = msg.tick;

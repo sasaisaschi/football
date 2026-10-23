@@ -4,7 +4,7 @@ import { PITCH } from '../physics/pitch-geometry';
 import { STANDS } from '../physics/pitch-colliders';
 import type { Framing } from './framing';
 
-export type Shot = 'main' | 'close' | 'behind-goal' | 'decision' | 'wide' | 'overview';
+export type Shot = 'main' | 'close' | 'behind-goal' | 'decision' | 'wide' | 'overview' | 'follow';
 
 /**
  * Vertical field of view (degrees). The live broadcast shot is tighter, like a TV main camera, so the players are large
@@ -12,6 +12,8 @@ export type Shot = 'main' | 'close' | 'behind-goal' | 'decision' | 'wide' | 'ove
  * framing that is computed for it, uses the wider angle.
  */
 export const BROADCAST_FOV = 27, WIDE_FOV = 36;
+/** The scene's following shot: low and close on the near side, a long lens, so the players fill the picture. */
+export const FOLLOW_FOV = 24;
 
 /**
  * TV direction. The main gantry camera follows play with some anticipation; real events trigger cuts
@@ -41,6 +43,10 @@ export class CameraDirector {
   decisionFrame: Framing | null = null;
   /** While play is condensed the picture is a high overview of the whole half instead of the broadcast shot. */
   condensed = false;
+  /** In a decisive scene the main shot is the close following shot. */
+  scene = false;
+  /** Smoothed direction of play along the pitch, for the following shot to trail it. */
+  private flow = 1;
 
   constructor(readonly camera: THREE.PerspectiveCamera) {
     camera.position.set(0, 22, STANDS.z + 6);
@@ -62,6 +68,16 @@ export class CameraDirector {
     }
   }
 
+  /** Hard cut to a shot (a scene starts, freezes or resumes); `s` places the camera at once. */
+  cutTo(shot: Shot, s: MatchSnapshot | null): void {
+    this.shot = shot === 'follow' ? 'main' : shot;
+    this.holdUntil = shot === 'decision' ? Infinity : 0;
+    this.celebrating = false;
+    if (s && shot === 'follow') { this.flow = Math.sign(s.ball.velocity.x) || this.flow; this.snapNext = true; }
+  }
+
+  private snapNext = false;
+
   private cut(shot: Shot, wallTime: number, hold: number): void {
     this.shot = shot;
     this.holdUntil = wallTime + hold;
@@ -72,7 +88,7 @@ export class CameraDirector {
       this.shot = this.celebrating && this.shot === 'behind-goal' ? 'wide' : 'main';
       if (this.shot === 'wide') this.holdUntil = wallTime + 3;
     }
-    const shot = this.manual ?? (this.shot === 'main' && this.condensed ? 'overview' : this.shot);
+    const shot = this.manual ?? (this.shot === 'main' ? (this.scene ? 'follow' : this.condensed ? 'overview' : 'main') : this.shot);
     const b = s.ball.position;
     const v = s.ball.velocity;
     let snap = false;
@@ -81,6 +97,15 @@ export class CameraDirector {
         const lead = { x: b.x + v.x * 0.6, z: b.z + v.z * 0.4 };
         this.target.set(lead.x * 0.82, 18, STANDS.z + 2);
         this.look.set(lead.x, 0, lead.z * nearSideFollow(lead.z));
+        break;
+      }
+      case 'follow': {
+        // Trails play from the near side, low, with a long lens; the direction of play turns slowly, not with every touch.
+        if (Math.abs(v.x) > 2) this.flow += (Math.sign(v.x) - this.flow) * Math.min(1, dt * 0.8);
+        const lead = { x: b.x + v.x * 0.35, z: b.z + v.z * 0.25 };
+        this.target.set(lead.x - this.flow * 9, 7.5, Math.min(STANDS.z - 1, lead.z + 21));
+        this.look.set(lead.x + this.flow * 2, 0.9, lead.z);
+        if (this.snapNext) { snap = true; this.snapNext = false; }
         break;
       }
       case 'close': {
@@ -121,13 +146,13 @@ export class CameraDirector {
       }
     }
     // A decision moment flies to its framing quickly (it must be readable at once); other cuts are hard.
-    const rate = shot === 'main' || shot === 'overview' ? 1.8 : shot === 'decision' ? 5 : 2.6;
-    const k = snap && shot !== 'decision' && this.camera.position.distanceTo(this.target) > 20 ? 1 : 1 - Math.exp(-dt * rate);
+    const rate = shot === 'main' || shot === 'overview' ? 1.8 : shot === 'decision' ? 2.2 : shot === 'follow' ? 2.4 : 2.6;
+    const k = snap && shot !== 'decision' && (shot === 'follow' || this.camera.position.distanceTo(this.target) > 20) ? 1 : 1 - Math.exp(-dt * rate);
     this.camera.position.lerp(this.target, k);
     this.lookNow.lerp(this.look, k);
-    const fov = shot === 'main' ? BROADCAST_FOV : WIDE_FOV;
+    const fov = shot === 'main' ? BROADCAST_FOV : shot === 'follow' ? FOLLOW_FOV : WIDE_FOV;
     if (Math.abs(this.camera.fov - fov) > 0.01) {
-      this.camera.fov += (fov - this.camera.fov) * (shot === 'decision' ? 1 : k);
+      this.camera.fov += (fov - this.camera.fov) * (k === 1 ? 1 : shot === 'decision' ? Math.min(1, k * 1.2) : k);
       this.camera.updateProjectionMatrix();
     }
     this.camera.lookAt(this.lookNow);
