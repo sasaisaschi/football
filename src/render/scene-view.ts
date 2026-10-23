@@ -75,7 +75,11 @@ export class SceneView {
     title.classList.add('show');
     this.label(tr('LIVE · BUILD-UP', 'LIVE · VORGESCHICHTE'));
     this.camera.scene = true;
-    this.camera.cutTo('follow', s);
+    // A set piece about to be taken is shown from behind the ball (or the corner flag) towards goal.
+    const r = s.restart;
+    const setPiece = m.category === 'set-piece' && r && ['corner', 'free-kick', 'penalty'].includes(r.kind);
+    this.camera.setPiece = setPiece ? { spot: r.position, goalX: attackSign(r.team, s.half) * 52.5, kind: r.kind } : null;
+    this.camera.cutTo(setPiece ? 'set-piece' : 'follow', s);
   }
 
   private label(text: string): void {
@@ -118,6 +122,7 @@ export class SceneView {
 
   end(): void {
     this.active = false;
+    this.camera.setPiece = null;
     this.el.hidden = true;
     this.overlay.hide();
     this.camera.scene = false;

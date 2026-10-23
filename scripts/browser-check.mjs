@@ -85,6 +85,9 @@ const layoutCheck = () => evaluate(`(()=>{
 })()`);
 
 const seconds = { manager: 0, scene: 0, decide: 0, coach: 0, interval: 0 };
+/** Computing time of the worker and ticks it produced, split by what was on screen (3D scene or manager screens). */
+const compute = { manager: { ms: 0, ticks: 0 }, scene: { ms: 0, ticks: 0 } };
+let lastCompute = null;
 let maxFrames = 0, maxHeapMb = 0, canvasInManager = 0;
 try {
   await send('Runtime.enable');
@@ -112,11 +115,13 @@ try {
   const t0 = Date.now();
   let shots = 0, managerShot = false, scene = null, lastPhase = '', last = Date.now();
   while ((Date.now() - t0) / 1000 < maxSeconds) {
-    const st = await evaluate(`(()=>{const d=${D};return {phase:d.phase,finished:d.finished,frames:d.keptFrames,canvas:getComputedStyle(document.querySelector('#app > canvas')).visibility,heap:performance.memory?Math.round(performance.memory.usedJSHeapSize/1048576):0}})()`);
+    const st = await evaluate(`(()=>{const d=${D};return {phase:d.phase,finished:d.finished,cpu:d.cpuMs,produced:d.produced,frames:d.keptFrames,canvas:getComputedStyle(document.querySelector('#app > canvas')).visibility,heap:performance.memory?Math.round(performance.memory.usedJSHeapSize/1048576):0}})()`);
     const now = Date.now(), dt = (now - last) / 1000;
     last = now;
     if (!st) { await sleep(250); continue; }
     maxFrames = Math.max(maxFrames, st.frames); maxHeapMb = Math.max(maxHeapMb, st.heap);
+    if (lastCompute) { const k = ['build-up', 'decide', 'consequence'].includes(st.phase) ? 'scene' : 'manager'; compute[k].ms += st.cpu - lastCompute.cpu; compute[k].ticks += st.produced - lastCompute.produced; }
+    lastCompute = { cpu: st.cpu, produced: st.produced };
     if (st.finished) break;
     const phase = st.phase;
     seconds[phase === 'build-up' || phase === 'consequence' ? 'scene' : phase] = (seconds[phase === 'build-up' || phase === 'consequence' ? 'scene' : phase] ?? 0) + dt;
@@ -191,7 +196,8 @@ try {
   if (!inv.ordered) fail('event ids not in order');
   if (!inv.sameOrder || inv.flowDecisions !== inv.moments) fail(`moments ${inv.moments}, decisions ${inv.decisions}, flow ${inv.flowDecisions}`);
   if (canvasInManager > 0) fail(`3D canvas visible in the manager view (${canvasInManager} samples)`);
-  report.checks.session = { wallSeconds: Math.round(wall), secondsIn: Object.fromEntries(Object.entries(seconds).map(([k, v]) => [k, Math.round(v)])), metrics: await evaluate(`${D}.metrics`), cpuSeconds: +((await evaluate(`${D}.cpuMs`)) / 1000).toFixed(1), maxKeptFrames: maxFrames, maxHeapMb };
+  report.checks.session = { wallSeconds: Math.round(wall), secondsIn: Object.fromEntries(Object.entries(seconds).map(([k, v]) => [k, Math.round(v)])), metrics: await evaluate(`${D}.metrics`), cpuSeconds: +((await evaluate(`${D}.cpuMs`)) / 1000).toFixed(1), maxKeptFrames: maxFrames, maxHeapMb,
+    msPerTick: Object.fromEntries(Object.entries(compute).map(([k, v]) => [k, v.ticks ? +(v.ms / v.ticks).toFixed(2) : null])), ticksComputed: { manager: compute.manager.ticks, scene: compute.scene.ticks } };
   const sceneFps = report.scenes.map(x => x.fps).filter(Boolean);
   report.checks.fpsScenes = { mean: sceneFps.length ? +(sceneFps.reduce((a, b) => a + b, 0) / sceneFps.length).toFixed(1) : null, min: sceneFps.length ? Math.min(...sceneFps) : null, samples: sceneFps };
   report.checks.result = await evaluate("({score:document.querySelector('[data-score]')?.textContent,decisions:document.querySelectorAll('.result-list li').length,recap:document.querySelectorAll('.result-recap li').length,again:!!document.querySelector('[data-again]')})");

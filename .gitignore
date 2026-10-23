@@ -11,3 +11,5 @@ perf-output/
 browser-check-*/
 intel-output/
 video-output/
+protocol-output/
+protocol-tactics/
