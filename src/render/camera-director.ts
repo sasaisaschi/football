@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { MatchEvent, MatchSnapshot } from '../engine/types';
 import { PITCH } from '../physics/pitch-geometry';
 import { STANDS } from '../physics/pitch-colliders';
-import type { Framing } from './framing';
+import { cameraAllowed, type Framing } from './framing';
 
 export type Shot = 'main' | 'close' | 'behind-goal' | 'decision' | 'wide' | 'overview' | 'follow' | 'set-piece' | 'shot';
 
@@ -132,7 +132,12 @@ export class CameraDirector {
         const aim = corner ? { x: sp.goalX - Math.sign(sp.goalX) * 11, z: 0 } : { x: sp.goalX, z: 0 };
         const dx = sp.spot.x - aim.x, dz = sp.spot.z - aim.z, d = Math.hypot(dx, dz) || 1;
         const back = corner ? 9 : 11;
-        this.target.set(sp.spot.x + (dx / d) * back, corner ? 6.5 : 4.2, Math.max(-PITCH.halfWidth - 3, Math.min(PITCH.halfWidth + 3, sp.spot.z + (dz / d) * back)));
+        this.target.set(sp.spot.x + (dx / d) * back, corner ? 6.5 : 4.2, sp.spot.z + (dz / d) * back);
+        // Never behind the boards or inside a stand: moved towards the target until the stadium allows the camera
+        // there (and the boards do not hide the taker), the rule the decision framing uses (framing.ts).
+        for (let i = 0; i < 60 && (!cameraAllowed(this.target) || Math.abs(this.target.x) > PITCH.halfLength + 2 || Math.abs(this.target.z) > PITCH.halfWidth + 2); i++) {
+          this.target.x -= (dx / d) * 0.5; this.target.z -= (dz / d) * 0.5;
+        }
         this.look.set(aim.x * 0.5 + b.x * 0.5, 1, aim.z * 0.5 + b.z * 0.5);
         if (this.snapNext) { snap = true; this.snapNext = false; }
         break;

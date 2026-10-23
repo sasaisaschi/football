@@ -8,8 +8,9 @@
 // protocol (tick:type of every event, plus the decisions) to the output folder.
 // Usage: npm run test:browser   (env: CHROME_PATH, CHECK_PREVIEW=1, CHECK_BASE=/football/, CHECK_VIEWPORT=1600x900,
 //        CHECK_SEED=7, CHECK_HALF=5, CHECK_QUERY='lang=de&mode=analyst', CHECK_POLICY=second|first|delegate,
-//        CHECK_THINK=1-2 (seconds per decision), CHECK_SECONDS (time limit), CHECK_OUT (folder), CHECK_SHOTS=12)
-import { spawn } from 'node:child_process';
+//        CHECK_THINK=1-2 (seconds per decision), CHECK_SECONDS (time limit), CHECK_OUT (folder), CHECK_SHOTS=12,
+//        CHECK_RECORD=2 (record the first n scenes, build-up to consequence, as scene-N.mp4 with ffmpeg))
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -32,6 +33,9 @@ if (!browserPath) { console.error('No Chrome/Edge found. Set CHROME_PATH to a Ch
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { browser: browserPath, viewport: `${vw}x${vh}`, policy, checks: {}, scenes: [], coach: [], errors: [], warnings: [], notes: [] };
 const fail = msg => { report.errors.push(msg); };
+const recordScenes = Number(process.env.CHECK_RECORD ?? 0);
+/** Screencast of the scene being recorded: JPEG frames with their timestamps. */
+let recording = null;
 
 const base = process.env.CHECK_BASE ?? '/';
 const viteArgs = process.env.CHECK_PREVIEW ? ['preview', '--port', String(port), '--strictPort', '--base', base] : ['--port', String(port), '--strictPort'];
@@ -56,6 +60,10 @@ ws.addEventListener('message', ev => {
   if (m.method === 'Runtime.consoleAPICalled' && (m.params.type === 'error' || m.params.type === 'warning')) {
     const text = m.params.args.map(a => a.value ?? a.description).join(' ');
     (m.params.type === 'error' ? report.errors : report.warnings).push(`console: ${text}`);
+  }
+  if (m.method === 'Page.screencastFrame') {
+    if (recording) { const f = join(out, `rec-${recording.n}-${String(recording.frames.length).padStart(5, '0')}.jpg`); writeFileSync(f, Buffer.from(m.params.data, 'base64')); recording.frames.push({ f, t: m.params.metadata.timestamp }); }
+    ws.send(JSON.stringify({ id: ++id, method: 'Page.screencastFrameAck', params: { sessionId: m.params.sessionId } }));
   }
   if (m.method === 'Runtime.exceptionThrown') report.errors.push(`exception: ${m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text}`);
 });
@@ -127,6 +135,23 @@ try {
     seconds[phase === 'build-up' || phase === 'consequence' ? 'scene' : phase] = (seconds[phase === 'build-up' || phase === 'consequence' ? 'scene' : phase] ?? 0) + dt;
     if (phase === 'manager' && st.canvas !== 'hidden') canvasInManager++;
     if (phase === 'manager' && !managerShot && report.scenes.length > 0 && lastPhase === 'manager') { managerShot = true; await sleep(1500); await shot('03-manager-view'); }
+    const inScene = ['build-up', 'decide', 'consequence'].includes(phase);
+    if (inScene && !recording && report.scenes.length < recordScenes && lastPhase === 'manager') {
+      recording = { n: report.scenes.length + 1, frames: [] };
+      await send('Page.startScreencast', { format: 'jpeg', quality: 82, maxWidth: 1280, maxHeight: 720, everyNthFrame: 1 });
+    }
+    if (!inScene && recording) {
+      await send('Page.stopScreencast');
+      const r = recording; recording = null;
+      // Every frame for as long as it was on screen (real pace; the decision's thinking time included).
+      const NL = String.fromCharCode(10);
+      const list = r.frames.map((fr, i) => `file '${fr.f.replaceAll(String.fromCharCode(92), '/')}'${NL}duration ${Math.max(0.001, Math.min(0.5, (r.frames[i + 1]?.t ?? fr.t + 0.04) - fr.t)).toFixed(3)}`).join(NL);
+      writeFileSync(join(out, `rec-${r.n}.txt`), list);
+      try {
+        execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', join(out, `rec-${r.n}.txt`), '-vf', 'fps=30,scale=1280:-2', '-c:v', 'libx264', '-crf', '26', '-pix_fmt', 'yuv420p', join(out, `scene-${r.n}.mp4`)]);
+        report.checks[`scene${r.n}Video`] = { frames: r.frames.length, seconds: +((r.frames.at(-1).t - r.frames[0].t)).toFixed(1) };
+      } catch (err) { report.notes.push(`scene ${r.n} video not built: ${err}`); }
+    }
     if (phase === 'build-up' && lastPhase !== 'build-up') {
       const m = await evaluate(`(()=>{const m=window.__match.driver.moment;return m?{id:m.id,kind:m.kind,category:m.category,title:m.title,options:m.options.map(o=>o.label)}:null})()`);
       scene = { ...m, openedAt: Math.round((now - t0) / 1000) };

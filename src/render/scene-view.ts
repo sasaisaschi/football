@@ -117,7 +117,8 @@ export class SceneView {
     this.label(tr('LIVE · CONSEQUENCE', 'LIVE · KONSEQUENZ'));
     this.overlay.hide();
     this.camera.decisionFrame = null;
-    this.camera.cutTo('follow', null);
+    // A set piece still to be taken is watched from behind the ball again; open play is followed.
+    this.camera.cutTo(this.camera.setPiece && this.shown?.restart ? 'set-piece' : 'follow', null);
   }
 
   end(): void {
