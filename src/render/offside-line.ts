@@ -24,8 +24,9 @@ export class OffsideLine {
   private shownX = NaN;
 
   constructor() {
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.8, depthWrite: false });
-    this.strip = new THREE.Mesh(new THREE.PlaneGeometry(0.28, PITCH.width), mat);
+    // White and thin as a broadcast's offside graphic: yellow is the colour of a shot in the reference picture.
+    const mat = new THREE.MeshBasicMaterial({ color: 0xf3f6fb, transparent: true, opacity: 0.55, depthWrite: false });
+    this.strip = new THREE.Mesh(new THREE.PlaneGeometry(0.16, PITCH.width), mat);
     this.strip.rotation.x = -Math.PI / 2;
     this.strip.position.y = 0.035;
     this.strip.renderOrder = 2;
@@ -33,12 +34,12 @@ export class OffsideLine {
     canvas.width = 256; canvas.height = 64;
     const c = canvas.getContext('2d')!;
     c.fillStyle = 'rgba(6,11,22,0.75)'; c.fillRect(0, 8, 256, 48);
-    c.fillStyle = '#ffd23f'; c.font = '700 26px Bahnschrift, Segoe UI, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = '#f3f6fb'; c.font = '700 26px Bahnschrift, Segoe UI, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(tr('OFFSIDE LINE', 'ABSEITSLINIE'), 128, 33);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     this.label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-    this.label.scale.set(4, 1, 1);
+    this.label.scale.set(2.2, 0.55, 1);
     this.label.renderOrder = 6;
     this.group.add(this.strip, this.label);
     this.group.visible = false;

@@ -1,7 +1,7 @@
 .consequence {
   position: absolute; left: var(--space-4); bottom: var(--space-4); width: min(360px, 40vw); padding: var(--space-3) var(--space-4);
-  background: color-mix(in srgb, var(--c-panel) 92%, transparent); backdrop-filter: blur(8px);
-  border: 1px solid var(--c-line); border-left: 3px solid var(--c-accent); border-radius: var(--radius-md);
+  background: var(--c-hud); backdrop-filter: blur(8px);
+  border: 1px solid var(--c-hud-line); border-left: 3px solid var(--c-accent); border-radius: var(--radius-sm);
   box-shadow: var(--shadow-panel); font-family: var(--font-ui); pointer-events: none; animation: consequence-in 200ms ease-out;
 }
 .consequence[hidden] { display: none; }

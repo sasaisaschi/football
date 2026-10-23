@@ -17,25 +17,37 @@ export function createPitchView(): THREE.Group {
  * geometry breaks into dashes, while the texture's mipmaps fade it smoothly; up close the crisp geometry lies on top.
  */
 function turf(segments: readonly [number, number, number, number][]): THREE.Mesh {
-  const size = 2048;
+  const size = 4096;
   const canvas = document.createElement('canvas');
   canvas.width = size; canvas.height = size / 2;
   const c = canvas.getContext('2d')!;
-  const stripes = 18;
+  // Olive summer grass of the reference picture, mown in broad stripes across the pitch.
+  const stripes = 20;
   for (let i = 0; i < stripes; i++) {
-    c.fillStyle = i % 2 ? '#25773f' : '#1f6c38';
+    c.fillStyle = i % 2 ? '#566d19' : '#4e6316';
     c.fillRect((i * size) / stripes, 0, size / stripes + 1, size / 2);
   }
-  // Fine grain so the grass does not look like plastic up close.
+  // Patches of lighter and darker turf (wear, watering) at a few metres' scale, then a fine grain.
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 900; i++) {
+    const x = rnd() * size, y = rnd() * size / 2, r = 30 + rnd() * 140;
+    const g = c.createRadialGradient(x, y, 0, x, y, r);
+    const light = rnd() < 0.5;
+    g.addColorStop(0, light ? 'rgba(150,170,70,0.10)' : 'rgba(30,50,15,0.10)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g;
+    c.fillRect(x - r, y - r, 2 * r, 2 * r);
+  }
   const img = c.getImageData(0, 0, size, size / 2);
   for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 9;
-    img.data[i] += n; img.data[i + 1] += n * 1.2; img.data[i + 2] += n * 0.6;
+    const n = (rnd() - 0.5) * 14;
+    img.data[i] += n * 0.9; img.data[i + 1] += n; img.data[i + 2] += n * 0.4;
   }
   c.putImageData(img, 0, 0);
   const w = PITCH.length + PITCH.runOff * 2 + 6, h = PITCH.width + PITCH.runOff * 2 + 6;
   const px = (x: number) => ((x + w / 2) / w) * size, pz = (z: number) => ((z + h / 2) / h) * (size / 2);
-  c.strokeStyle = '#e4ece4';
+  c.strokeStyle = '#dfe6da';
   c.lineWidth = (PITCH.lineWidth / w) * size;
   c.lineCap = 'round';
   c.beginPath();
@@ -94,7 +106,10 @@ function markings(): { mesh: THREE.Mesh; segments: [number, number, number, numb
       arc(s * hl, c * hw, PITCH.cornerArcRadius, a1, a2, 12);
     }
   }
-  return { mesh: new THREE.Mesh(mergeGeometries(parts), new THREE.MeshBasicMaterial({ color: 0xf2f7f2 })), segments };
+  // Lit like the grass (shadows fall across them), slightly worn as in the reference.
+  const mesh = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ color: 0xeef2ea, roughness: 0.95, transparent: true, opacity: 0.9 }));
+  mesh.receiveShadow = true;
+  return { mesh, segments };
 }
 
 function goal(side: -1 | 1): THREE.Group {
