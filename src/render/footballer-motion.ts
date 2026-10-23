@@ -22,6 +22,11 @@ const SWING_TO_CONTACT = 0.24;
 const STRIKE_FADE = 12;
 /** Below this speed (m/s) the idle clip takes over from the walk. */
 const IDLE_UNTIL = 0.9;
+/**
+ * Turning on the spot is stepped, not spun: the feet travel round the body on a circle of about this radius (m), and that
+ * distance drives the walk cycle like distance run does. Before, a standing body turned on the spot like a turntable.
+ */
+const STEP_RADIUS = 0.28;
 
 export class Motion {
   private readonly mixer: THREE.AnimationMixer;
@@ -33,8 +38,13 @@ export class Motion {
   /** Shared stride phase 0…1 of all gaits. */
   private phase = Math.random();
   private strike = { side: -1 as -1 | 0 | 1, since: 0, weight: 0 };
-  /** Weight of the strike clip now (0…1), for the figure to blend its leg IK the same way. */
+  /** Weight of a boot's swing now (0…1), for the figure to blend its leg IK onto the physics boots. */
   strikeWeight = 0;
+  /**
+   * How much of the strike clip's whole-body movement a swing gets (0…1): a full shot takes the clip's wind-up, trunk
+   * and arms; a receiving touch or a dribble only a little of it (the leg itself is always on the physics boot).
+   */
+  strikeScale = 1;
 
   constructor(root: THREE.Object3D, clips: THREE.AnimationClip[]) {
     this.mixer = new THREE.AnimationMixer(root);
@@ -60,10 +70,12 @@ export class Motion {
 
   /**
    * Poses the skeleton for this frame. `forward`/`lateral`: the body's velocity in its own frame (m/s);
-   * `swingingBoot`: the boot in a swing (−1 none); `dt`: shown time since the last frame (s, already slowed in slow motion).
+   * `swingingBoot`: the boot in a swing (−1 none); `turn`: how fast the body turns (rad/s);
+   * `dt`: shown time since the last frame (s, already slowed in slow motion).
    */
-  update(forward: number, lateral: number, swingingBoot: -1 | 0 | 1, dt: number): void {
-    const speed = Math.hypot(forward, lateral);
+  update(forward: number, lateral: number, swingingBoot: -1 | 0 | 1, turn: number, dt: number): void {
+    // The feet's pace: running, plus stepping round when the body turns (it matters only near standing).
+    const speed = Math.hypot(forward, lateral) + Math.abs(turn) * STEP_RADIUS * Math.max(0, 1 - Math.hypot(forward, lateral) / IDLE_UNTIL);
     // Blend weights over the four gaits by speed; below the walk the walk fades towards its standing moment.
     const speeds = this.gaits.map(g => g.info.speed);
     const w = speeds.map(() => 0);
@@ -84,19 +96,20 @@ export class Motion {
     if (swingingBoot === -1 && s.weight < 0.02) s.side = -1;
     this.strikeWeight = s.side === -1 ? 0 : s.weight;
     // Standing still: the idle clip (played back and forth), crossing over into the walk up to walking pace.
-    const idle = Math.max(0, 1 - speed / IDLE_UNTIL) * (1 - this.strikeWeight);
+    const clipWeight = this.strikeWeight * this.strikeScale;
+    const idle = Math.max(0, 1 - speed / IDLE_UNTIL) * (1 - clipWeight);
     this.idleTime += dt;
     const d = this.idle.getClip().duration, k = this.idleTime % (2 * d);
     this.idle.time = k < d ? k : 2 * d - k;
     this.idle.setEffectiveWeight(idle);
-    const gaitShare = 1 - this.strikeWeight - idle;
+    const gaitShare = 1 - clipWeight - idle;
     this.gaits.forEach((g, i) => {
       g.action.setEffectiveWeight(w[i] * gaitShare);
       g.action.time = this.phase * g.action.getClip().duration;
     });
     this.strikes.forEach((a, side) => {
       const on = side === s.side;
-      a.setEffectiveWeight(on ? this.strikeWeight : 0);
+      a.setEffectiveWeight(on ? clipWeight : 0);
       if (on) a.time = Math.max(0, Math.min(a.getClip().duration - 1e-3, this.strikeContact - SWING_TO_CONTACT + s.since));
     });
     this.mixer.update(0);

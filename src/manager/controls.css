@@ -32,7 +32,7 @@
 .mgr-role { font-size: var(--fs-xs); color: var(--c-text-muted); font-weight: 700; }
 .mgr-bars { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-1); }
 .mgr-bar { position: relative; height: 16px; background: var(--c-night); border-radius: var(--radius-sm); overflow: hidden; }
-.mgr-bar i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--c-away) 45%, transparent); }
+.mgr-bar i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--c-pass) 45%, transparent); }
 .mgr-bar em { position: relative; display: block; font-style: normal; font-size: 10px; line-height: 16px; padding-left: 3px; font-family: var(--font-score); white-space: nowrap; }
 .mgr-tags { grid-column: 2 / -1; font-size: 10px; color: var(--c-text-muted); min-height: 0; }
 .mgr-tags:empty { display: none; }

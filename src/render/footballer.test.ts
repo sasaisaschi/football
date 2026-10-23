@@ -62,4 +62,26 @@ describe('footballer figure', () => {
     const reach = Math.min(bone(f, 'handL').distanceTo(new THREE.Vector3(0.08, 2.1, 0.3)), bone(f, 'handR').distanceTo(new THREE.Vector3(-0.08, 2.1, 0.3)));
     expect(reach).toBeLessThan(0.12);
   });
+
+  it('keeps exactly its pose in a frozen frame (no layer is applied again on top of itself)', () => {
+    const f = new Footballer(profile, TEAMS[0], model);
+    // Side-stepping (hips into the run, trunk to the heading), turning, with the head on the ball: every layer active.
+    const run = (h: number) => standing(0, 0, { heading: h, velocity: { x: 3.2, y: 0, z: 0.4 } });
+    for (let i = 0; i < 40; i++) f.update(run(0.4 + i * 0.01), 1 / 60, { x: 6, y: 0.11, z: 5 });
+    const pose = () => { const out: number[] = []; f.root.traverse(o => { if ((o as THREE.Bone).isBone) out.push(...o.quaternion.toArray()); }); return out; };
+    f.update(run(0.8), 0, { x: 6, y: 0.11, z: 5 });
+    const frozen = pose();
+    for (let i = 0; i < 200; i++) f.update(run(0.8), 0, { x: 6, y: 0.11, z: 5 });
+    pose().forEach((v, i) => expect(v).toBeCloseTo(frozen[i], 6));
+    expect(bone(f, 'head').y).toBeGreaterThan(profile.heightM * 0.85);
+  });
+
+  it('turns on the spot in steps: a foot lifts off the turf while the body turns', () => {
+    const f = new Footballer(profile, TEAMS[0], model);
+    for (let i = 0; i < 60; i++) f.update(standing(), 1 / 60);
+    const rest = Math.max(bone(f, 'footL').y, bone(f, 'footR').y);
+    let lift = 0;
+    for (let i = 0; i < 30; i++) { f.update(standing(0, 0, { heading: i * 0.1 }), 1 / 60); lift = Math.max(lift, bone(f, 'footL').y - rest, bone(f, 'footR').y - rest); }
+    expect(lift).toBeGreaterThan(0.03);
+  });
 });

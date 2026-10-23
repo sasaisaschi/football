@@ -6,14 +6,20 @@
   --c-line: #2a3d5c;
   --c-text: #f3f6fb;
   --c-text-muted: #9fb2cc;
-  --c-accent: #ff8a2a;
-  --c-accent-strong: #ff6a00;
-  --c-home: #ff8a2a;
-  --c-away: #4cc3ff;
+  --c-accent: #1b7ff3;
+  --c-accent-strong: #0b5dd3;
+  --c-home: #1b7ff3;
+  --c-away: #ab1b2e;
   --c-live: #d7263d;
   --c-good: #3ddc84;
-  --c-warn: #ffd23f;
+  --c-warn: #f5c40b;
   --c-pitch: #1d7a45;
+  /* Reference scene (client picture): pass and shot markings, the HUD's dark glass surfaces. */
+  --c-pass: #3ab2ec;
+  --c-pass-light: #80d2fc;
+  --c-hud: rgba(14, 17, 20, 0.88);
+  --c-hud-raised: rgba(255, 255, 255, 0.05);
+  --c-hud-line: rgba(255, 255, 255, 0.1);
 
   --font-ui: 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-score: 'Bahnschrift', 'DIN Alternate', 'Segoe UI', sans-serif;
@@ -34,6 +40,6 @@
   --space-4: 16px;
   --space-5: 24px;
   --shadow-panel: 0 10px 30px rgba(0, 0, 0, 0.45);
-  --shadow-glow: 0 0 24px rgba(255, 138, 42, 0.45);
+  --shadow-glow: 0 0 24px rgba(27, 127, 243, 0.45);
   --transition: 180ms ease;
 }

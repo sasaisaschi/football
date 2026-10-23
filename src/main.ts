@@ -5,6 +5,7 @@ import { CrowdAudio } from './audio/crowd-audio';
 import { DEFAULT_ORCHESTRATOR } from './orchestrator/orchestrator';
 import { createPitchView } from './render/pitch-view';
 import { createStadiumView } from './render/stadium-view';
+import { createDaylight } from './render/daylight';
 import { showPrepScreen, type MatchChoice, type StoredChoice } from './manager/prep-screen';
 import { DEFAULT_INSTRUCTION } from './engine/match-config';
 import type { TeamInstruction } from './engine/types';
@@ -36,7 +37,7 @@ if (!host) throw new Error('#app element missing in index.html');
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 host.append(renderer.domElement);
@@ -44,22 +45,11 @@ const overlay = document.createElement('div');
 overlay.className = 'overlay';
 host.append(overlay);
 
+// A sunny afternoon as in the client's reference picture: sun from behind the far stand, soft shadows falling towards
+// the camera, a bright sky and image-based light so kits and skin are shaded like the reference.
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#050a14');
-scene.fog = new THREE.Fog('#050a14', 160, 360);
-scene.add(new THREE.HemisphereLight(0xc9d8ff, 0x1a3020, 0.85));
-// Key light standing in for the floodlight banks; it casts the player and ball shadows.
-const key = new THREE.DirectionalLight(0xffffff, 2.6);
-key.position.set(-40, 80, 50);
-key.castShadow = true;
-key.shadow.mapSize.set(2048, 2048);
-Object.assign(key.shadow.camera, { left: -70, right: 70, top: 50, bottom: -50, near: 10, far: 220 });
-key.shadow.bias = -0.0004;
-scene.add(key);
-// A second floodlight bank from the opposite corner, without shadows: it lifts the figures off the turf (rim light).
-const rim = new THREE.DirectionalLight(0xbfd4ff, 0.9);
-rim.position.set(55, 60, -60);
-scene.add(rim);
+const sky = createDaylight(scene, renderer);
+const key = sky.sun;
 scene.add(createPitchView());
 const stadium = createStadiumView();
 scene.add(stadium.group);
@@ -76,6 +66,32 @@ const resize = () => {
 new ResizeObserver(resize).observe(host);
 resize();
 
+/**
+ * Live pictures of the 3D scene for the decision bar (scene-pictures.ts): rendered into a corner of the canvas just
+ * before the frame's own picture overwrites it, and copied out at once, so they carry the same lighting, tone mapping
+ * and colour space as the scene itself.
+ */
+const pictureQueue: { cam: THREE.PerspectiveCamera; w: number; h: number; done: (c: HTMLCanvasElement) => void }[] = [];
+const capture = (cam: THREE.PerspectiveCamera, w: number, h: number) => new Promise<HTMLCanvasElement>(done => { pictureQueue.push({ cam, w, h, done }); });
+function takePictures(): void {
+  if (!pictureQueue.length) return;
+  const dpr = renderer.getPixelRatio(), size = renderer.getSize(new THREE.Vector2());
+  renderer.setScissorTest(true);
+  for (const p of pictureQueue.splice(0)) {
+    renderer.setViewport(0, 0, p.w / dpr, p.h / dpr);
+    renderer.setScissor(0, 0, p.w / dpr, p.h / dpr);
+    p.cam.aspect = p.w / p.h;
+    p.cam.updateProjectionMatrix();
+    renderer.render(scene, p.cam);
+    const out = document.createElement('canvas');
+    out.width = p.w; out.height = p.h;
+    out.getContext('2d')!.drawImage(renderer.domElement, 0, renderer.domElement.height - p.h, p.w, p.h, 0, 0, p.w, p.h);
+    p.done(out);
+  }
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, size.x, size.y);
+}
+
 const audio = new CrowdAudio();
 let app: MatchApp | null = null;
 let starting = false;
@@ -88,7 +104,7 @@ function loop(now: number): void {
   // The 3D picture exists only in a decisive scene; the manager screens need no rendering at all.
   const draw = app?.rendering ?? false;
   renderer.domElement.style.visibility = draw ? 'visible' : 'hidden';
-  if (draw) renderer.render(scene, camera);
+  if (draw) { takePictures(); renderer.render(scene, camera); }
   requestAnimationFrame(loop);
 }
 
@@ -126,7 +142,7 @@ async function startMatch(choice: MatchChoice): Promise<void> {
   starting = true;
   audio.start();
   const { halfMinutes } = choice;
-  app = await MatchApp.create(scene, camera, stadium, overlay, audio, key, {
+  app = await MatchApp.create(scene, camera, stadium, overlay, audio, key, capture, {
     seed: num('seed', Math.floor(Math.random() * 1e9)),
     halfMinutes,
     // The app's spacing was set for 2 × 45 minutes; shorter halves get proportionally shorter spacing (at least 20 s).

@@ -18,7 +18,13 @@ export { loadFootballer } from './footballer-model';
 
 /** Sliding tackle: hip height on the turf and how far the trunk leans back (m, rad). */
 const SLIDE_HIP = 0.18, SLIDE_LEAN = 1.05;
-const CHEST_FRONT = 0.2, HEADER_LEAN = 0.45, TURN_LEAN = 0.22, KICK_CROUCH = 0.05, NECK_YAW = 1.1;
+const CHEST_FRONT = 0.2, HEADER_LEAN = 0.45, TURN_LEAN = 0.22, KICK_CROUCH = 0.05, NECK_YAW = 1.3;
+/**
+ * Side-stepping: the hips and legs turn up to this far (rad) into the running direction while the trunk stays towards
+ * where the body faces (the physics heading), as a footballer runs across the pitch watching the ball. A backpedal
+ * (running direction more than BACKPEDAL behind) keeps the hips square and plays the stride backwards.
+ */
+const HIP_TWIST = 0.9, BACKPEDAL = 2.2;
 /** The physics boot is the sole of the foot; the ankle joint sits this far above and behind it (m, model scale). */
 const ANKLE_UP = 0.075, ANKLE_BACK = 0.04;
 
@@ -45,10 +51,24 @@ export class Footballer {
   private readonly list: THREE.Bone[];
   private readonly saved: THREE.Quaternion[];
   private readonly savedPelvis = new THREE.Vector3();
+  /**
+   * The pure clip pose of the last frame. three.js's mixer writes a bone only when the clip's value changed since its
+   * last write; in a frozen frame nothing changes, so the layers put on top of the clip (head turn, lean, trunk twist)
+   * were applied again and again to their own result and the figures turned further every frame. Each frame now starts
+   * from this pose.
+   */
+  private readonly clipPose: THREE.Quaternion[];
+  private readonly clipPelvis = new THREE.Vector3();
+  private clipPoseValid = false;
   /** Weight of the physics-driven pose of special situations (slide, header, hands, dive), smoothed. */
   private special = 0;
   private lastHeading: number | null = null;
   private turnLean = 0;
+  private turnRate = 0;
+  /** Hips turned from the heading into the running direction (rad), smoothed. */
+  private hipYaw = 0;
+  /** Farthest the swinging boot has moved from the standing one in this swing (m): a shot's big swing or a touch. */
+  private swingReach = 0;
 
   constructor(readonly profile: PlayerProfile, team: TeamProfile, m: Model) {
     const keeper = profile.role === 'GK';
@@ -68,10 +88,11 @@ export class Footballer {
     palette[Kit.Sleeve] = keeper ? kit : skin;
     palette[Kit.Shorts] = keeper ? dark : new THREE.Color(team.shorts);
     palette[Kit.Socks] = keeper ? dark : kit;
-    palette[Kit.Boots] = new THREE.Color('#15181f');
+    palette[Kit.Boots] = new THREE.Color(team.id === 0 ? '#eef1f4' : '#e8663a');
     palette[Kit.Hair] = new THREE.Color(HAIR[(profile.id * 7) % HAIR.length]);
     palette[Kit.Hands] = keeper ? new THREE.Color('#f1f4ee') : skin;
     palette[Kit.Eyes] = new THREE.Color('#2a2420');
+    palette[Kit.Trim] = keeper ? kit : new THREE.Color('#f4f6fa');
     // Bones: a fresh copy of the skeleton for this figure.
     // Every root of the skeleton (the pelvis, and the exporter's neutral bone for unweighted vertices).
     const roots = src.skeleton.bones.filter(b => !(b.parent as THREE.Bone | null)?.isBone).map(cloneBones);
@@ -79,6 +100,7 @@ export class Footballer {
     for (const rootBone of roots) rootBone.traverse(o => { if ((o as THREE.Bone).isBone) { list.push(o as THREE.Bone); this.bones[o.name] = o as THREE.Bone; } });
     this.list = list;
     this.saved = list.map(() => new THREE.Quaternion());
+    this.clipPose = list.map(() => new THREE.Quaternion());
     const ordered = src.skeleton.bones.map(b => this.bones[b.name.replace('.', '')]);
     this.skeleton = new THREE.Skeleton(ordered, src.skeleton.boneInverses.map(m => m.clone()));
     const mat = kitMaterial(palette);
@@ -109,24 +131,42 @@ export class Footballer {
     this.motion = new Motion(holder, m.clips);
   }
 
-  /** Shirt numbers on back and chest, attached to the chest bone so they bend with the trunk. */
+  /**
+   * Name and number on the back, number and crest on the chest, as on the reference kits: white lettering with a thin
+   * dark edge (a keeper's dark). Attached to the chest bone so they bend with the trunk.
+   */
   private addNumbers(p: PlayerProfile, team: TeamProfile, keeper: boolean): void {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 128;
-    const c = canvas.getContext('2d')!;
-    c.fillStyle = keeper ? '#111' : team.shorts;
-    c.font = '900 96px Bahnschrift, Segoe UI, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(String(p.number), 64, 70);
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -4 });
+    const ink = keeper ? '#14281b' : '#f6f8fb', edge = keeper ? 'rgba(255,255,255,0.35)' : 'rgba(10,20,40,0.55)';
+    const plate = (draw: (c: CanvasRenderingContext2D) => void) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 256;
+      const c = canvas.getContext('2d')!;
+      c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+      draw(c);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      return new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -4 });
+    };
+    const text = (c: CanvasRenderingContext2D, t: string, x: number, y: number, px: number, maxW: number) => {
+      c.font = `800 ${px}px Bahnschrift, 'Segoe UI', sans-serif`;
+      c.lineWidth = px * 0.08; c.strokeStyle = edge; c.strokeText(t, x, y, maxW);
+      c.fillStyle = ink; c.fillText(t, x, y, maxW);
+    };
+    const surname = p.name.replace(/^[A-Z]\. /, '').toUpperCase();
+    const backMat = plate(c => { text(c, surname, 128, 40, 34, 200); text(c, String(p.number), 128, 150, 170, 220); });
+    const frontMat = plate(c => {
+      text(c, String(p.number), 70, 128, 120, 120);
+      c.fillStyle = team.id === 0 ? '#f6f8fb' : '#f2d27a'; c.beginPath(); c.arc(190, 118, 34, 0, Math.PI * 2); c.fill();
+      c.fillStyle = team.kit; c.beginPath(); c.arc(190, 118, 24, 0, Math.PI * 2); c.fill();
+    });
     const chest = this.bones.chest;
     // In the chest bone's frame: +Y up the spine; the model faces +Z after export.
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), mat);
-    back.position.set(0, 0.03, -0.125);
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.26), backMat);
+    back.position.set(0, 0.02, -0.125);
     back.rotation.y = Math.PI;
-    const front = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.08), mat);
-    front.position.set(-0.07, 0.08, 0.118);
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), frontMat);
+    front.position.set(0, 0.085, 0.119);
     chest.add(back, front);
   }
 
@@ -158,13 +198,39 @@ export class Footballer {
     this.root.visible = !view.sentOff;
     if (view.sentOff) return;
     this.root.position.set(view.position.x, Math.max(0, view.position.y - this.profile.heightM / 2), view.position.z);
-    this.root.rotation.set(0, view.heading, 0);
+    if (this.lastHeading !== null && dt > 0) this.turnRate = Math.atan2(Math.sin(view.heading - this.lastHeading), Math.cos(view.heading - this.lastHeading)) / dt;
+    this.lastHeading = view.heading;
+    // Hips into the running direction (faded out for a strike or a special pose, which need the physics frame).
+    const speed = Math.hypot(view.velocity.x, view.velocity.z);
+    const off = speed > 0.05 ? Math.atan2(Math.sin(Math.atan2(view.velocity.x, view.velocity.z) - view.heading), Math.cos(Math.atan2(view.velocity.x, view.velocity.z) - view.heading)) : 0;
+    const a = Math.abs(off);
+    const twist = a <= HIP_TWIST ? a : a <= 1.6 ? HIP_TWIST : a < BACKPEDAL ? HIP_TWIST * (BACKPEDAL - a) / (BACKPEDAL - 1.6) : 0;
+    const want = Math.sign(off) * twist * Math.min(1, Math.max(0, (speed - 1) / 1.2)) * (1 - this.motion.strikeWeight) * (1 - this.special);
+    this.hipYaw += (want - this.hipYaw) * Math.min(1, dt * 6);
+    this.root.rotation.set(0, view.heading + this.hipYaw, 0);
     this.root.updateMatrixWorld(true);
     this.invFrame.copy(this.root.children[0].matrixWorld).invert();
-    const right = Math.cos(view.heading) * view.velocity.x - Math.sin(view.heading) * view.velocity.z;
-    const forward = Math.sin(view.heading) * view.velocity.x + Math.cos(view.heading) * view.velocity.z;
-    // 1. Motion capture.
-    this.motion.update(forward, right, view.swingingBoot, dt);
+    const yaw = view.heading + this.hipYaw;
+    const right = Math.cos(yaw) * view.velocity.x - Math.sin(yaw) * view.velocity.z;
+    const forward = Math.sin(yaw) * view.velocity.x + Math.cos(yaw) * view.velocity.z;
+    // A swing's size decides how much of the strike clip's body movement it gets (a touch is not a shot).
+    if (view.swingingBoot === -1) this.swingReach = 0;
+    else {
+      const a = view.boots[view.swingingBoot], b = view.boots[1 - view.swingingBoot];
+      this.swingReach = Math.max(this.swingReach, Math.hypot(a.x - b.x, a.z - b.z) + Math.max(0, a.y - 0.12) * 1.5);
+      this.motion.strikeScale = Math.max(0.2, Math.min(1, (this.swingReach - 0.3) / 0.5));
+    }
+    // 1. Motion capture, on top of the clip pose of the last frame (the mixer leaves unchanged values alone).
+    if (this.clipPoseValid) {
+      this.list.forEach((b, i) => b.quaternion.copy(this.clipPose[i]));
+      this.bones.pelvis.position.copy(this.clipPelvis);
+    }
+    this.motion.update(forward, right, view.swingingBoot, this.turnRate, dt);
+    this.list.forEach((b, i) => this.clipPose[i].copy(b.quaternion));
+    this.clipPelvis.copy(this.bones.pelvis.position);
+    this.clipPoseValid = true;
+    this.root.updateMatrixWorld(true);
+    this.twistTrunk();
     this.leanIntoTurn(view, dt);
     // 3. Situations the clips do not cover: the physics-driven pose, blended.
     const dive = this.profile.role === 'GK' && Math.abs(right) > 3.2;
@@ -199,15 +265,20 @@ export class Footballer {
     this.root.updateMatrixWorld(true);
   }
 
+  /** The trunk turns back from the hips towards the heading (spine, chest and neck share the counter-turn). */
+  private twistTrunk(): void {
+    if (Math.abs(this.hipYaw) < 1e-3) return;
+    for (const [b, k] of [['spine', 0.35], ['chest', 0.4], ['neck', 0.25]] as const) this.bones[b].quaternion.multiply(q.setFromAxisAngle(Y, -this.hipYaw * k));
+    this.root.updateMatrixWorld(true);
+  }
+
   /** Banks the body into a turn: the faster he runs and turns, the more the pelvis tilts towards the inside. */
   private leanIntoTurn(view: PlayerView, dt: number): void {
     const speed = Math.hypot(view.velocity.x, view.velocity.z);
-    if (this.lastHeading !== null && dt > 0) {
-      const turnRate = Math.atan2(Math.sin(view.heading - this.lastHeading), Math.cos(view.heading - this.lastHeading)) / dt;
-      const target = Math.max(-TURN_LEAN, Math.min(TURN_LEAN, turnRate * speed * 0.035));
+    if (dt > 0) {
+      const target = Math.max(-TURN_LEAN, Math.min(TURN_LEAN, this.turnRate * speed * 0.035));
       this.turnLean += (target - this.turnLean) * Math.min(1, dt * 8);
     }
-    this.lastHeading = view.heading;
     if (Math.abs(this.turnLean) < 1e-3) return;
     const pelvis = this.bones.pelvis;
     this.root.updateMatrixWorld(true);
@@ -302,7 +373,7 @@ export class Footballer {
     const head = this.bones.head;
     head.updateMatrixWorld(true);
     const p = head.worldToLocal(tmp.set(look.x, look.y, look.z));
-    const yaw = Math.max(-NECK_YAW, Math.min(NECK_YAW, Math.atan2(p.x, p.z))) * 0.6;
+    const yaw = Math.max(-NECK_YAW, Math.min(NECK_YAW, Math.atan2(p.x, p.z))) * 0.85;
     head.quaternion.multiply(q.setFromEuler(euler.set(0, yaw, 0, 'YXZ')));
   }
 

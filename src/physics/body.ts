@@ -33,6 +33,23 @@ export function motorLimits(p: PlayerProfile): MotorLimits {
  */
 const SLIDE = { decel: 5, maxTime: 0.9, down: 0.45, rise: 0.35, radius: 0.14 } as const;
 
+/**
+ * How far an outfield player's body can face away from where he runs (rad), by pace. Walking he can face anywhere;
+ * a backpedal or a side-step works up to about jogging pace; faster he must turn and run forwards, looking over his
+ * shoulder (`gaze`). Without this limit bodies ran backwards at sprint pace while facing the ball.
+ */
+export function maxFacingOffset(speed: number): number {
+  if (speed <= 2) return Math.PI;
+  if (speed <= 3.5) return Math.PI - (Math.PI / 2) * ((speed - 2) / 1.5);
+  if (speed <= 5.5) return Math.PI / 2 - (Math.PI / 2 - 0.35) * ((speed - 3.5) / 2);
+  return 0.35;
+}
+
+/** How far the head turns from the body towards what the player wants to see (rad). */
+export const NECK_TURN = 1.4;
+
+const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
 export type BodyCommand = {
   target: Vec2;
   /** Desired cruising speed; braking towards the target follows v² = 2·a·d. */
@@ -53,6 +70,9 @@ export class PlayerBody {
   readonly height: number;
   readonly mass: number;
   heading: number;
+  /** Where the player looks: the body's heading, the head turned towards the point he wants to face (perception). */
+  gaze: number;
+  private readonly keeper: boolean;
   private readonly pos: Vec3 = { x: 0, y: 0, z: 0 };
   private posEpoch = -1;
   private readonly vel: Vec3 = { x: 0, y: 0, z: 0 };
@@ -65,6 +85,8 @@ export class PlayerBody {
     this.mass = profile.massKg;
     this.radius = 0.27;
     this.heading = heading;
+    this.gaze = heading;
+    this.keeper = profile.role === 'GK';
     const halfHeight = this.height / 2 - this.radius;
     this.body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic().setTranslation(x, this.height / 2, z).lockRotations().setCanSleep(false),
@@ -138,16 +160,23 @@ export class PlayerBody {
     }
     this.body.applyImpulse({ x: dvx * this.mass, y: 0, z: dvz * this.mass }, true); this.velEpoch = -1;
 
-    let wanted = this.heading;
+    let look = this.heading;
     if (cmd.face) {
       const fx = cmd.face.x - p.x, fz = cmd.face.z - p.z;
-      if (Math.hypot(fx, fz) > 0.05) wanted = Math.atan2(fx, fz);
+      if (Math.hypot(fx, fz) > 0.05) look = Math.atan2(fx, fz);
     } else if (speed > 0.8) {
-      wanted = Math.atan2(v.x, v.z);
+      look = Math.atan2(v.x, v.z);
+    }
+    // The body faces what the player wants to see as far as his pace allows; a keeper and a committed body (a dive)
+    // keep facing the play.
+    let wanted = look;
+    if (!this.keeper && effort > 0 && speed > 2) {
+      const run = Math.atan2(v.x, v.z), limit = maxFacingOffset(speed);
+      wanted = run + Math.max(-limit, Math.min(limit, wrap(look - run)));
     }
     const turn = (L.turnRate / (1 + speed / 3)) * dt;
-    const delta = Math.atan2(Math.sin(wanted - this.heading), Math.cos(wanted - this.heading));
-    this.heading += Math.max(-turn, Math.min(turn, delta));
+    this.heading += Math.max(-turn, Math.min(turn, wrap(wanted - this.heading)));
+    this.gaze = this.heading + Math.max(-NECK_TURN, Math.min(NECK_TURN, wrap(look - this.heading)));
   }
 
   /**
@@ -159,6 +188,7 @@ export class PlayerBody {
     const v = Math.min(speed, this.limits.maxSpeed);
     this.body.setLinvel({ x: d.x * v, y: 0, z: d.z * v }, true); this.velEpoch = -1;
     this.heading = Math.atan2(d.x, d.z);
+    this.gaze = this.heading;
     // Capsule axis (local Y) turned onto the slide direction: 90° about the horizontal axis across it.
     const s = Math.SQRT1_2;
     this.collider.setRadius(SLIDE.radius);
@@ -246,5 +276,6 @@ export class PlayerBody {
     this.body.setTranslation({ x, y: this.height / 2, z }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.velEpoch = -1;
     this.heading = heading;
+    this.gaze = heading;
   }
 }

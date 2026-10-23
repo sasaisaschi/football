@@ -1,177 +1,94 @@
 import * as THREE from 'three';
-import type { DecisionMoment, MatchSnapshot, OptionVisual, TeamId, Vec2 } from '../engine/types';
+import type { DecisionMoment, DecisionOption, MatchSnapshot, TeamId, Vec2 } from '../engine/types';
 import { PITCH } from '../physics/pitch-geometry';
+import { dashedArc, glowRing, targetFan } from './marking-shapes';
 
 /**
- * Tactical markings on the 3D pitch for an open decision moment, drawn only from the options' own visual data (the
- * frozen state they were offered in): the acting player's ring, rings for team-mates and opponents involved, the ball
- * path of each option (ground, lofted, shot, throw, carry), ordered runs, target zones and line shifts. Each option's
- * marks carry its key number; the focused option is bright, the others step back.
+ * Markings on the 3D pitch for an open decision, in the style of the client's reference picture, drawn only from the
+ * options' own visual data (the frozen state they were offered in): a glowing ring under the acting player, the same
+ * ring under a receiver, thin rings under team-mates involved, a dashed curved arrow for each option's ball (blue for a
+ * pass, yellow for a shot, rising to the goal and ending in a yellow fan at the goal mouth), dashes for ordered runs,
+ * target zones and line shifts. The focused option is bright, the others step back.
  */
-const ACCENT = new THREE.Color('#ff8a2a'), MATE = new THREE.Color('#f3f6fb'), OPP = new THREE.Color('#ff5470'), LINE = new THREE.Color('#4cc3ff');
-const GROUND = 0.04;
+export type MarkKind = 'pass' | 'shot' | 'carry' | 'other';
+/** Colours of the reference picture: the pass arrow and rings, the shot arrow, a carry, other instructions. */
+export const MARK_COLOUR: Record<MarkKind, string> = { pass: '#3ab2ec', shot: '#fce10d', carry: '#7edfd6', other: '#f3f6fb' };
+const RING = '#55c7f5', MATE_RING = '#7fd0f0', LINE = '#3ab2ec';
+const GROUND = 0.03;
+
+/** What kind of marking an option gets (its colour on the pitch and in the panel). */
+export function markKind(o: DecisionOption): MarkKind {
+  const b = o.visual?.ball;
+  if (!b) return 'other';
+  return b.kind === 'shot' ? 'shot' : b.kind === 'dribble' ? 'carry' : 'pass';
+}
 
 type OptionMarks = { group: THREE.Group; materials: THREE.Material[] };
-
-function material(colour: THREE.Color, opacity = 0.95): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide });
-}
-
-/** A flat ring on the turf. */
-function ring(at: Vec2, radius: number, width: number, mat: THREE.Material): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.RingGeometry(radius - width, radius, 40), mat);
-  m.rotation.x = -Math.PI / 2;
-  m.position.set(at.x, GROUND, at.z);
-  m.renderOrder = 2;
-  return m;
-}
-
-/** A tube along a path with an arrow head at its end. */
-function arrow(points: THREE.Vector3[], radius: number, mat: THREE.Material): THREE.Group {
-  const g = new THREE.Group();
-  const curve = new THREE.CatmullRomCurve3(points);
-  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(8, points.length * 6), radius, 6, false), mat);
-  tube.renderOrder = 3;
-  g.add(tube);
-  const end = points[points.length - 1], before = curve.getPointAt(0.97);
-  const head = new THREE.Mesh(new THREE.ConeGeometry(radius * 3.2, radius * 8, 10), mat);
-  head.position.copy(end);
-  head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(before).normalize());
-  head.renderOrder = 3;
-  g.add(head);
-  return g;
-}
-
-/** Dashes on the turf from a to b (a run). */
-function dashes(a: Vec2, b: Vec2, mat: THREE.Material): THREE.Group {
-  const g = new THREE.Group();
-  const d = Math.hypot(b.x - a.x, b.z - a.z);
-  const n = Math.max(2, Math.floor(d / 1.1));
-  for (let i = 0; i < n; i++) {
-    const t0 = i / n, t1 = (i + 0.55) / n;
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(d * (t1 - t0), 0.16), mat);
-    s.rotation.set(-Math.PI / 2, 0, -Math.atan2(b.z - a.z, b.x - a.x));
-    s.position.set(a.x + (b.x - a.x) * (t0 + t1) / 2, GROUND, a.z + (b.z - a.z) * (t0 + t1) / 2);
-    s.renderOrder = 2;
-    g.add(s);
-  }
-  g.add(ring(b, 0.55, 0.14, mat));
-  return g;
-}
-
-/** World size of an option's number from LABEL_FAR metres away; closer the number shrinks so it never covers a player. */
-const LABEL_SIZE = 1.5, LABEL_FAR = 30;
-
-/** The option's key number floating above the end of its path. */
-function label(n: number, at: THREE.Vector3, colour: THREE.Color): THREE.Sprite {
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const x = c.getContext('2d')!;
-  x.fillStyle = `#${colour.getHexString()}`;
-  x.beginPath(); x.arc(64, 64, 54, 0, Math.PI * 2); x.fill();
-  x.fillStyle = '#060b16'; x.font = '900 72px Bahnschrift, Segoe UI, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(String(n), 64, 70);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-  s.scale.setScalar(LABEL_SIZE);
-  // Above a receiver's head, not in front of it.
-  s.position.copy(at).add(new THREE.Vector3(0, 2.6, 0));
-  s.renderOrder = 5;
-  return s;
-}
-
-/** The ball's path for one option, from where the ball lies now. */
-function ballPath(from: THREE.Vector3, b: NonNullable<OptionVisual['ball']>): THREE.Vector3[] {
-  const to = new THREE.Vector3(b.to.x, GROUND + 0.06, b.to.z);
-  const start = new THREE.Vector3(from.x, b.kind === 'throw' ? 2.3 : 0.12, from.z);
-  const d = start.distanceTo(to);
-  const arc = (height: number) => Array.from({ length: 13 }, (_, i) => {
-    const t = i / 12;
-    return new THREE.Vector3(start.x + (to.x - start.x) * t, start.y + (to.y - start.y) * t + 4 * height * t * (1 - t), start.z + (to.z - start.z) * t);
-  });
-  if (b.kind === 'lofted') return arc(Math.min(9, 0.2 * d));
-  if (b.kind === 'throw') return arc(Math.min(3, 0.12 * d));
-  if (b.kind === 'shot') return arc(0.6).map((p, i) => (i === 12 ? new THREE.Vector3(to.x, 1.0, to.z) : p));
-  return [start, to];
-}
 
 export class TacticalOverlay {
   readonly group = new THREE.Group();
   private marks: OptionMarks[] = [];
-  private pulse: THREE.Mesh | null = null;
-  /** The options' key numbers, kept at a steady size on screen. */
-  private readonly tags: THREE.Sprite[] = [];
+  private pulse: THREE.Object3D | null = null;
   private focused = -1;
+  /** The markings can be switched off from the scene's toolbar (the reference's first button). */
+  enabled = true;
 
-  show(m: DecisionMoment, s: MatchSnapshot, team: (id: number) => TeamId): void {
+  /** `eye`: where the camera will stand, so the rising shot arrow faces it. */
+  show(m: DecisionMoment, s: MatchSnapshot, team: (id: number) => TeamId, eye: THREE.Vector3): void {
     this.hide();
     const actor = s.players[m.focusPlayer].position;
     const ball = new THREE.Vector3(s.ball.position.x, s.ball.position.y, s.ball.position.z);
-    // Who is who: the actor in the accent colour, other involved players by side.
     const base = new THREE.Group();
-    this.pulse = ring(actor, 1.05, 0.18, material(ACCENT));
+    this.pulse = glowRing({ x: actor.x, z: actor.z }, 1.05, RING, 1);
     base.add(this.pulse);
-    // The ball itself: a white ring on the turf and a marker above it, so it is found at a glance.
-    base.add(ring({ x: ball.x, z: ball.z }, 0.5, 0.09, material(MATE)));
-    const pin = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.45, 12), material(MATE));
-    pin.rotation.x = Math.PI;
-    pin.position.set(ball.x, ball.y + 1.1, ball.z);
-    pin.renderOrder = 4;
-    base.add(pin);
+    // Team-mates involved (not receivers of a ball option, who get the full ring): a thin ring, as the reference's #11.
+    const receivers = new Set(m.options.map(o => o.visual?.ball?.receiver).filter((r): r is number => r !== undefined));
     for (const id of m.participants) {
-      if (id === m.focusPlayer) continue;
+      if (id === m.focusPlayer || receivers.has(id) || team(id) !== m.team) continue;
       const p = s.players[id];
-      if (p.sentOff) continue;
-      base.add(ring(p.position, 0.75, 0.1, material(team(id) === m.team ? MATE : OPP, 0.75)));
+      if (!p.sentOff) base.add(glowRing({ x: p.position.x, z: p.position.z }, 0.8, MATE_RING, 0.55, true));
     }
     this.group.add(base);
-    m.options.forEach((o, i) => {
+    m.options.forEach(o => {
       const g = new THREE.Group();
-      const colour = ACCENT;
-      const mats: THREE.Material[] = [];
-      const mat = (c: THREE.Color, op = 0.95) => { const x = material(c, op); mats.push(x); return x; };
+      const kind = markKind(o);
+      const colour = MARK_COLOUR[kind];
       const v = o.visual;
-      let end = new THREE.Vector3(actor.x, 0, actor.z);
       if (v?.ball) {
-        const path = ballPath(ball, v.ball);
-        g.add(arrow(path, v.ball.kind === 'dribble' ? 0.07 : 0.09, mat(colour)));
-        end = path[path.length - 1];
-        if (v.ball.receiver !== undefined) g.add(ring(s.players[v.ball.receiver].position, 0.95, 0.16, mat(colour)));
+        const to = v.ball.to;
+        if (v.ball.kind === 'shot') {
+          // Rises from the ball to the goal: a dashed arc facing the camera, a yellow fan where it ends.
+          const end = new THREE.Vector3(to.x, 0.75, to.z);
+          g.add(dashedArc(ball.clone().setY(0.15), end, { colour, lift: 1.4, bend: 0.06, eye, width: 0.15 }));
+          g.add(targetFan(end, to.x >= 0 ? 1 : -1, colour));
+        } else {
+          const receiver = v.ball.receiver !== undefined ? s.players[v.ball.receiver].position : null;
+          // A pass ends at the edge of the receiver's ring (the ring shows where he is, the arrow where the ball goes).
+          const aim = new THREE.Vector3(to.x, GROUND, to.z);
+          const from = ball.clone().setY(GROUND);
+          const len = from.distanceTo(aim);
+          const end = receiver && aim.distanceTo(new THREE.Vector3(receiver.x, GROUND, receiver.z)) < 1.6 ? from.clone().lerp(aim, Math.max(0, (len - 1.1) / len)) : aim;
+          g.add(dashedArc(from, end, { colour, lift: v.ball.kind === 'lofted' ? Math.min(6, len * 0.18) : 0, bend: 0.1, eye, width: v.ball.kind === 'dribble' ? 0.18 : 0.22 }));
+          if (receiver) g.add(glowRing({ x: receiver.x, z: receiver.z }, 0.95, RING, 0.95));
+        }
       }
       for (const r of v?.runs ?? []) {
-        g.add(dashes(s.players[r.player].position, r.to, mat(MATE, 0.9)));
-        if (!v?.ball) end = new THREE.Vector3(r.to.x, 0, r.to.z);
+        const p = s.players[r.player].position;
+        g.add(dashedArc(new THREE.Vector3(p.x, GROUND, p.z), new THREE.Vector3(r.to.x, GROUND, r.to.z), { colour: MATE_RING, lift: 0, bend: 0, eye, width: 0.16 }));
+        g.add(glowRing(r.to, 0.6, MATE_RING, 0.7, true));
       }
-      if (v?.zone) {
-        const z = new THREE.Mesh(new THREE.CircleGeometry(v.zone.r, 40), mat(colour, 0.18));
-        z.rotation.x = -Math.PI / 2; z.position.set(v.zone.x, GROUND - 0.005, v.zone.z); z.renderOrder = 1;
-        g.add(z, ring(v.zone, v.zone.r, 0.12, mat(colour, 0.8)));
-        if (!v.ball && !v.runs) end = new THREE.Vector3(v.zone.x, 0, v.zone.z);
-      }
-      if (v?.line && Math.abs(v.line.to - v.line.from) > 0.3) {
-        // The defensive line: where it stands now (thin) and where this instruction moves it (bold), across the pitch.
-        const across = (x: number, w: number, c: THREE.Color, op: number) => {
-          const l = new THREE.Mesh(new THREE.PlaneGeometry(w, PITCH.width - 4), mat(c, op));
-          l.rotation.x = -Math.PI / 2; l.position.set(x, GROUND, 0); l.renderOrder = 2;
-          return l;
-        };
-        g.add(across(v.line.from, 0.12, LINE, 0.5), across(v.line.to, 0.3, LINE, 0.9));
-        const z0 = actor.z > 0 ? actor.z - 6 : actor.z + 6;
-        g.add(arrow([new THREE.Vector3(v.line.from, GROUND + 0.05, z0), new THREE.Vector3(v.line.to, GROUND + 0.05, z0)], 0.08, mat(LINE)));
-        if (!v.ball && !v.runs && !v.zone) end = new THREE.Vector3(v.line.to, 0, z0);
-      }
-      const tag = label(i + 1, end, colour);
-      this.tags.push(tag);
-      mats.push(tag.material);
-      g.add(tag);
+      if (v?.zone) g.add(glowRing(v.zone, v.zone.r, colour, 0.85, false, 0.16));
+      if (v?.line && Math.abs(v.line.to - v.line.from) > 0.3) g.add(lineShift(v.line.from, v.line.to, actor));
       this.group.add(g);
-      this.marks.push({ group: g, materials: mats });
+      const materials: THREE.Material[] = [];
+      g.traverse(x => { if ((x as THREE.Mesh).material) materials.push((x as THREE.Mesh).material as THREE.Material); });
+      this.marks.push({ group: g, materials });
     });
+    this.group.visible = this.enabled;
     this.focus(m.options.findIndex(o => o.id === m.defaultOptionId));
   }
 
-  /** Highlights one option's marks; the others fade back (−1: all equal). */
+  /** Highlights one option's marks; the others step back (−1: all equal). */
   focus(index: number): void {
     this.focused = index;
     this.marks.forEach((mk, i) => {
@@ -179,7 +96,7 @@ export class TacticalOverlay {
       for (const m of mk.materials) {
         const base = (m.userData.opacity as number | undefined) ?? (m as THREE.MeshBasicMaterial).opacity;
         m.userData.opacity = base;
-        (m as THREE.MeshBasicMaterial).opacity = on ? base : base * 0.22;
+        (m as THREE.MeshBasicMaterial).opacity = on ? base : base * 0.55;
       }
       mk.group.renderOrder = on ? 4 : 1;
     });
@@ -189,22 +106,24 @@ export class TacticalOverlay {
     return this.focused;
   }
 
-  update(time: number, camera: THREE.Camera): void {
-    if (this.pulse) this.pulse.scale.setScalar(1 + 0.12 * Math.sin(time * 5));
-    // The numbers keep a steady size on screen: at a close decision framing a fixed world size filled a fifth of the
-    // picture and hid the receiver it belongs to (throw-in, browser check).
-    for (const t of this.tags) t.scale.setScalar(LABEL_SIZE * Math.min(1, t.position.distanceTo(camera.position) / LABEL_FAR));
+  setEnabled(on: boolean): void {
+    this.enabled = on;
+    this.group.visible = on;
+  }
+
+  update(time: number): void {
+    // The acting player's ring breathes gently.
+    if (this.pulse) this.pulse.scale.setScalar(1 + 0.05 * Math.sin(time * 4));
   }
 
   hide(): void {
-    this.tags.length = 0;
     for (const c of [...this.group.children]) {
       this.group.remove(c);
       c.traverse(o => {
-        if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) {
+        if (o instanceof THREE.Mesh) {
           o.geometry.dispose();
           const m = o.material as THREE.Material & { map?: THREE.Texture | null };
-          m.map?.dispose();
+          if (!m.userData.sharedMap) m.map?.dispose();
           m.dispose();
         }
       });
@@ -213,4 +132,18 @@ export class TacticalOverlay {
     this.pulse = null;
     this.focused = -1;
   }
+}
+
+/** The defensive line: where it stands now (thin) and where the instruction moves it (bold), across the pitch. */
+function lineShift(from: number, to: number, actor: Vec2): THREE.Group {
+  const g = new THREE.Group();
+  const across = (x: number, w: number, op: number) => {
+    const l = new THREE.Mesh(new THREE.PlaneGeometry(w, PITCH.width - 4), new THREE.MeshBasicMaterial({ color: LINE, transparent: true, opacity: op, depthWrite: false }));
+    l.rotation.x = -Math.PI / 2; l.position.set(x, GROUND, 0); l.renderOrder = 2;
+    return l;
+  };
+  g.add(across(from, 0.12, 0.5), across(to, 0.3, 0.9));
+  const z0 = actor.z > 0 ? actor.z - 6 : actor.z + 6;
+  g.add(dashedArc(new THREE.Vector3(from, GROUND, z0), new THREE.Vector3(to, GROUND, z0), { colour: LINE, lift: 0, bend: 0, eye: new THREE.Vector3(0, 50, 0), width: 0.22 }));
+  return g;
 }

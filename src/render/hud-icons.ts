@@ -1,0 +1,13 @@
+/**
+ * Icons of the reference picture as inline SVG (currentColor): the tactics target with a pin, the statistics bars, the
+ * team, the minimap's target, the pass arrow and the shot crosshair of the option cards.
+ */
+export const ICONS = {
+  tactics: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="9.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 2.5v5M16 24.5v5M2.5 16h5M24.5 16h5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M16 10.2a4.3 4.3 0 0 1 4.3 4.3c0 3.1-4.3 7.3-4.3 7.3s-4.3-4.2-4.3-7.3a4.3 4.3 0 0 1 4.3-4.3z" fill="currentColor"/><circle cx="16" cy="14.4" r="1.6" style="fill: var(--c-night)"/></svg>`,
+  stats: `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="6" y="15" width="5" height="11" rx="1" fill="currentColor"/><rect x="13.5" y="8" width="5" height="18" rx="1" fill="currentColor"/><rect x="21" y="18" width="5" height="8" rx="1" fill="currentColor"/><path d="M23.5 7.6l1.2 1.2 1.2-1.2a1.1 1.1 0 0 1 1.6 1.6l-2.8 2.8-2.8-2.8a1.1 1.1 0 0 1 1.6-1.6z" fill="currentColor"/><rect x="4.5" y="27" width="23" height="1.6" rx="0.8" fill="currentColor"/></svg>`,
+  team: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="10" r="4" fill="currentColor"/><path d="M8.5 26c0-4.6 3.3-8 7.5-8s7.5 3.4 7.5 8z" fill="currentColor"/><circle cx="7.5" cy="12.5" r="3" fill="currentColor"/><path d="M2 24.5c0-3.4 2.4-6 5.5-6 1.2 0 2.2.3 3.1.9-1.5 1.5-2.4 3.4-2.6 5.1z" fill="currentColor"/><circle cx="24.5" cy="12.5" r="3" fill="currentColor"/><path d="M30 24.5c0-3.4-2.4-6-5.5-6-1.2 0-2.2.3-3.1.9 1.5 1.5 2.4 3.4 2.6 5.1z" fill="currentColor"/></svg>`,
+  target: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M16 3v6M16 23v6M3 16h6M23 16h6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="16" r="4" fill="currentColor"/></svg>`,
+  pass: `<svg viewBox="0 0 96 24" aria-hidden="true"><path d="M2 12h10M18 12h10M34 12h10M50 12h18" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M66 3l24 9-24 9z" fill="currentColor"/></svg>`,
+  shot: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M16 2.5v6M16 23.5v6M2.5 16h6M23.5 16h6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="16" r="3.6" fill="currentColor"/></svg>`,
+  carry: `<svg viewBox="0 0 96 24" aria-hidden="true"><path d="M2 16l12-8 12 8 12-8 12 8" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M60 3l24 9-24 9z" fill="currentColor"/></svg>`,
+} as const;

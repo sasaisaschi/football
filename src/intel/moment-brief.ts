@@ -49,6 +49,13 @@ export function briefMoment(m: DecisionMoment, s: MatchSnapshot, profiles: reado
         : tr(`Time on the ball: the nearest opponent, ${name(near.id)}, is ${near.d.toFixed(1)} m away.`, `Zeit am Ball: Der nächste Gegner, ${name(near.id)}, ist ${near.d.toFixed(1)} m entfernt.`));
     }
   }
+  // A restart for us: where it is taken and who is around the taker (measured in the frozen frame).
+  if (s.restart && s.restart.team === m.team && m.category !== 'coach') {
+    const spot = s.restart.position;
+    const mates = s.players.filter(p => !p.sentOff && p.id !== s.restart!.taker && profiles[p.id].team === m.team && dist(p.position, spot) < 15).length;
+    const marking = opponents.filter(p => dist(p.position, spot) < 15).length;
+    lines.push(tr(`Restart ${Math.round(goalDistance(spot, sign))} m from their goal: ${mates} of ours and ${marking} of theirs within 15 m of the ball.`, `Standard ${Math.round(goalDistance(spot, sign))} m vor ihrem Tor: ${mates} von uns und ${marking} Gegner im Umkreis von 15 m um den Ball.`));
+  }
   // Defending: what the opponent with the ball could do from where he is.
   if (!attacking && s.lastTouch !== null && profiles[s.lastTouch].team !== m.team && m.category !== 'coach') {
     const carrier = s.players[s.lastTouch], at = { x: carrier.position.x, z: carrier.position.z };

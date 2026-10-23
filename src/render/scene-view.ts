@@ -3,46 +3,55 @@ import * as THREE from 'three';
 import type { CrowdAudio } from '../audio/crowd-audio';
 import { TEAMS } from '../engine/rosters';
 import type { DecisionMoment, MatchEvent, MatchSnapshot, PlayerProfile, TeamId, Vec3 } from '../engine/types';
-import { tr } from '../i18n';
 import { attackSign } from '../physics/pitch-geometry';
 import { createBallView } from './ball-view';
-import { ATTACK_FOV, CameraDirector, WIDE_FOV } from './camera-director';
+import { CameraDirector, WIDE_FOV } from './camera-director';
 import { OffsideLine } from './offside-line';
-import { frameAttack, frameMoment } from './framing';
+import { frameMoment } from './framing';
 import { lerpBall, lerpPlayer } from './interpolate';
 import { NameTag } from './name-tag';
 import { Footballer, loadFootballer } from './footballer';
+import { frameReference } from './reference-camera';
+import { SceneHud, type HudInfo } from './scene-hud';
+import { scenePictures, type Capture } from './scene-pictures';
 import type { StadiumView } from './stadium-view';
 import { TacticalOverlay } from './tactical-overlay';
 
 /** What the scene draws a frame from: the simulation's computed frames. */
 export interface FrameSource { frame(tick: number): MatchSnapshot; readonly produced: number }
 
-/** Direction to the key floodlight (main.ts) and half the size of the area its shadows cover in a scene (m). */
-const KEY_OFFSET = new THREE.Vector3(-40, 80, 50), SHADOW_HALF = 34;
-
-const CATEGORY = (m: DecisionMoment) => ({ attack: tr('Attack', 'Angriff'), transition: tr('Transition', 'Umschalten'), defence: tr('Defence', 'Abwehr'), 'set-piece': tr('Set piece', 'Standard'), coach: tr('Coach', 'Trainer') })[m.category];
+/**
+ * Direction to the sun (daylight.ts) and half the size of the area its shadows cover in a scene (m). The sun stands
+ * behind the far side as seen from the reference camera, so its shadows fall towards the camera as in the reference.
+ */
+const SUN = { back: 45, up: 70, side: 40 }, SHADOW_HALF = 34;
 
 /**
- * The 3D stage of a decisive scene: figures, ball, stadium, camera, tactical markings, a slim score bug, letterbox and
- * the scene's title card. It is drawn only while a scene runs (the manager view has no 3D picture). Everything it
- * shows comes from computed frames; it never changes the match.
+ * The 3D stage of a decisive scene in the style of the client's reference picture: figures, ball, stadium, the
+ * reference camera, the options' markings, the broadcast graphics (score strip, toolbar, minimap). It is drawn only
+ * while a scene runs (the manager view has no 3D picture). Everything it shows comes from computed frames; it never
+ * changes the match.
  */
 export class SceneView {
   readonly el = document.createElement('div');
   readonly overlay = new TacticalOverlay();
   private readonly offside = new OffsideLine();
-  /** An open-play scene: offside line for the team in possession, attack camera. */
+  readonly hud: SceneHud;
+  /** An open-play scene: offside line for the team in possession, the reference camera. */
   private openPlay = false;
   /** A shot was struck in this scene: offside no longer matters, the line goes. */
   private shotTaken = false;
+  private frozenNow = false;
   readonly camera: CameraDirector;
   private readonly figures: Footballer[];
   private readonly ball = createBallView();
   private nameTag: NameTag | null = null;
   private celebrateUntil = 0;
   private celebrateTeam: TeamId = 0;
-  private readonly bug: HTMLElement;
+  /** The side the camera stands on (the attackers' right); the sun is placed opposite. */
+  private sunSide: 1 | -1 = 1;
+  /** Renders of the frozen moment still to be taken (once the figures are posed at the frozen tick). */
+  private pictures: { m: DecisionMoment; s: MatchSnapshot; wait: number } | null = null;
   shown: MatchSnapshot | null = null;
   active = false;
 
@@ -52,7 +61,10 @@ export class SceneView {
     private readonly stadium: StadiumView,
     private readonly audio: CrowdAudio,
     private readonly profiles: PlayerProfile[],
-    private readonly o: { userTeam: TeamId; halfMinutes: number; focusPlayer: number | null; clock: (s: MatchSnapshot) => string; key: THREE.DirectionalLight },
+    private readonly o: {
+      userTeam: TeamId; halfMinutes: number; focusPlayer: number | null; clock: (s: MatchSnapshot) => string; key: THREE.DirectionalLight;
+      info: HudInfo; capture: Capture; onPictures: (portrait: HTMLCanvasElement | null, thumbs: Map<string, HTMLCanvasElement>) => void;
+    },
     model: Awaited<ReturnType<typeof loadFootballer>>,
   ) {
     this.camera = new CameraDirector(cam);
@@ -61,48 +73,39 @@ export class SceneView {
     if (o.focusPlayer !== null) { this.nameTag = new NameTag(profiles[o.focusPlayer], TEAMS[profiles[o.focusPlayer].team].kit); scene.add(this.nameTag.sprite); }
     this.el.className = 'scene';
     this.el.hidden = true;
-    this.el.innerHTML = `
-      <div class="scene-bar top"></div><div class="scene-bar bottom"></div>
-      <div class="scene-bug"><span class="home">${TEAMS[0].short}</span><b data-score>0 : 0</b><span class="away">${TEAMS[1].short}</span><i data-clock>00:00</i><em data-label></em></div>
-      <div class="scene-title" data-title><small></small><strong></strong></div>`;
-    this.bug = this.el.querySelector('.scene-bug')!;
+    this.hud = new SceneHud(profiles, o.userTeam, o.info, on => this.overlay.setEnabled(on));
+    this.el.append(this.hud.el);
   }
 
-  /** A decisive scene starts: letterbox in, title card, the camera picks up play where the build-up begins. */
-  begin(m: DecisionMoment, s: MatchSnapshot): void {
+  /**
+   * A decisive scene starts: the camera picks up play where the build-up begins (`s`). The side it watches from is
+   * that of the team with the ball at the frozen moment (`atMoment`): six seconds earlier the other team may still
+   * have had it.
+   */
+  begin(m: DecisionMoment, s: MatchSnapshot, atMoment: MatchSnapshot): void {
     this.active = true;
     this.el.hidden = false;
     this.el.dataset.phase = 'build-up';
-    const title = this.el.querySelector<HTMLElement>('[data-title]')!;
-    title.querySelector('small')!.textContent = `${CATEGORY(m)} · ${this.o.clock(s)}`;
-    title.querySelector('strong')!.textContent = tr('Decisive moment', 'Entscheidende Szene');
-    title.classList.remove('show');
-    void title.offsetWidth;
-    title.classList.add('show');
-    this.label(tr('LIVE · BUILD-UP', 'LIVE · VORGESCHICHTE'));
+    this.frozenNow = false;
+    this.hud.setMoment(null);
     this.camera.scene = true;
     // A set piece about to be taken is shown from behind the ball (or the corner flag) towards goal.
     const r = s.restart;
     const setPiece = m.category === 'set-piece' && r && ['corner', 'free-kick', 'penalty'].includes(r.kind);
     this.camera.setPiece = setPiece ? { spot: r.position, goalX: attackSign(r.team, s.half) * 52.5, kind: r.kind } : null;
-    // Open play: the camera stands behind the attack of the team that has the ball and looks at the goal it attacks.
+    // Open play: the reference camera on the right of the team that has the ball, looking at the goal it attacks.
     this.openPlay = m.category !== 'set-piece' && m.category !== 'coach';
     this.shotTaken = false;
-    const attackers = s.possession ?? m.team;
+    const attackers = atMoment.possession ?? (m.category === 'defence' ? (1 - m.team) as TeamId : m.team);
+    this.sunSide = attackSign(attackers, s.half);
     this.camera.attackGoalX = this.openPlay ? attackSign(attackers, s.half) * 52.5 : null;
     this.camera.cutTo(setPiece ? 'set-piece' : 'follow', s);
   }
 
-  private label(text: string): void {
-    this.el.querySelector('[data-label]')!.textContent = text;
-  }
-
-  /** The frozen moment: markings on the pitch, the framing that shows every option beside the panel. */
+  /** The frozen moment: the framing that shows every option above the decision bar, the markings, the live renders. */
   frozen(m: DecisionMoment, s: MatchSnapshot, panel: { right: number; bottom: number }, host: HTMLElement): void {
     this.el.dataset.phase = 'decide';
-    this.label(tr('FROZEN · YOUR CALL', 'EINGEFROREN · DEINE WAHL'));
-    this.overlay.show(m, s, id => this.profiles[id].team);
-    this.overlay.focus(Math.max(0, m.options.findIndex(o => o.id === m.defaultOptionId)));
+    this.frozenNow = true;
     const points: Vec3[] = [s.ball.position];
     for (const id of m.participants) {
       const p = s.players[id];
@@ -116,18 +119,26 @@ export class SceneView {
       if (v?.zone) points.push({ x: v.zone.x + v.zone.r, y: 0, z: v.zone.z }, { x: v.zone.x - v.zone.r, y: 0, z: v.zone.z });
       if (v?.line) for (const x of [v.line.from, v.line.to]) points.push({ x, y: 0, z: s.players[m.focusPlayer].position.z });
     }
-    const w = host.clientWidth, h = host.clientHeight;
-    const safe = { left: -0.92, right: 1 - (2 * (panel.right + 64)) / w, bottom: -1 + (2 * (panel.bottom + 70)) / h, top: 1 - (2 * 120) / h };
+    const h = host.clientHeight;
+    // The free part of the picture: above the decision bar, below the score strip, right of the toolbar.
+    const safe = { left: -0.85, right: 0.97, bottom: -1 + (2 * (panel.bottom + 0.02 * h)) / h, top: 0.8 };
     const goalX = this.camera.attackGoalX;
-    this.camera.decisionFrame = goalX !== null ? frameAttack(points, s.ball.position, goalX, this.cam.aspect, ATTACK_FOV, safe) : frameMoment(points, attackSign(m.team, s.half), this.cam.aspect, WIDE_FOV, safe);
+    const frame = goalX !== null ? frameReference(points, s.ball.position, goalX > 0 ? 1 : -1, this.cam.aspect, safe) : frameMoment(points, attackSign(m.team, s.half), this.cam.aspect, WIDE_FOV, safe);
+    this.camera.decisionFrame = frame;
     this.camera.cutTo('decision', s);
+    this.overlay.show(m, s, id => this.profiles[id].team, frame.position);
+    this.overlay.focus(Math.max(0, m.options.findIndex(o => o.id === m.defaultOptionId)));
+    this.hud.setMoment(m);
+    this.pictures = { m, s, wait: 2 };
   }
 
   /** The choice is made: markings go, the camera follows what really happens. */
   decided(): void {
     this.el.dataset.phase = 'consequence';
-    this.label(tr('LIVE · CONSEQUENCE', 'LIVE · KONSEQUENZ'));
+    this.frozenNow = false;
     this.overlay.hide();
+    this.hud.setMoment(null);
+    this.pictures = null;
     this.camera.decisionFrame = null;
     // A set piece still to be taken is watched from behind the ball again; open play is followed.
     this.camera.cutTo(this.camera.setPiece && this.shown?.restart ? 'set-piece' : 'follow', null);
@@ -140,6 +151,8 @@ export class SceneView {
     this.offside.group.visible = false;
     this.el.hidden = true;
     this.overlay.hide();
+    this.hud.setMoment(null);
+    this.pictures = null;
     this.camera.scene = false;
   }
 
@@ -161,33 +174,37 @@ export class SceneView {
     this.shown = s;
     const ball = lerpBall(a.ball, b.ball, alpha);
     this.ball.update(ball, s.ball.rotation);
-    // The decorative running cycle follows the shown time (slower in slow motion).
+    // The running cycle follows the shown time (slower in slow motion, still while frozen).
     const gaitDt = dt * pace;
-    // Positions over the whole interval a → b (taking the nearer snapshot as the end made figures stand still for half
-    // an interval and then jump; issue #39 / PR #38). Discrete state (score, clock) comes from the nearer snapshot.
+    // Positions over the whole interval a → b; discrete state (score, clock) comes from the nearer snapshot.
     a.players.forEach((p, k) => this.figures[k].update(lerpPlayer(p, b.players[k], alpha), gaitDt, ball));
     this.camera.update({ ...s, ball: { ...s.ball, position: ball } }, wall, dt);
     this.followShadows(ball);
-    this.overlay.update(wall, this.cam);
-    this.offside.update(s, this.profiles, this.openPlay && !this.shotTaken ? s.possession : null, this.cam);
+    this.overlay.update(wall);
+    // The offside line belongs to live play; the frozen decision shows only the options, as the reference does.
+    this.offside.update(s, this.profiles, this.openPlay && !this.shotTaken && !this.frozenNow ? s.possession : null, this.cam);
+    if (this.pictures && --this.pictures.wait <= 0) {
+      const { m, s: at } = this.pictures;
+      this.pictures = null;
+      void scenePictures(m, at, this.o.capture).then(p => this.o.onPictures(p.portrait, p.thumbs));
+    }
     const excitement = Math.min(1, Math.max(0, (Math.abs(ball.x) - 20) / 30));
     const celebrate = wall < this.celebrateUntil ? (this.celebrateTeam === 0 ? 1 : -1) : 0;
     this.stadium.update(wall, excitement, celebrate);
     this.audio.update(s, this.o.userTeam);
     this.nameTag?.update(s, this.cam);
-    this.bug.querySelector('[data-score]')!.textContent = `${s.score[0]} : ${s.score[1]}`;
-    this.bug.querySelector('[data-clock]')!.textContent = this.o.clock(s);
+    this.hud.update(s, this.o.clock(s));
   }
 
   /**
-   * The floodlight's shadows are drawn for the part of the pitch the scene shows, not for the whole pitch: the same
-   * shadow map then has about ten times the resolution where the players are, and their shadows get crisp edges.
+   * The sun's shadows are drawn for the part of the pitch the scene shows, not for the whole pitch: the same shadow
+   * map then has about ten times the resolution where the players are, and their shadows get crisp edges.
    */
   private followShadows(ball: Vec3): void {
     const key = this.o.key, cam = key.shadow.camera;
     const at = new THREE.Vector3(ball.x, 0, ball.z).lerp(new THREE.Vector3(this.cam.position.x, 0, this.cam.position.z), 0.15);
     key.target.position.copy(at);
-    key.position.copy(at).add(KEY_OFFSET);
+    key.position.copy(at).add(new THREE.Vector3(-SUN.back * this.sunSide, SUN.up, -SUN.side * this.sunSide));
     key.target.updateMatrixWorld();
     if (cam.right !== SHADOW_HALF) { Object.assign(cam, { left: -SHADOW_HALF, right: SHADOW_HALF, top: SHADOW_HALF, bottom: -SHADOW_HALF }); cam.updateProjectionMatrix(); }
   }

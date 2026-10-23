@@ -9,7 +9,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 /** Height of the model as built (m); each figure is scaled to its player's height. */
 export const MODEL_HEIGHT = 1.684;
 /** Kit colours of a figure, in the order of the material's colour uniform. */
-export const enum Kit { Skin, Shirt, Sleeve, Shorts, Socks, Boots, Hair, Hands, Eyes }
+export const enum Kit { Skin, Shirt, Sleeve, Shorts, Socks, Boots, Hair, Hands, Eyes, Trim }
 
 /**
  * Standard material whose base colour is the kit: the body part comes per vertex from the model (R = (part + 0.5) / 16,
@@ -31,7 +31,7 @@ vPart = int(bodyPart.r * 16.0);
 vRest = position;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-uniform vec3 kitColours[9];
+uniform vec3 kitColours[10];
 flat varying int vPart;
 varying vec3 vRest;
 int kit() {
@@ -39,11 +39,11 @@ int kit() {
   if (vPart == 0) return y < 0.99 ? 3 : 1;                 // torso: shorts, shirt
   if (vPart == 1) return y < 1.44 ? 1 : 0;                 // neck: collar, skin
   if (vPart == 2) return (y > 1.615 || (vRest.z < -0.005 && y > 1.5)) ? 6 : 0; // head: hair, face
-  if (vPart == 3) return y > 1.215 ? 1 : 2;                // upper arm: sleeve of the shirt, then arm
+  if (vPart == 3) return y > 1.24 ? 1 : y > 1.215 ? 9 : 2; // upper arm: sleeve, its white cuff, then arm
   if (vPart == 4) return 2;                                // forearm (a keeper's long sleeve)
   if (vPart == 5) return 7;                                // hand (a keeper's glove)
   if (vPart == 6) return y > 0.99 ? 1 : y > 0.70 ? 3 : 0;  // thigh: (hip under the shirt), shorts, knee
-  if (vPart == 7) return y < 0.115 ? 5 : y < 0.45 ? 4 : 0; // shin: boot, sock, knee
+  if (vPart == 7) return y < 0.115 ? 5 : y < 0.42 ? 4 : y < 0.45 ? 9 : 0; // shin: boot, sock, its band, knee
   if (vPart == 8) return 5;                                // foot: boot
   return 8;                                                // eyes
 }`)

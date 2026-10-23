@@ -11,6 +11,7 @@ import type { Personalization } from './intel/types';
 import { CoachDialog, IntervalScreen } from './manager/coach-screens';
 import { ManagerView } from './manager/manager-view';
 import { SceneView } from './render/scene-view';
+import type { Capture } from './render/scene-pictures';
 import { loadFootballer } from './render/footballer';
 import type { StadiumView } from './render/stadium-view';
 import { SessionDriver } from './session/driver';
@@ -84,7 +85,7 @@ export class MatchApp {
     });
   }
 
-  static async create(scene: THREE.Scene, cam: THREE.PerspectiveCamera, stadium: StadiumView, host: HTMLElement, audio: CrowdAudio, key: THREE.DirectionalLight, options: AppOptions): Promise<MatchApp> {
+  static async create(scene: THREE.Scene, cam: THREE.PerspectiveCamera, stadium: StadiumView, host: HTMLElement, audio: CrowdAudio, key: THREE.DirectionalLight, capture: Capture, options: AppOptions): Promise<MatchApp> {
     const app = new MatchApp(cam, host, audio, options);
     await app.client.ready;
     app.profiles = app.client.profiles;
@@ -95,7 +96,11 @@ export class MatchApp {
     app.consequence = new ConsequenceCard(app.profiles);
     // The figure model (public/models/footballer.glb); without it there is no scene to show, so a failure stops here.
     const model = await loadFootballer(`${import.meta.env.BASE_URL}models/footballer.glb`);
-    app.stage = new SceneView(scene, cam, stadium, audio, app.profiles, { userTeam: options.userTeam, halfMinutes: options.halfMinutes, focusPlayer: options.prefs.focusPlayer, clock: s => app.intel.clock(s), key }, model);
+    app.stage = new SceneView(scene, cam, stadium, audio, app.profiles, {
+      userTeam: options.userTeam, halfMinutes: options.halfMinutes, focusPlayer: options.prefs.focusPlayer, clock: s => app.intel.clock(s), key, capture,
+      info: { stats: () => app.sceneStats(), player: () => app.panel.brief },
+      onPictures: (portrait, thumbs) => app.panel.setPictures(portrait, thumbs),
+    }, model);
     app.manager = new ManagerView({
       halfMinutes: options.halfMinutes, userTeam: options.userTeam, profiles: app.profiles, instruction: options.instruction, intel: app.intel, intelPanel: app.intelPanel.el,
       pace: app.driver.pace, onPace: p => { app.driver.pace = p; }, onPause: p => { app.paused = p; app.driver.paused = p; app.client.pause(p); },
@@ -103,6 +108,21 @@ export class MatchApp {
     host.append(app.manager.el, app.stage.el, app.panel.el, app.consequence.el);
     app.driver.kickOff();
     return app;
+  }
+
+  /** The scene toolbar's statistics: the match so far, as the match intelligence counted it. */
+  private sceneStats(): [string, number | string, number | string][] {
+    const t = this.intel.stats.teams, total = t[0].possession + t[1].possession || 1;
+    const pct = (k: 0 | 1) => `${Math.round((t[k].possession / total) * 100)} %`;
+    return [
+      [tr('Possession', 'Ballbesitz'), pct(0), pct(1)],
+      [tr('Shots', 'Schüsse'), t[0].shots, t[1].shots],
+      [tr('On target', 'Aufs Tor'), t[0].shotsOnTarget, t[1].shotsOnTarget],
+      [tr('xG', 'xG'), t[0].xg.toFixed(2), t[1].xg.toFixed(2)],
+      [tr('Passes completed', 'Angekommene Pässe'), `${t[0].passesCompleted}/${t[0].passes}`, `${t[1].passesCompleted}/${t[1].passes}`],
+      [tr('Corners', 'Ecken'), t[0].corners, t[1].corners],
+      [tr('Fouls', 'Fouls'), t[0].fouls, t[1].fouls],
+    ];
   }
 
   /** Is the 3D picture drawn now? Only in a decisive scene. */
@@ -184,7 +204,7 @@ export class MatchApp {
     this.dialog?.close();
     this.consequence.hide();
     this.manager.show(false);
-    this.stage.begin(m, this.client.frame(from));
+    this.stage.begin(m, this.client.frame(from), this.client.frame(this.client.momentTick ?? from));
   }
 
   private frozen(m: DecisionMoment): void {
