@@ -86,7 +86,7 @@ describe('keeper at a penalty against us', () => {
   const penalty = (seed: number, side?: -1 | 0 | 1) => {
     const e = new MatchEngine({ seed, halfMinutes: 45 });
     stageScenario(e, { [role(e, 0, 'GK')]: { x: -50, z: 2 } }, { x: -30, y: 0.11, z: 0 });
-    whistle(e, { type: 'foul', offender: role(e, 0, 'RCB'), victim: role(e, 1, 'ST'), spot: { x: -45, z: 0 }, penalty: true, card: 'none', reason: 'Foulspiel', advantage: false });
+    whistle(e, { type: 'foul', offender: role(e, 0, 'RCB'), victim: role(e, 1, 'ST'), spot: { x: -45, z: 0 }, penalty: true, card: 'none', reason: 'foul', advantage: false });
     if (side !== undefined) {
       e.director = open();
       runFor(e, 10);
@@ -150,7 +150,7 @@ describe('free-kick wall (Law 13)', () => {
       [role(e, 0, 'RCB')]: { x: -38, z: 3 }, [role(e, 0, 'LCB')]: { x: -40, z: -2 }, [role(e, 0, 'CM')]: { x: -34, z: 6 }, [role(e, 0, 'LB')]: { x: -42, z: 8 }, [role(e, 0, 'RB')]: { x: -42, z: -9 },
       [role(e, 1, 'ST')]: { x: -30, z: 4 }, [role(e, 1, 'LW')]: { x: -40, z: 10 },
     }, { x: -31, y: 0.11, z: 4 });
-    whistle(e, { type: 'foul', offender: role(e, 0, 'CM'), victim: role(e, 1, 'ST'), spot: { x: -31.5, z: 4 }, penalty: false, card: 'none', reason: 'Foulspiel', advantage: false });
+    whistle(e, { type: 'foul', offender: role(e, 0, 'CM'), victim: role(e, 1, 'ST'), spot: { x: -31.5, z: 4 }, penalty: false, card: 'none', reason: 'foul', advantage: false });
     if (choose) {
       e.director = open();
       runFor(e, 10);

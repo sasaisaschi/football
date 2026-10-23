@@ -1,4 +1,4 @@
-import type { PlayerProfile, RestartKind, TeamId, Vec2, Vec3 } from '../engine/types';
+import type { FoulReason, PlayerProfile, RestartKind, TeamId, Vec2, Vec3 } from '../engine/types';
 import { BALL_SPEC, PITCH, attackSign, ballOut, goalCrossed, inPenaltyArea } from '../physics/pitch-geometry';
 
 /**
@@ -18,7 +18,7 @@ export type Decision =
   | { type: 'goal'; team: TeamId; scorer: number | null; ownGoal: boolean }
   | { type: 'restart'; kind: RestartKind; team: TeamId; spot: Vec2; reason: 'out' | 'offside' | 'foul' | 'handball' | 'back-pass' }
   | { type: 'offside'; player: number; spot: Vec2 }
-  | { type: 'foul'; offender: number; victim: number; spot: Vec2; penalty: boolean; card: 'none' | 'yellow' | 'red'; reason: string; advantage: boolean }
+  | { type: 'foul'; offender: number; victim: number; spot: Vec2; penalty: boolean; card: 'none' | 'yellow' | 'red'; reason: FoulReason; advantage: boolean }
   | { type: 'in-play'; kind: RestartKind; taker: number };
 
 /** `sliding`: in a sliding tackle (on the ground, legs stretched out). */
@@ -196,12 +196,13 @@ export class Referee {
     });
     const dogso = toGoal < 28 && Math.abs(vs.pos.z) < 18 && heading && !coverBehind;
     let card: 'none' | 'yellow' | 'red' = 'none';
-    let reason = 'Foulspiel';
-    if (closingSpeed > 6.5) { card = 'yellow'; reason = 'rücksichtsloses Einsteigen'; }
-    if (sliding && !playedBallFirst && closingSpeed >= SLIDE_RECKLESS) { card = 'yellow'; reason = 'rücksichtslose Grätsche'; }
-    if (sliding && fromBehind && closingSpeed >= SLIDE_EXCESSIVE) { card = 'red'; reason = 'Grätsche von hinten mit übermäßiger Härte'; }
-    if (dogso && !(penalty && playedBallFirst)) { card = 'red'; reason = 'Verhinderung einer offensichtlichen Torchance'; }
-    else if (tactical || (heading && toGoal < 45)) { card = card === 'none' ? 'yellow' : card; reason = tactical ? 'taktisches Foul' : 'Unterbinden eines aussichtsreichen Angriffs'; }
+    // A code, not a sentence: the referee decides, presentation words it in the viewer's language (ui/commentary.ts).
+    let reason: FoulReason = 'foul';
+    if (closingSpeed > 6.5) { card = 'yellow'; reason = 'reckless'; }
+    if (sliding && !playedBallFirst && closingSpeed >= SLIDE_RECKLESS) { card = 'yellow'; reason = 'reckless-slide'; }
+    if (sliding && fromBehind && closingSpeed >= SLIDE_EXCESSIVE) { card = 'red'; reason = 'excessive-slide'; }
+    if (dogso && !(penalty && playedBallFirst)) { card = 'red'; reason = 'dogso'; }
+    else if (tactical || (heading && toGoal < 45)) { card = card === 'none' ? 'yellow' : card; reason = tactical ? 'tactical' : 'stopping-attack'; }
     if (card === 'yellow' && this.yellow.has(offender)) card = 'red';
     if (card === 'yellow') this.yellow.add(offender);
     if (card === 'red') { this.sentOff.add(offender); this.redCards.add(offender); }

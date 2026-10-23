@@ -17,7 +17,8 @@
     "preview": "vite preview",
     "sim": "vitest run src/engine/full-match.test.ts",
     "probe": "node scripts/probe.mjs",
-    "lab": "vitest run src/engine/shot-lab.test.ts --silent=false"
+    "lab": "vitest run src/engine/shot-lab.test.ts --silent=false",
+    "intel": "node scripts/intel.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-simd-compat": "^0.21.0",

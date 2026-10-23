@@ -5,8 +5,9 @@ import { CrowdAudio } from './audio/crowd-audio';
 import { DEFAULT_ORCHESTRATOR } from './orchestrator/orchestrator';
 import { createPitchView } from './render/pitch-view';
 import { createStadiumView } from './render/stadium-view';
-import { showStartScreen } from './ui/start-screen';
+import { showStartScreen, type MatchChoice, type StoredChoice } from './ui/start-screen';
 import { MEMORY_STORAGE_KEY, parseMemory, type AgentMemory } from './ai/agent-memory';
+import { LANG_STORAGE_KEY, parseLang, setLang } from './i18n';
 
 /**
  * Optional URL parameters for development and verification (documented in PROJECT_REPORT.md):
@@ -18,8 +19,13 @@ import { MEMORY_STORAGE_KEY, parseMemory, type AgentMemory } from './ai/agent-me
  *   ?condense=0          show everything live instead of condensing quiet play
  *   ?memory=0            players start without (and do not store) memory of earlier matches
  *   ?autostart=1         skip the start screen (used by the browser check)
+ *   ?lang=de             German interface (default English; the start screen remembers the choice)
+ *   ?mode=analyst        match intelligence in analyst mode (default fan); ?team=1 coach the away side; ?focus=9 focus player id
  */
 const params = new URLSearchParams(location.search);
+const storedLang = (() => { try { return localStorage.getItem(LANG_STORAGE_KEY); } catch { return null; } })();
+setLang(parseLang(params.get('lang') ?? storedLang));
+document.documentElement.lang = params.get('lang') ?? storedLang ?? 'en';
 const num = (key: string, fallback: number) => (params.has(key) && Number.isFinite(Number(params.get(key))) ? Number(params.get(key)) : fallback);
 
 const host = document.querySelector<HTMLDivElement>('#app');
@@ -48,6 +54,10 @@ key.shadow.mapSize.set(2048, 2048);
 Object.assign(key.shadow.camera, { left: -70, right: 70, top: 50, bottom: -50, near: 10, far: 220 });
 key.shadow.bias = -0.0004;
 scene.add(key);
+// A second floodlight bank from the opposite corner, without shadows: it lifts the figures off the turf (rim light).
+const rim = new THREE.DirectionalLight(0xbfd4ff, 0.9);
+rim.position.set(55, 60, -60);
+scene.add(rim);
 scene.add(createPitchView());
 const stadium = createStadiumView();
 scene.add(stadium.group);
@@ -100,10 +110,28 @@ function loadMemory(): AgentMemory | null {
   return parseMemory(localStorage.getItem(MEMORY_STORAGE_KEY), 7);
 }
 
-async function startMatch(halfMinutes: number, condense: boolean): Promise<void> {
+/** The viewer's remembered choices (club, intelligence mode, focus player); the URL overrides them (browser check). */
+const PREFS_STORAGE_KEY = 'the12thman.prefs';
+function storedChoice(): StoredChoice {
+  let saved: Partial<StoredChoice> = {};
+  try { saved = JSON.parse(localStorage.getItem(PREFS_STORAGE_KEY) ?? '{}') as Partial<StoredChoice>; } catch { saved = {}; }
+  const team = params.get('team') ?? String(saved.userTeam ?? 0);
+  const focus = params.get('focus') ?? (saved.focusPlayer === null || saved.focusPlayer === undefined ? '' : String(saved.focusPlayer));
+  return {
+    userTeam: team === '1' ? 1 : 0,
+    mode: (params.get('mode') ?? saved.mode) === 'analyst' ? 'analyst' : 'fan',
+    focusPlayer: focus === '' || !Number.isFinite(Number(focus)) ? null : Number(focus),
+  };
+}
+function storeChoice(c: StoredChoice): void {
+  try { localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ userTeam: c.userTeam, mode: c.mode, focusPlayer: c.focusPlayer })); } catch { /* private window: the choice holds for this visit */ }
+}
+
+async function startMatch(choice: MatchChoice): Promise<void> {
   if (starting) return;
   starting = true;
   audio.start();
+  const { halfMinutes, condense } = choice;
   app = await MatchApp.create(scene, camera, stadium, overlay, audio, {
     seed: num('seed', Math.floor(Math.random() * 1e9)),
     halfMinutes,
@@ -111,8 +139,10 @@ async function startMatch(halfMinutes: number, condense: boolean): Promise<void>
     cooldown: num('cooldown', Math.max(20, Math.round((DEFAULT_ORCHESTRATOR.cooldown * halfMinutes) / 45))),
     maxPerHalf: num('moments', DEFAULT_ORCHESTRATOR.maxPerHalf),
     timeoutSeconds: num('timeout', DEFAULT_ORCHESTRATOR.timeoutSeconds),
-    userTeam: 0,
+    userTeam: choice.userTeam,
     condense,
+    prefs: { mode: choice.mode, favouriteTeam: choice.userTeam, focusPlayer: choice.focusPlayer },
+    savePrefs: p => storeChoice({ userTeam: choice.userTeam, mode: p.mode, focusPlayer: p.focusPlayer }),
     memory: loadMemory(),
     saveMemory: m => { if (params.get('memory') !== '0') localStorage.setItem(MEMORY_STORAGE_KEY, JSON.stringify(m)); },
   });
@@ -126,8 +156,9 @@ window.addEventListener('keydown', ev => {
 
 requestAnimationFrame(loop);
 const half = num('half', 15);
-if (params.get('autostart') === '1') void startMatch(half, params.get('condense') !== '0');
-else showStartScreen(overlay, half, loadMemory()?.matches ?? 0, choice => {
+if (params.get('autostart') === '1') void startMatch({ halfMinutes: half, condense: params.get('condense') !== '0', resetMemory: false, ...storedChoice() });
+else showStartScreen(overlay, half, loadMemory()?.matches ?? 0, storedChoice(), choice => {
   if (choice.resetMemory) localStorage.removeItem(MEMORY_STORAGE_KEY);
-  void startMatch(choice.halfMinutes, choice.condense);
+  storeChoice(choice);
+  void startMatch(choice);
 });

@@ -126,7 +126,7 @@ describe('Law 12 – fouls and misconduct', () => {
     });
     it('reaching the man instead of the ball: a reckless foul, booked', () => {
       const states = new Map([[att, state({ x: 0, z: 0 }, { x: 4, z: 0 }, Math.PI / 2)], [def, slider({ x: 0, z: 0.9 }, { x: 0, z: -5.5 }, Math.PI)]]);
-      expect(setUp(false).onBodyContact(def, att, 5.5, 10, 1, ball, states, null)).toMatchObject({ type: 'foul', offender: def, card: 'yellow', reason: 'rücksichtslose Grätsche' });
+      expect(setUp(false).onBodyContact(def, att, 5.5, 10, 1, ball, states, null)).toMatchObject({ type: 'foul', offender: def, card: 'yellow', reason: 'reckless-slide' });
     });
     it('from behind with excessive force: sent off, even if the ball was touched', () => {
       const states = new Map([[att, state({ x: 0, z: 0 }, { x: 4, z: 0 }, Math.PI / 2)], [def, slider({ x: -0.9, z: 0 }, { x: 11, z: 0 }, Math.PI / 2)]]);
@@ -159,7 +159,7 @@ describe('Law 12 – fouls and misconduct', () => {
   it('a deliberate tactical foul is booked; a second booking sends the player off', () => {
     const ref = new Referee(roster);
     const states = new Map([[att, state({ x: -5, z: 3 }, { x: 1, z: 0 }, Math.PI / 2)], [def, state({ x: -5.6, z: 3 }, { x: 2, z: 0 }, Math.PI / 2, true)]]);
-    expect(ref.onBodyContact(def, att, 1.8, 10, 1, { x: -20, y: 0.11, z: 3 }, states, null)).toMatchObject({ card: 'yellow', reason: 'taktisches Foul' });
+    expect(ref.onBodyContact(def, att, 1.8, 10, 1, { x: -20, y: 0.11, z: 3 }, states, null)).toMatchObject({ card: 'yellow', reason: 'tactical' });
     expect(ref.onBodyContact(def, att, 1.8, 20, 1, { x: -20, y: 0.11, z: 3 }, states, null)).toMatchObject({ card: 'red' });
   });
   it('team-mates bumping into each other is never a foul', () => {

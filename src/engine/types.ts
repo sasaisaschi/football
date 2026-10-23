@@ -141,7 +141,7 @@ export type MatchEvent = MatchEventBase &
     | { type: 'goal'; team: TeamId; scorer: number | null; ownGoal: boolean; position: Vec3 }
     | { type: 'out'; restart: RestartKind; team: TeamId; position: Vec2 }
     | { type: 'offside'; player: number; position: Vec2 }
-    | { type: 'foul'; offender: number; victim: number; position: Vec2; penalty: boolean; card: 'none' | 'yellow' | 'red'; reason: string }
+    | { type: 'foul'; offender: number; victim: number; position: Vec2; penalty: boolean; card: 'none' | 'yellow' | 'red'; reason: FoulReason }
     | { type: 'advantage'; team: TeamId }
     | { type: 'restart'; restart: RestartKind; team: TeamId; position: Vec2 }
     | { type: 'in-play'; restart: RestartKind; taker: number }
@@ -154,6 +154,8 @@ export type MatchEvent = MatchEventBase &
     | { type: 'substitution'; team: TeamId; off: number; on: number; role: Role; reason?: SubReason }
   );
 export type MatchEventType = MatchEvent['type'];
+/** Why the referee gave a foul (Law 12), as a code; the words are chosen by the presentation. */
+export type FoulReason = 'foul' | 'reckless' | 'reckless-slide' | 'excessive-slide' | 'dogso' | 'tactical' | 'stopping-attack';
 /** Why a coach changes a player: only what is known in the match (there is no fatigue model, so none is claimed). */
 export type SubReason = 'keeper' | 'form' | 'card' | 'chase' | 'protect';
 
@@ -198,6 +200,8 @@ export type DecisionOption = {
     | { type: 'none' };
   /** Rough, honest outlook from the current state; never a promise of the outcome. */
   outlook: string;
+  /** The player's own estimate of success (0…1) from the option evaluation, where one exists (passes, shots, take-ons). */
+  estimate?: number;
   visual?: OptionVisual;
 };
 

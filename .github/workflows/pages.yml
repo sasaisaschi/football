@@ -1,0 +1,47 @@
+# Public demo on GitHub Pages. Runs ONLY when started by hand (Actions → "Deploy demo to GitHub Pages" → Run workflow),
+# never on push or merge. Before the first run, enable Pages in the repository settings with "Source: GitHub Actions".
+# Optional: set the repository variable NARRATION_URL to the deployed narration function (api/) to switch on the AI
+# narration; without it the demo runs fully locally in the browser.
+name: Deploy demo to GitHub Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_NARRATION_URL: ${{ vars.NARRATION_URL }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,6 +1,6 @@
 # THE 12TH MAN – Technical Report & Development Guide
 
-**Stand:** 22.10.2026 · Phase B (#33) auf `main` gemergt; **Phase-B-Restarbeiten auf Branch `claude/phase-b-arbeitsauftrag-8042ea` (Folge-PR, Abnahme offen)** – Ergebnisse, Messwerte und Nicht-Erreichtes in §10.10. Frühere Messwerte bleiben historisch datiert.
+**Stand:** 23.10.2026 · Phase B, Restarbeiten und Phase C auf `main` gemergt (#33–#35); **Phase D – Hackathon-Einreichung und Match Intelligence – auf Branch `claude/phase-d-submission` (PR #36, Abnahme offen)**. Ergebnisse, Messwerte, offene Benutzeraktionen und Risiken in §12. Frühere Messwerte bleiben historisch datiert.
 **Rolle:** verbindliche Source of Truth für Architektur, tatsächlichen Stand, Versionen, Tests, Messwerte und nächste Schritte.
 **Kennzeichnung:** **Implementiert** = Code vorhanden · **Getestet** = durch tatsächlich ausgeführte Tests belegt · **Gemessen** = Zahl aus einem tatsächlichen Lauf · **Geplant** = nicht vorhanden · **Nicht geprüft** = vorhanden, ohne Nachweis.
 
@@ -77,6 +77,9 @@ scripts/probe.mjs           Mehr-Seed-Statistik (npm run probe; --orchestrator: 
 | Chronologische Simulation im Web Worker, Präsentationsregie (live / verdichtet / angehalten) | Implementiert, getestet, im Browser gemessen (Phase B) | `sim/*`, `app.ts` |
 | Entscheidungs-Seitenleiste (Tastatur/Maus, Spielerform), Konsequenzkarte, Verlaufsleiste, Start/Ergebnis mit Chronik | Implementiert, im Browser getestet (Phase B) | `ui/*` |
 | Prozedurale Spielerfigur, Entscheidungs-Framing, taktische 3D-Overlays, Übersichtskamera | Implementiert, getestet, im Browser geprüft (Phase B) | `render/*` |
+| Match Intelligence: Statistik, Muster, Erklärungen (Fan/Analyst, EN/DE), Begründung der Entscheidungsszenen, Spielbericht, JSON-Feed | Implementiert, getestet, im Browser geprüft (Phase D) | `intel/*`, `ui/intel-panel.ts` |
+| Zweisprachige Oberfläche (Englisch Standard, Deutsch) | Implementiert, im Browser geprüft (Phase D) | `i18n.ts` |
+| KI-Formulierung über Microsoft Foundry | **Vorbereitet, nicht bereitgestellt** (Kernlogik unit-getestet) | `intel/foundry/*`, `api/` |
 
 ## 5. Testing Status (tatsächlich ausgeführt)
 
@@ -101,6 +104,10 @@ scripts/probe.mjs           Mehr-Seed-Statistik (npm run probe; --orchestrator: 
 | 20.10.2026 | Phase B: `npm run test:browser` (Desktop, schmal, Vollpartie) und `npm run probe` (Momentverteilung, Statistik, Ablation) | siehe §10.9 B6 |
 | 22.10.2026 | Restarbeiten: `npm run check` | `tsc` fehlerfrei, **26 Testdateien / 142 Tests bestanden** (3 übersprungen), Build erfolgreich |
 | 22.10.2026 | Restarbeiten: Browser Desktop/schmal/Produktions-Vollpartie, Schusslabor, 48-Seed-Probe | siehe §10.10 R7 |
+| 22.10.2026 | Phase C: `npm run check` | `tsc` fehlerfrei, **27 Testdateien / 151 Tests bestanden** (3 übersprungen), Build erfolgreich |
+| 22.10.2026 | Phase C: `npm run sim`, Schusslabor, Szenenaufzeichnung, 60-Seed-Probe, 5 Browsersitzungen, Desktop/schmal | siehe §11.4–§11.6 |
+| 23.10.2026 | Phase D: `npm run check` | `tsc` fehlerfrei, **29 Testdateien / 164 Tests bestanden** (4 übersprungen), Build erfolgreich |
+| 23.10.2026 | Phase D: Browser (2 × 15-Sitzung, Deutsch, schmal, Auswärtsteam, Pages-Unterpfad, Cloud-Fehlerfall), `npm run sim`, `npm run intel`, Video | siehe §12.4–§12.5 |
 
 **Testinhalte:** Feldmaße/Regel 9/10, Zufall reproduzierbar; Ballaufprall, Rollweg, keine Kraftakkumulation, Magnus-Richtung, Netz/Pfosten/Latte; Beschleunigungsgrenzen, 22 Körper stabil, bitgleiche Wiederholung; Fußkontakt (Nähe kickt nie, Richtung/Tempo, Spannstoß mit Lift, Richtungsabhängigkeit, Drallkorrektur beim seitlichen Antippen, Fehltreffer mit Drall, Luftloch, Reichweite, Ballannahme); Schiedsrichter (Abseits, Einwurf-Ausnahme, Seitenwechsel, Ecke/Abstoß/Einwurf/Tor/Eigentor, Foul von hinten, Zweikampf ≠ Foul, Notbremse = Rot + Elfmeter, taktisches Foul = Gelb, Gelb-Rot, Mitspieler-Kontakt, Handspiel außerhalb, Rückpass); vollständige Partie ohne ungültige Zustandsübergänge, gleicher Seed = gleiche Partie, kein kollektives Ballverfolgen, Torwart-Ergebnisse variieren, Ballfreigabe innerhalb von 6 s; Director (Moment friert ein, jede angebotene Option wird als echter Schwung ausgeführt, gleiche Lage + andere Entscheidung → anderer Verlauf, gleiche Entscheidung → unterschiedlicher Erfolg, Momente selten und mit Abstand); Quelltext „kein Magnetismus“.
 
@@ -855,7 +862,9 @@ Insgesamt verdoppeln sich die Brustannahmen (31 → 65), und es gibt weniger Ein
 - Fouls aus Körperkontakten. Bei der Grätsche trifft der Gegner auf die liegende Kapsel (Beine und Hüfte); Schuhe berühren weiterhin nur den Ball, Tritte auf den Fuß gibt es nicht.
 - Der laufende Spielrhythmus der Beine ist rein visuell (ruhende Schuh-Kollider bleiben unter der Hüfte); Kick-Beine folgen exakt der Physik.
 - Ballparameter sind Literaturwerte, keine eigene Messreihe.
-- Bei Kurzspielen zeigt die Uhr echte Simulationszeit (z. B. 2 × 5 min), nicht 90 Minuten.
+- Bei Kurzspielen zeigt die Uhr echte Simulationszeit (z. B. 2 × 5 min), nicht 90 Minuten; Anzeigetafel, Start und Ergebnis nennen die Länge (§11.4).
+- **Spielstatistik nach Phase C** (60 Seeds, §11.2): Tore 2,4, Torschüsse 16,3 (real ≈ 25), Ecken 6 (real ≈ 10), Pässe ≈ 1400 (real ≈ 1000), Einwürfe 50 (real ≈ 45); Tore fast nur aus dem offenen Spiel.
+- **Microsoft Foundry:** Die KI-Formulierung ist vorbereitet, aber nicht bereitgestellt; alle Texte entstehen lokal (§12).
 - Eine 90-Minuten-Partie braucht im Browser ≈ 11,7 min Rechenzeit unter Dauerlast (2,16 ms je Tick, Iris Xe; Phase B: 4,2 ms); die Nutzerzeit (14:04 min) kann nicht unter die Rechenzeit fallen (§10.10 R1).
 - Spieler fern vom Ball planen mit 30/20 Hz neu (Körper weiter mit 60 Hz); bei sauber rollendem Ball unter 10 m/s rechnet die Physik mit 2 statt 4 Teilschritten (gleichwertig gemessen, §10.10 R1).
 - Ton ist vollständig synthetisiert (keine Fangesänge/Kommentarstimme).
@@ -879,10 +888,13 @@ Insgesamt verdoppeln sich die Brustannahmen (31 → 65), und es gibt weniger Ein
 12. **Phase A** – Ballannahme nach Einwürfen, Kamera an der nahen Seitenlinie, Zeitraffer nur in ruhigen Phasen, Statusmeldungen mit Laufzeit.
 13. **Phase B** – Orchestrator mit Stopp vor Standards, Agenten-Traits und Form, chronologische Simulation im Web Worker mit Präsentationsregie, neue Figuren, Entscheidungskamera, Taktik-Overlays, neue Oberfläche (§10.9).
 14. **Phase-B-Restarbeiten** – Simulation −54 % je Tick, Agenten nachkalibriert, Ersatzbank und Wechsel, Elfmeter-Torwart, Freistoßmauer, Eckenverteidigung, Beziehungen und Gedächtnis über Partien, Figur und Animation, Figuren-Labor (§10.10).
+15. **Phase C** – Kurzpartie 2 × 15 als gemessener 6:30–7:22-min-Modus mit Längenkennzeichnung, Ursachenanalyse der Torquote und Eigentore (Mitspieler am Ball des eigenen Mannes, zwei Torwartfehler, Regel 12), Wechsel der Gegner-KI, Kamera zielt auf den freien Bildbereich (§11).
+16. **Phase D** – Match-Intelligence-Pipeline (Ingest bis Personalize) mit Fan- und Analystenmodus in EN/DE, Erklärung der Entscheidungsszenen, englische Oberfläche, Foundry-Schnittstelle und GitHub-Pages-Workflow vorbereitet (nicht aktiv), Einreichungspaket und Video (§12).
 
 ## 9. Nächste Schritte
 
-1. **Restarbeiten abnehmen** (Folge-PR, §10.10). Offen: 10 min Nutzerzeit für 2 × 45 min (gemessen 14:04 min, Engpass Rechenzeit), Tore 3,6/90 und weniger Fänge des Torwarts (nächste Kalibrierung), Szenariomodus.
+1. **Phase D abnehmen** (PR #36, §12), dann die Benutzeraktionen aus §12.6: Microsoft-Technologie (Foundry) bereitstellen, GitHub Pages veröffentlichen, Video hochladen, Kategorie und Lizenz wählen, einreichen bis 28.10.2026, 07:59 MEZ.
+2. Danach (nicht abgaberelevant): Torschüsse 16/90 und Ecken 6/90 nachkalibrieren, Standardtore, Szenariomodus.
 2. **Simulationstempo:** Wahrnehmung, Freilaufsuche und Abfangprüfung algorithmisch weiter verbilligen; Messung auf weiterer Hardware.
 3. Nachkalibrierung (Messung mit `npm run probe`, 48 Seeds): Schüsse (≈ 19/90, real ≈ 25), Tore (in drei kurzen Browserpartien keines), Häufigkeit von Kopfballtoren, Grätschen und Fouls, Passzahl (≈ 1360 statt ≈ 1000/90), lange Bälle über 30 m.
 4. Orchestrator: Wechsel (nach Ersatzbank-Logik), Torwart beim gegnerischen Elfmeter, defensive Eckenvarianten, Wiederholung (Replay) eines Moments aus den Ereignisdaten.
@@ -1518,3 +1530,182 @@ Vergleichsbilder aus dem Produktions-Build liegen in `docs/phase-c/`:
 | Szenariomodus | nein | – | – | weiterhin eigener Folgepunkt (§10.10 R6) |
 
 **Nicht als Erfolg gewertet:** Grüne Unit-Tests allein. Alle Aussagen zu Spielzeit, Verständlichkeit und Darstellung stammen aus den Browsersitzungen und den Aufnahmen, die Statistik aus Mehr-Seed-Läufen.
+
+## 12. Phase D – Hackathon-Einreichung und AI Match Intelligence (22.10.2026)
+
+**Ausgangslage:** `main` = `c0e84c0` (PR #33–#35 gemergt). Branch `claude/phase-d-submission`, ein PR, kein Merge ohne Freigabe. Abgabefrist laut Regeln: 27.10.2026, 23:59 PT (= 28.10.2026, 07:59 MEZ). Registrierung laut Auftraggeber erfolgt.
+
+**Vorgaben des Auftraggebers (22.10.2026):**
+- Azure/Microsoft Foundry wird vorerst zurückgestellt. Die Foundry-Schnittstelle wird modular vorbereitet; die echte Integration bleibt als offen gekennzeichnet, bis sie tatsächlich funktioniert.
+- Öffentliche Demo über GitHub Pages: Die Konfiguration wird vorbereitet, aber nichts aktiviert oder veröffentlicht. Das Deployment ist ein eigener letzter Schritt nach der Abnahme.
+
+### 12.1 Arbeitsplan
+
+Abhängigkeiten: D-i18n vor D2/D3, weil die Erklärungen zweisprachig erzeugt werden. D2 vor D3, weil die Entscheidungsszenen die Analyse nutzen. D4 nach D2/D3, weil die neuen Anzeigen mitgestaltet werden. Video und Einreichungspaket zuletzt, weil sie den Endstand zeigen.
+
+1. **D1 Compliance-Matrix** aus den offiziellen Regeln (Anforderung, Nachweis, fehlender Teil, Arbeitsschritt), inklusive Lizenz, fremder Assets und Testzugang bis zum Ende der Bewertung (10.11.2026).
+2. **Sprache:** Englisch als Standard, Deutsch umschaltbar (`?lang=de` und Startbildschirm); auch Orchestrator-Texte aus dem Worker.
+3. **D2 Match Intelligence** (`src/intel/`), deterministisch, ohne Cloud:
+   - Ingest der `MatchEvent`s in Bildreihenfolge zusammen mit dem jeweils gezeigten Snapshot.
+   - Statistik je Team und Spieler: Pässe mit Distanz, Ankunft und Schwierigkeit; Schüsse mit Tempo und xG; Ballbesitz; Ballbesitzwechsel; Druck auf den Ballführer; Standards; Entscheidungen.
+   - Mustererkennung mit Begründung aus Ereignissen (z. B. Druckwechsel, Kontrolle oder Chaos, Rhythmus, Torgefahr).
+   - Texte für Fan- und Analystenmodus in EN/DE. Jede Aussage verweist auf die Ereignis-IDs, auf denen sie beruht.
+   - Personalisierung (Lieblingsteam, Spielerfokus), Abschlussbericht und maschinenlesbarer, zeitgestempelter JSON-Export für Overlays.
+4. **D3 Erklärbarkeit der Entscheidungen:** In der Entscheidungsleiste steht „Warum jetzt“ (Druck auf den Akteur mit Gegnername und Abstand, offene Passwege, Risiko je Option aus der vorhandenen Bewertung). Die Konsequenzkarte zeigt den tatsächlichen Ausgang gegen die Einschätzung. Die Analyse erklärt nur; sie gibt keine Absichten, Ballkontakte oder Entscheidungen vor.
+5. **Foundry-Schnittstelle (vorbereitet, nicht aktiv):**
+   - Client-Adapter, der strukturierte Fakten an einen serverseitigen Endpunkt schickt; ohne konfigurierten Endpunkt aus.
+   - Endpunkt-Code als Azure Function mit Grenzen für Anfragen, Länge und Kosten; Schlüssel nur serverseitig.
+   - Tests für „aus“, Fehler und Zeitüberschreitung.
+6. **D4 Bildqualität** der Entscheidungsszenen (Spielergröße, Kamera, Licht, Overlays, Intelligence-Anzeige), belegt durch neue Browser-Screenshots.
+7. **D5 Deployment vorbereitet:** Vite-Basis-Pfad und GitHub-Actions-Workflow, der nur manuell auslösbar ist. Nicht veröffentlicht.
+8. **D6 Paket:** `submission/PITCH_EN.md`, `DEMO_SCRIPT_EN.md`, `SUBMISSION_CHECKLIST.md`, neues englisches `README.md`, Demovideo (< 2 min) aus echten Browseraufnahmen.
+9. **D7 Abschluss:** Typecheck, alle Tests, Build, Browserprüfungen (beide Modi, beide Sprachen, Cloud-Fehlerfälle), Bericht §12, ein PR.
+
+### 12.2 D1 Offizielle Anforderungen – Compliance-Matrix
+
+Die Regeln wurden vollständig gelesen (Stand 22.10.2026). Die Matrix mit Anforderung, Nachweis, fehlendem Teil und Arbeitsschritt steht in [`submission/SUBMISSION_CHECKLIST.md`](submission/SUBMISSION_CHECKLIST.md).
+
+Kernpunkte:
+- **Erfüllt:**
+  - Öffentliches Repository (geprüft mit `gh repo view`).
+  - Neues Projekt: Repository vom 15.10.2026, also nach dem Registrierungsbeginn am 29.09.
+  - Fünfstufige Pipeline der Challenge.
+  - Englische Materialien.
+  - Synthetische Daten mit Beispieldatensatz.
+  - Keine fremden Assets. Laufzeit-Abhängigkeiten nur three.js (MIT) und Rapier (Apache-2.0).
+- **Vorbereitet, Benutzeraktion nötig:**
+  - Öffentliche Demo (GitHub Pages).
+  - Video hochladen.
+  - Kategorie wählen.
+  - Lizenz entscheiden: Das Repository hat keine LICENSE-Datei.
+- **Größtes Risiko:** Stage One der Bewertung ist pass/fail und prüft, ob das Projekt die Hackathon-Technologien „reasonably applies“. **Derzeit läuft keine Microsoft-/Azure-Technologie produktiv.** Die Foundry-Anbindung ist nur vorbereitet.
+
+### 12.3 Umsetzung
+
+**Sprache:**
+- Englisch ist Standard, Deutsch umschaltbar (`src/i18n.ts`, `tr(en, de)` direkt an jeder Textstelle).
+- Die Sprache geht über die Konfiguration in den Simulations-Worker. So sind auch die Orchestrator-Texte (Optionen, Lagen) in der Seitensprache.
+- Foul-Begründungen sind im Schiedsrichter jetzt Codes (`FoulReason`); erst die Anzeige formuliert sie. Damit steckt keine Sprache mehr im Simulationskern.
+
+**D2 Match Intelligence** (`src/intel/`, deterministisch, ohne Cloud):
+
+| Stufe | Modul | Inhalt |
+| --- | --- | --- |
+| Ingest | `board.ts` | jedes `MatchEvent` in Anzeigereihenfolge mit dem Bild seines Ticks; gezeigte Bilder höchstens alle 0,25 s |
+| Interpret | `stats.ts` | <ul><li>Pässe: Distanz, Ankunft, Schwierigkeit 1–5 aus Länge, Druck auf den Passgeber und Raumgewinn</li><li>Schüsse: Tempo, Modell-xG (`shot-model.ts`, dieselbe Kurve wie die Spieler), Ausgang</li><li>Ballbesitz und Feldanteil, Ballbesitzwechsel, Ballverluste je Zone</li><li>Druck auf den Ballführer (Verteidiger ≤ 2 m) und ob er den Ball binnen 3 s gewinnt; Druck in der gegnerischen Hälfte</li><li>Laufweg, Spitzentempo und Sprints (> 7 m/s) je Spieler</li></ul> |
+| Explain | `patterns.ts` | Torgeschichte (Herkunft, Pässe, Vorlage, Schuss), Großchance, Parade, „wer drückt“ (Feldanteil ≥ 65 % in 5 min), Kontrolle (8 Pässe in Folge), Chaos (Ballwechsel ≥ 1,6 × Schnitt), hohes Pressing (≥ 4 Gewinne, Quote ≥ Gegner + 10 Punkte), Gefahr, härtester Schuss, Ergebnis jeder Nutzerentscheidung, Halbzeit- und Schlusszusammenfassung |
+| Render | `narrator.ts`, `ui/intel-panel.ts` | Fan- und Analystentexte in EN/DE; Panel neben dem Spiel; Namensschild des Fokusspielers mit Sprinttempo (`render/name-tag.ts`) |
+| Personalize | Startbildschirm, Taste `I` | Verein (beide Teams spielbar), Modus, Fokusspieler, Sprache; gespeichert in `localStorage` |
+
+- Jede Erkenntnis trägt ihre Zahlen und die IDs der Ereignisse, auf denen sie beruht. Der Analystenmodus zeigt sie an („events #…“).
+- Zum Abpfiff:
+  - automatischer Spielbericht (Schlusszusammenfassung, alle Tore, je Art und Team die jüngste weitere Erkenntnis);
+  - Download des JSON-Feeds `the12thman.intel/v1` mit allen Texten in beiden Modi und Sprachen.
+- `npm run intel` exportiert Ereignisprotokoll und Intelligence einer beliebigen Partie. Beispiel: `submission/sample-data/`, Seed 7, 2 × 15, 890 KB Ereignisse, 30 Erkenntnisse.
+
+**D3 Erklärbarkeit der Entscheidungen** (`intel/moment-brief.ts`):
+- Die Entscheidungsleiste bekommt „Why it matters“, gemessen im eingefrorenen Bild:
+  - Druck auf den Akteur: Gegnername, Abstand, Annäherungstempo;
+  - in der Abwehr: Abstand zum Ballführer, Modell-xG eines Schusses von dort, eigene Spieler zwischen Ball und Tor gegen Angreifer im Umkreis von 30 m;
+  - die sicherste und die mutigste Option nach der Einschätzung der Spieler;
+  - im Analystenmodus die letzten 5 Minuten.
+- Jede Option zeigt die Breite des Passwegs, den Freiraum des Empfängers und die Einschätzung, mit Risiko-Farbe.
+- Die Einschätzung ist der Erfolgswert aus der Optionsbewertung des Orchestrators (`DecisionOption.estimate`), keine neue Schätzung.
+- Die Analyse gibt keine Absichten, Ballkontakte oder Entscheidungen vor.
+- „Agentenrollen“ werden nicht als LLM-Agenten behauptet:
+  - Die Spieler sind Simulationsagenten (Wahrnehmung, Charakter, Gedächtnis).
+  - Die Intelligence besteht aus getrennten Stufen mit eigener Aufgabe und gemeinsamem Zustand (`IntelBoard`).
+
+**Foundry-Schnittstelle (vorbereitet, nicht aktiv):**
+- `src/intel/foundry/narrate-core.ts`:
+  - Eingangsprüfung: Größe, bekannte Art, flache Fakten.
+  - Limits: 20 Anfragen je Client in 10 min, 2000 am Tag, 120 Tokens, Temperatur 0,4.
+  - Prompt: nur Fakten.
+  - Zahlenwächter: Eine Antwort mit einer Zahl, die nicht in den Fakten steht, wird verworfen.
+- `narration-client.ts` (Browser):
+  - Ohne `VITE_NARRATION_URL` aus.
+  - Höchstens alle 8 s, 30 Anfragen pro Sitzung, 6 s Zeitlimit.
+  - Status und Fehler stehen im Analystenmodus sichtbar.
+  - Antworten werden als „Worded by Microsoft Foundry“ gekennzeichnet.
+- `api/src/functions/narrate.ts`: Azure Function v4, Anmeldung mit `@azure/ai-projects` und `DefaultAzureCredential`, also verwaltete Identität ohne Schlüssel. Das entspricht dem TypeScript-Weg im Foundry-Quickstart.
+- **Nicht gebaut, nicht bereitgestellt, nie gegen Azure ausgeführt** (Vorgabe des Auftraggebers: Azure zurückgestellt).
+
+**D4 Bild:**
+- Die TV-Kamera arbeitet im Live-Spiel mit 27° statt 36° Bildwinkel; die Spieler sind etwa 1,35 × größer.
+- Die Entscheidungskamera bleibt bei 36°, und ihr Bildausschnitt wird für genau diesen Winkel berechnet.
+- Zur nahen Seitenlinie folgt die Kamera dem Ball stärker (bis 1,0). Der Einwurf-Kameratest blieb so grün; ohne diese Anpassung schlug er fehl.
+- Zweites Flutlicht als Gegenlicht ohne Schatten.
+- Vergleichsbild aus gleichem Seed und gleicher Szene: `docs/phase-d/01-broadcast-before-after.jpg`.
+- Neue Panels und Startbildschirm im Design der Variablen.
+
+**D5 Deployment (vorbereitet, nicht veröffentlicht):**
+- `vite.config.ts` hat einen Basispfad über `VITE_BASE`.
+- `.github/workflows/pages.yml` startet nur manuell (`workflow_dispatch`) mit Typecheck, Tests, Build und Pages-Deploy.
+- Pages ist im Repository nicht aktiviert (`gh api …/pages` → 404). Ein Merge veröffentlicht also nichts.
+- Ein Build mit `/football/` als Basis lief im Browser unter `vite preview --base /football/`: 3 Momente, 0 Fehler, 60 FPS. Der Worker-Chunk und die WASM-Physik werden unter dem Unterpfad gefunden.
+
+**D6 Paket:**
+- `submission/PITCH_EN.md`, `DEMO_SCRIPT_EN.md`, `SUBMISSION_CHECKLIST.md`, `sample-data/`; neues englisches `README.md`.
+- Video `video-output/the-12th-man-demo.mp4` (Endstand): **86,9 s**, 1600 × 900, 30 fps, nur echte Bildschirmaufnahmen, Untertitel eingebrannt, keine Musik, keine Stimme. Nicht im Repository, weil es 52 MB groß ist.
+- Erzeugt mit `scripts/video/record-demo.mjs` (Chrome-Screencast einer echten Sitzung, Seed 11, 2 × 5, 7207 Bilder, 8 Entscheidungen, 0 Fehler) und `build-video.mjs` (ffmpeg).
+- Der Abspann behauptet keine Foundry-Integration („prepared – see repository status“).
+
+### 12.4 Was im Browser wirklich getestet wurde (Produktions-Build, Chrome headless, Intel Iris Xe)
+
+| Lauf | Ergebnis |
+| --- | --- |
+| 2 × 15 Sitzung, Seed 7, Fan, Fokusspieler, Bedenkzeit 5–10 s | **7:16 min** Nutzerzeit, 4:02 Rechenzeit, 11 Momente, alle korrekt erfasst (10 gewählt, 1 überlassen), 0 s Stillstand, FPS 56 live / 60 verdichtet, 29 Erkenntnisse in 8 Arten, 4302 Ereignisse und 5086 Bilder verarbeitet, 0 Fehler |
+| Desktop 2 × 5, Seed 7, Fan | 4 Momente, 0 verdeckte Beteiligte, 55–57 FPS, 0 Fehler |
+| Analyst, Deutsch (`lang=de`), Seed 23 | alle Texte deutsch inklusive Orchestrator; Status „KI-Formulierung … aus“; 4 Momente, 0 verdeckt, 0 Fehler |
+| Schmal 800 × 900, Seed 7 | 5 Momente, 0 verdeckte Beteiligte, 55/60 FPS, 0 Fehler |
+| Auswärtsteam (`team=1`), Analyst | 4 Momente für Northgate, 0 verdeckt, 0 Fehler |
+| Pages-Basis `/football/` | siehe D5 |
+| Cloud-Fehlerfall: Build mit unerreichbarem `VITE_NARRATION_URL`, Analyst | Partie läuft normal (4 Momente, 10 Erkenntnisse, 0 Fehler); Status sichtbar: „AI narration (Microsoft Foundry): error – Failed to fetch. Local texts shown.“ |
+
+**Im Prüfskript gefunden und behoben (kein Produktfehler):**
+- Es bemerkte einen Moment während einer FPS-Messung erst spät. Der Countdown lief dann ab, die App entschied korrekt per Zeitablauf. Die Bedenkzeit richtet sich jetzt nach dem tatsächlich verbleibenden Countdown.
+- Zwei sporadische Startabbrüche: Chrome bekommt jetzt bis zu 40 s statt 15 s.
+
+**In der eigenen Sichtprüfung gefunden und behoben:**
+- **Vertauschte Herkunft im Torbericht:** Die Zone ist aus Sicht des verlierenden Teams gespeichert.
+- **„Pressing greift“ war kein hohes Pressing:** Es fehlte der Filter auf die gegnerische Hälfte; die Meldung kam zu häufig.
+- **Rundungs-Rekorde:** „95 km/h, bisher 95“.
+- **Elfmeter-Ausgang:** Er hieß „Ball im Aus“ statt „Schuss daneben“.
+- **Falsche Vorlage bei einem Elfmetertor:** Es wurde ein Pass von *vor* dem Elfmeter genannt. Ein Regressionstest schlägt ohne die Korrektur fehl.
+- **Startbildschirm:** Die Auswahl war nicht hervorgehoben.
+- **Leiste:** „What the players would do“ brach senkrecht um.
+- **Spielbericht:** Er wiederholte dieselbe Meldung viermal und ließ das erste Tor weg.
+- **Text „previous best – km/h“** beim ersten harten Schuss.
+
+### 12.5 Tests
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npm run check` | `tsc` fehlerfrei, **29 Testdateien / 164 Tests bestanden** (4 nur über eigene Befehle), Build erfolgreich |
+| Neu: `intel/intel.test.ts` (6) | <ul><li>Echte 2 × 4-Partie: Jede zitierte Ereignis-ID existiert; Tore, Schüsse und Ballbesitzwechsel gleich `matchStats`; jede Nutzerentscheidung bekommt ein Ergebnis</li><li>Texte in beiden Modi und Sprachen vollständig und verschieden</li><li>Export bei Wiederholung identisch</li><li>Begründungen für jeden echten Moment, die Einschätzungen exakt die des Orchestrators</li><li>Elfmetertor ohne falsche Vorlage</li><li>Passschwierigkeit</li></ul> |
+| Neu: `intel/foundry/foundry.test.ts` (7) | Unit-Tests der eigenen Logik mit Ersatz-`fetch`: Eingangsprüfung, Prompt, Zahlenwächter, Limits; Client aus ohne URL, sendet Namen statt IDs, Abstand und Sitzungsgrenze, Fehler- und Zeitüberschreitungsstatus. **Kein Integrationsnachweis.** |
+| Angepasst | Schiedsrichtertests auf Begründungscodes; Kameratests mit engerem Winkel grün |
+| `npm run sim` (2 × 45, Seed 2026) | Abpfiff regulär, bestanden |
+| `npm run intel` (Seed 7, 2 × 15) | Export bestanden, Beispieldatensatz in `submission/sample-data/` |
+
+### 12.6 Microsoft-Dienste, URLs, offene Benutzeraktionen, Risiken
+
+**Tatsächlich angesprochene Microsoft-Dienste:** keine. Es wurde keine Azure-Ressource erstellt und kein Foundry-Modell aufgerufen. Benutzt wurde GitHub (öffentliches Repository, PR); der Pages-Workflow ist vorbereitet, aber nie gelaufen.
+
+**Verifizierte öffentliche URLs:**
+- Repository: https://github.com/sasaisaschi/football (öffentlich).
+- Eine öffentliche Demo-URL existiert noch nicht, weil auf Wunsch nicht veröffentlicht wurde. Die lokale `vite preview` zählt ausdrücklich nicht.
+
+**Benutzeraktionen bis zur Abgabe (28.10.2026, 07:59 MEZ):**
+1. Entscheidung zur Microsoft-Technologie. Empfohlenes Minimum: Foundry-Projekt mit Modell-Deployment und die Function aus `api/` bereitstellen (Schritte in `api/README.md`), dann `NARRATION_URL` setzen.
+2. GitHub Pages aktivieren (*Source: GitHub Actions*), den Workflow manuell starten und die URL im privaten Fenster prüfen. Online lassen bis 10.11.2026.
+3. Video auf YouTube oder Vimeo hochladen (öffentlich), URL eintragen. Wird Foundry bereitgestellt: Video neu aufnehmen mit sichtbarer Foundry-Formulierung (`DEMO_SCRIPT_EN.md`).
+4. Kategorie wählen. Empfehlung: Grand Prize; Foundry-Kategorie nur bei laufender Integration; Multi-Agent nicht.
+5. Lizenz entscheiden.
+6. Formular ausfüllen (Text aus `PITCH_EN.md` und der Checkliste).
+
+**Risiken:**
+- **Stage One (pass/fail):** Ohne laufende Microsoft-Technologie kann die Einreichung an der Vorprüfung scheitern. Das ist der wichtigste offene Punkt.
+- **Hardware:** Die Demo braucht WebGL 2 und WASM-SIMD. Auf schwacher Hardware dauert eine Sitzung länger (2 × 15 gemessen 7:16 min auf Intel Iris Xe).
+- **Video:** Es zeigt den Endstand ohne Foundry. Wird Foundry bereitgestellt, ist es neu aufzunehmen: `record-demo.mjs`, dann `build-video.mjs`, zusammen etwa 7 min.
+- **Spielstatistik:** Sie bleibt wie in §11 (Schüsse 16/90). Das ist kein Abgabehindernis.

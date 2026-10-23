@@ -4,7 +4,7 @@ import { TEAMS } from './engine/rosters';
 import type { DecisionMoment, DecisionSource, MatchEvent, MatchSnapshot, PlayerProfile, TeamId, Vec3 } from './engine/types';
 import { attackSign } from './physics/pitch-geometry';
 import { createBallView } from './render/ball-view';
-import { CameraDirector } from './render/camera-director';
+import { CameraDirector, WIDE_FOV } from './render/camera-director';
 import { frameMoment } from './render/framing';
 import { lerpBall, lerpPlayer } from './render/interpolate';
 import { PlayerFigure } from './render/player-view';
@@ -19,11 +19,20 @@ import { DecisionPanel } from './ui/decision-panel';
 import { Hud } from './ui/hud';
 import { showResult, type SessionMetrics } from './ui/result-screen';
 import type { AgentMemory } from './ai/agent-memory';
+import { lang, tr } from './i18n';
+import { IntelBoard } from './intel/board';
+import { briefMoment } from './intel/moment-brief';
+import type { Personalization } from './intel/types';
+import { NameTag } from './render/name-tag';
+import { IntelPanel } from './ui/intel-panel';
+import { NarrationClient } from './intel/foundry/narration-client';
 
 /** `memory`: what the players remember from earlier matches; `saveMemory` keeps the updated memory after full time. */
 export type AppOptions = {
   seed: number; halfMinutes: number; cooldown: number; maxPerHalf: number; timeoutSeconds: number; userTeam: TeamId; condense: boolean;
   memory: AgentMemory | null; saveMemory: (m: AgentMemory) => void;
+  /** How the match intelligence reaches this viewer; `savePrefs` remembers a change made during the match. */
+  prefs: Personalization; savePrefs: (p: Personalization) => void;
 };
 
 /** Wall seconds a status line stays. */
@@ -50,6 +59,9 @@ export class MatchApp {
   private readonly hud: Hud;
   private readonly panel: DecisionPanel;
   private consequence: ConsequenceCard | null = null;
+  private intel: IntelBoard | null = null;
+  private intelPanel: IntelPanel | null = null;
+  private nameTag: NameTag | null = null;
   private cursor = 0;
   private wall = 0;
   private lastDanger = 0;
@@ -67,7 +79,7 @@ export class MatchApp {
     private readonly audio: CrowdAudio,
     readonly options: AppOptions,
   ) {
-    this.client = new SimClient({ seed: options.seed, halfMinutes: options.halfMinutes, userTeam: options.userTeam, cooldown: options.cooldown, maxPerHalf: options.maxPerHalf, timeoutSeconds: options.timeoutSeconds, memory: options.memory ?? undefined });
+    this.client = new SimClient({ seed: options.seed, halfMinutes: options.halfMinutes, userTeam: options.userTeam, cooldown: options.cooldown, maxPerHalf: options.maxPerHalf, timeoutSeconds: options.timeoutSeconds, memory: options.memory ?? undefined, lang: lang() });
     this.camera = new CameraDirector(cam);
     this.hud = new Hud(options.halfMinutes);
     this.metrics = { wallSeconds: 0, cpuSeconds: 0, simSeconds: 0, moments: 0, halfMinutes: options.halfMinutes };
@@ -77,7 +89,7 @@ export class MatchApp {
     window.addEventListener('keydown', ev => {
       if ((ev.key === 'l' || ev.key === 'L') && !this.panel.open) {
         this.options.condense = !this.options.condense;
-        this.hud.setStatus(this.options.condense ? 'Ruhige Phasen werden verdichtet.' : 'Alles live – keine Verdichtung.', this.wall, STATUS_SECONDS);
+        this.hud.setStatus(this.options.condense ? tr('Quiet phases are condensed.', 'Ruhige Phasen werden verdichtet.') : tr('Everything live – no condensing.', 'Alles live – keine Verdichtung.'), this.wall, STATUS_SECONDS);
       }
     });
   }
@@ -89,7 +101,16 @@ export class MatchApp {
     app.figures = app.profiles.map(p => { const f = new PlayerFigure(p, TEAMS[p.team]); scene.add(f.root); return f; });
     app.consequence = new ConsequenceCard(app.profiles);
     host.append(app.consequence.el);
-    app.hud.setStatus(`${TEAMS[0].name} gegen ${TEAMS[1].name} – du entscheidest für ${TEAMS[options.userTeam].name}.`, 0, STATUS_SECONDS);
+    // Match intelligence: the board takes every event and displayed frame; the panel shows it in the viewer's mode.
+    const intel = new IntelBoard(app.profiles, options.halfMinutes);
+    app.intel = intel;
+    // Optional AI narration through the project's own Foundry endpoint; without VITE_NARRATION_URL it stays off.
+    app.intelPanel = new IntelPanel(intel, app.profiles, options.prefs, options.savePrefs, new NarrationClient(import.meta.env.VITE_NARRATION_URL || undefined));
+    host.append(app.intelPanel.el);
+    intel.onInsight(i => app.intelPanel!.push(i));
+    const focus = options.prefs.focusPlayer;
+    if (focus !== null) { app.nameTag = new NameTag(app.profiles[focus], TEAMS[app.profiles[focus].team].kit); scene.add(app.nameTag.sprite); }
+    app.hud.setStatus(tr(`${TEAMS[0].name} vs ${TEAMS[1].name} – you make the calls for ${TEAMS[options.userTeam].name}.`, `${TEAMS[0].name} gegen ${TEAMS[1].name} – du entscheidest für ${TEAMS[options.userTeam].name}.`), 0, STATUS_SECONDS);
     return app;
   }
 
@@ -104,13 +125,14 @@ export class MatchApp {
       events: this.client.events, produced: this.client.produced, shownTick: this.playback.tick, mode: this.playback.mode, speed: this.playback.speed,
       moment: this.client.moment, deciding: this.panel.open, finished: this.finished, metrics: this.metrics, cpuMs: this.client.cpuMs,
       chronicle: this.consequence?.chronicle ?? [], snapshot: this.shown, camera: this.cam, director: this.camera,
+      intel: this.intel ? { insights: this.intel.insights, ingested: this.intel.ingested, mode: this.options.prefs.mode, export: () => this.intelExport() } : null,
     };
   }
 
   /** One animation frame; `draw` false: advance the pacing and events only, without posing the picture. */
   frame(dt: number, draw = true): void {
     this.wall += dt;
-    if (this.client.error) { this.hud.setStatus(`Simulationsfehler: ${this.client.error}`, this.wall, 3600); return; }
+    if (this.client.error) { this.hud.setStatus(`${tr('Simulation error', 'Simulationsfehler')}: ${this.client.error}`, this.wall, 3600); return; }
     if (this.client.produced < 0 || !this.consequence) return;
     if (!this.panel.open && !this.finished) {
       this.playback.update(dt, {
@@ -147,6 +169,13 @@ export class MatchApp {
     this.stadium.update(this.wall, excitement, celebrate);
     this.audio.update(s, this.options.userTeam);
     this.hud.update(s, this.playback.mode, this.playback.speed, this.panel.open, this.wall);
+    this.intel?.observe(s);
+    this.intelPanel?.update(s, this.wall);
+    this.nameTag?.update(s, this.cam);
+  }
+
+  private intelExport() {
+    return this.intel!.export({ seed: this.options.seed, userTeam: this.options.userTeam, score: this.shown?.score ?? [0, 0] });
   }
 
   /** Classic pace when the user switched condensing off: time-lapse ×3 only in really quiet play (Phase A guards). */
@@ -168,13 +197,15 @@ export class MatchApp {
     const line = commentaryFor(e, { profiles: this.profiles, score: s?.score ?? [0, 0] });
     if (line) this.hud.log(line, s ? this.hud.clockText(s) : '00:00');
     this.consequence!.onEvent(e);
+    // The event with the frame of its own tick: positions and pressure exactly as they were when it happened.
+    this.intel?.ingest(e, this.client.frame(e.tick));
     if (CALM_BREAKERS.has(e.type) || (e.type === 'swing' && e.action !== 'pass' && e.action !== 'dribble' && e.action !== 'control')) this.lastDanger = this.wall;
     if (e.type === 'goal') {
       this.celebrateUntil = this.wall + 6;
       this.celebrateTeam = e.team;
-      if (s) this.hud.mark('goal', this.hud.elapsed(s), e.team, `Tor ${TEAMS[e.team].short}`);
+      if (s) this.hud.mark('goal', this.hud.elapsed(s), e.team, `${tr('Goal', 'Tor')} ${TEAMS[e.team].short}`);
     }
-    if (e.type === 'moment' && s) { this.hud.mark('moment', this.hud.elapsed(s), e.team, 'Entscheidung'); this.metrics.moments++; }
+    if (e.type === 'moment' && s) { this.hud.mark('moment', this.hud.elapsed(s), e.team, tr('Decision', 'Entscheidung')); this.metrics.moments++; }
     // The substitute takes over the replaced player's position; the shared profiles follow the worker's.
     if (e.type === 'substitution') this.profiles[e.on].role = e.role;
   }
@@ -185,7 +216,10 @@ export class MatchApp {
     const s = this.client.frame(this.client.momentTick ?? this.playback.tick);
     s.moment = m;
     this.hud.clearStatus();
-    this.panel.show(m, this.wall, s, this.profiles);
+    this.intel?.noteMoment(m);
+    const brief = this.intel ? briefMoment(m, s, this.profiles, this.intel.stats, this.options.prefs.mode) : undefined;
+    this.panel.show(m, this.wall, s, this.profiles, brief);
+    this.intelPanel?.setDeciding(true);
     this.overlay.show(m, s, id => this.profiles[id].team);
     this.overlay.focus(Math.max(0, m.options.findIndex(o => o.id === m.defaultOptionId)));
     const points: Vec3[] = [s.ball.position];
@@ -206,7 +240,7 @@ export class MatchApp {
     const fp = this.panel.footprint();
     // A margin beside the panel and below the score bar, so markings around the outermost players stay clear too.
     const safe = { left: -0.92, right: 1 - (2 * (fp.right + 64)) / w, bottom: -1 + (2 * (fp.bottom + 40)) / h, top: 1 - (2 * 110) / h };
-    this.camera.decisionFrame = frameMoment(points, attackSign(m.team, s.half), this.cam.aspect, this.cam.fov, safe);
+    this.camera.decisionFrame = frameMoment(points, attackSign(m.team, s.half), this.cam.aspect, WIDE_FOV, safe);
   }
 
   private resolve(optionId: string, by: DecisionSource): void {
@@ -215,9 +249,10 @@ export class MatchApp {
     if (!m || !s) return;
     const option = m.options.find(o => o.id === optionId)!;
     this.overlay.hide();
+    this.intelPanel?.setDeciding(false);
     this.consequence!.start(m, optionId, by, this.hud.clockText(s), s.time, s.possession);
     this.client.resolve(optionId, by);
-    if (by !== 'user') this.hud.setStatus(by === 'delegated' ? `Du überlässt es den Spielern: ${option.label}.` : `Zeit abgelaufen – die Spieler entscheiden selbst: ${option.label}.`, this.wall, STATUS_SECONDS);
+    if (by !== 'user') this.hud.setStatus(by === 'delegated' ? tr(`You leave it to the players: ${option.label}.`, `Du überlässt es den Spielern: ${option.label}.`) : tr(`Time ran out – the players decide themselves: ${option.label}.`, `Zeit abgelaufen – die Spieler entscheiden selbst: ${option.label}.`), this.wall, STATUS_SECONDS);
   }
 
   private showFullTime(): void {
@@ -228,14 +263,16 @@ export class MatchApp {
     this.metrics.simSeconds = s.time;
     let saved: string | null = null;
     if (this.client.memory) {
-      try { this.options.saveMemory(this.client.memory); } catch (err) { saved = `Spielergedächtnis nicht gespeichert: ${err instanceof Error ? err.message : String(err)}`; }
+      try { this.options.saveMemory(this.client.memory); } catch (err) { saved = `${tr('Player memory not saved', 'Spielergedächtnis nicht gespeichert')}: ${err instanceof Error ? err.message : String(err)}`; }
     }
-    showResult(this.host, s.score, this.consequence!.chronicle, this.metrics, { before: this.options.memory, after: this.client.memory, profiles: this.profiles, team: this.options.userTeam, error: saved });
+    showResult(this.host, s.score, this.consequence!.chronicle, this.metrics, { before: this.options.memory, after: this.client.memory, profiles: this.profiles, team: this.options.userTeam, error: saved },
+      { insights: this.intel?.insights ?? [], prefs: this.options.prefs, feed: () => this.intelExport() });
   }
 
   dispose(): void {
     for (const f of this.figures) this.scene.remove(f.root);
     this.scene.remove(this.ball.mesh, this.overlay.group);
+    if (this.nameTag) { this.scene.remove(this.nameTag.sprite); this.nameTag.dispose(); }
     this.client.dispose();
   }
 }

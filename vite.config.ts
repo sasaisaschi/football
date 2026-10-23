@@ -2,6 +2,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // GitHub Pages serves the site under /<repository>/; the deploy workflow sets VITE_BASE=/football/. Locally: /.
+  base: process.env.VITE_BASE ?? '/',
   // The simulation runs in a module worker (sim/sim-worker.ts) with the physics chunk split off.
   worker: { format: 'es' },
   build: {
