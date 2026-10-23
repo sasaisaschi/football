@@ -1,7 +1,6 @@
 import type { AgentMemory } from '../ai/agent-memory';
 import type { DecisionMoment, DecisionSource, MatchEvent, MatchSnapshot, PlayerProfile } from '../engine/types';
 import { decodeFrame } from './frame-codec';
-import type { KeyTick } from './playback';
 import type { Batch, RunnerConfig } from './runner';
 import type { FromWorker, ToWorker } from './sim-worker';
 
@@ -16,7 +15,6 @@ const KEEP_BEHIND = 10;
 export class SimClient {
   profiles: PlayerProfile[] = [];
   readonly events: MatchEvent[] = [];
-  readonly keys: KeyTick[] = [];
   moment: DecisionMoment | null = null;
   momentTick: number | null = null;
   produced = -1;
@@ -69,10 +67,6 @@ export class SimClient {
     this.minds = b.minds;
     for (const e of b.events) {
       this.events.push(e);
-      if (e.type === 'goal') this.keys.push({ tick: e.tick, kind: 'goal' });
-      if (e.type === 'swing' && e.action === 'shot') this.keys.push({ tick: e.tick, kind: 'shot' });
-      if (e.type === 'moment') this.keys.push({ tick: e.tick, kind: 'moment' });
-      if (e.type === 'decision') this.keys.push({ tick: e.tick, kind: 'decision' });
       for (const l of this.listeners) l(e);
     }
     if (b.moment) { this.moment = b.moment; this.momentTick = this.produced; }
@@ -102,6 +96,16 @@ export class SimClient {
       this.send({ type: 'display', tick: Math.floor(tick) });
     }
     while (this.chunks.length > 1 && this.chunks[0].first + this.chunks[0].count < tick - KEEP_BEHIND * 60) this.chunks.shift();
+  }
+
+  /** Stops or resumes the computing in the worker (the manager's pause). */
+  pause(paused: boolean): void {
+    this.send({ type: 'pause', paused });
+  }
+
+  /** Frames kept in memory (for the browser check). */
+  get keptFrames(): number {
+    return this.chunks.reduce((n, c) => n + c.count, 0);
   }
 
   resolve(optionId: string, by: DecisionSource): void {

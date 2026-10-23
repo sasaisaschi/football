@@ -54,6 +54,11 @@ export class ConsequenceCard {
     if (m.category === 'coach') this.finish(fx.type === 'substitution' ? tr(`${this.name(fx.on)} comes on at the halfway line for ${this.name(fx.off)}.`, `${this.name(fx.on)} kommt an der Mittellinie für ${this.name(fx.off)}.`) : fx.type === 'none' ? tr('The team carries on as before.', 'Die Mannschaft spielt weiter wie bisher.') : tr('The instruction now holds for the whole second half.', 'Die Vorgabe gilt ab jetzt für die ganze zweite Halbzeit.'));
   }
 
+  /** Is a decision's consequence still being followed (no result yet)? */
+  get following(): boolean {
+    return this.current !== null;
+  }
+
   private name(id: number): string {
     return `${this.profiles[id].name} (${this.profiles[id].number})`;
   }
@@ -113,6 +118,11 @@ export class ConsequenceCard {
     this.current = null;
     this.el.classList.add('done');
     this.hideAt = -1; // hide after a while of wall time, see tick()
+  }
+
+  /** Off screen at once (the scene is over); a consequence still being followed keeps being followed. */
+  hide(): void {
+    this.el.hidden = true;
   }
 
   /** Wall-clock housekeeping: the card stays a few seconds after its result. */

@@ -13,8 +13,13 @@ const ROOF_UNDERSIDE = TERRACE_BASE + 30 * 0.42 + 9 - 0.3, ROOF_REACH = 4;
 /** Clearance the camera keeps above the terraces, below the roofs and inside the back walls; highest point over the open pitch (m). */
 const CLEARANCE = 4, OPEN_SKY = 70;
 const AZIMUTHS = 16;
-/** Camera elevations tried (rad); the steep ones are needed when only a narrow band of the screen is free. */
-const ELEVATIONS = [0.55, 0.68, 0.82, 1.0, 1.2];
+/**
+ * Camera elevations tried (rad); the steep ones are needed when only a narrow band of the screen is free. The low ones
+ * (Phase E) give the scene's cinematic view: closer to eye level, the near players large, the lanes in depth.
+ */
+const ELEVATIONS = [0.3, 0.42, 0.55, 0.68, 0.82, 1.0, 1.2];
+/** How much a low view is preferred over an equally tight steeper one. */
+const LOW_BONUS = (elevation: number) => (elevation < 0.5 ? 0.88 : 1);
 
 const camera = new THREE.PerspectiveCamera();
 const v = new THREE.Vector3();
@@ -156,7 +161,7 @@ function frameWithin(points: readonly Vec3[], attackDir: 1 | -1, aspect: number,
       // Behind the actor looking up the pitch reads best; straight down the line of play from in front, worst.
       const along = -dirX * attackDir;
       // Steep views read less like football: they only win when nothing flatter fits nearly as tight.
-      const score = hi * (1.25 - 0.25 * along) * (dirZ > 0 ? 0.92 : 1) * (elevation > 0.9 ? 1.35 : 1);
+      const score = hi * (1.25 - 0.25 * along) * (dirZ > 0 ? 0.92 : 1) * (elevation > 0.9 ? 1.35 : 1) * LOW_BONUS(elevation);
       if (!best || score < best.score) best = { score, position: p.clone(), aimed: aimedTarget() };
     }
   }

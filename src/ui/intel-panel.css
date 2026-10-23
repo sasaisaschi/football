@@ -52,3 +52,6 @@
   .intel { top: 96px; width: calc(100% - 2 * var(--space-4)); max-height: 34vh; }
   .intel[data-mode='analyst'] .intel-feed { display: none; }
 }
+
+/* Docked in the manager view: part of the dashboard instead of floating over the 3D picture. */
+.intel.intel-docked { position: static; width: auto; flex: 1; max-height: none; min-height: 0; backdrop-filter: none; background: var(--c-panel); }

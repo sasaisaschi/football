@@ -6,7 +6,7 @@ import { TEAMS } from '../src/engine/rosters';
 import type { MatchSnapshot, PlayerProfile } from '../src/engine/types';
 import { createBallView } from '../src/render/ball-view';
 import { createPitchView } from '../src/render/pitch-view';
-import { PlayerFigure } from '../src/render/player-view';
+import { Footballer, loadFootballer } from '../src/render/footballer';
 import { createStadiumView } from '../src/render/stadium-view';
 import data from './scenes.json';
 
@@ -37,8 +37,9 @@ const ball = createBallView();
 world.add(ball.mesh);
 const s = scene.snapshot;
 ball.update(s.ball.position, s.ball.rotation);
+const model = await loadFootballer('/models/footballer.glb');
 for (const p of scenes.profiles) {
-  const f = new PlayerFigure(p, TEAMS[p.team]);
+  const f = new Footballer(p, TEAMS[p.team], model);
   world.add(f.root);
   // The pose of a single frame; the decorative stride takes its phase from the frame number, so it is the same each time.
   (f as unknown as { gait: number }).gait = (s.tick + p.id) * 0.37;

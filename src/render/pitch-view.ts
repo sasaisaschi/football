@@ -5,13 +5,18 @@ import { PITCH } from '../physics/pitch-geometry';
 /** Turf with mowing stripes, IFAB markings (one merged mesh) and goals with nets, at physics scale. */
 export function createPitchView(): THREE.Group {
   const group = new THREE.Group();
-  group.add(turf());
-  group.add(markings());
+  const lines = markings();
+  group.add(turf(lines.segments));
+  group.add(lines.mesh);
   for (const side of [-1, 1] as const) group.add(goal(side));
   return group;
 }
 
-function turf(): THREE.Mesh {
+/**
+ * Turf texture. The markings are painted into it as well: far away a 12 cm line is thinner than a pixel and the line
+ * geometry breaks into dashes, while the texture's mipmaps fade it smoothly; up close the crisp geometry lies on top.
+ */
+function turf(segments: readonly [number, number, number, number][]): THREE.Mesh {
   const size = 2048;
   const canvas = document.createElement('canvas');
   canvas.width = size; canvas.height = size / 2;
@@ -28,10 +33,17 @@ function turf(): THREE.Mesh {
     img.data[i] += n; img.data[i + 1] += n * 1.2; img.data[i + 2] += n * 0.6;
   }
   c.putImageData(img, 0, 0);
+  const w = PITCH.length + PITCH.runOff * 2 + 6, h = PITCH.width + PITCH.runOff * 2 + 6;
+  const px = (x: number) => ((x + w / 2) / w) * size, pz = (z: number) => ((z + h / 2) / h) * (size / 2);
+  c.strokeStyle = '#e4ece4';
+  c.lineWidth = (PITCH.lineWidth / w) * size;
+  c.lineCap = 'round';
+  c.beginPath();
+  for (const [x1, z1, x2, z2] of segments) { c.moveTo(px(x1), pz(z1)); c.lineTo(px(x2), pz(z2)); }
+  c.stroke();
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
-  const w = PITCH.length + PITCH.runOff * 2 + 6, h = PITCH.width + PITCH.runOff * 2 + 6;
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.95 }));
   texture.repeat.set(1, 1);
   mesh.rotation.x = -Math.PI / 2;
@@ -39,12 +51,14 @@ function turf(): THREE.Mesh {
   return mesh;
 }
 
-function markings(): THREE.Mesh {
+function markings(): { mesh: THREE.Mesh; segments: [number, number, number, number][] } {
   const hl = PITCH.halfLength, hw = PITCH.halfWidth, w = PITCH.lineWidth;
   const parts: THREE.BufferGeometry[] = [];
+  const segments: [number, number, number, number][] = [];
   const o = new THREE.Object3D();
   const seg = (x1: number, z1: number, x2: number, z2: number) => {
     const len = Math.hypot(x2 - x1, z2 - z1);
+    segments.push([x1, z1, x2, z2]);
     o.position.set((x1 + x2) / 2, 0.01, (z1 + z2) / 2);
     o.rotation.set(-Math.PI / 2, 0, -Math.atan2(z2 - z1, x2 - x1));
     o.updateMatrix();
@@ -80,7 +94,7 @@ function markings(): THREE.Mesh {
       arc(s * hl, c * hw, PITCH.cornerArcRadius, a1, a2, 12);
     }
   }
-  return new THREE.Mesh(mergeGeometries(parts), new THREE.MeshBasicMaterial({ color: 0xf2f7f2 }));
+  return { mesh: new THREE.Mesh(mergeGeometries(parts), new THREE.MeshBasicMaterial({ color: 0xf2f7f2 })), segments };
 }
 
 function goal(side: -1 | 1): THREE.Group {

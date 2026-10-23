@@ -8,14 +8,15 @@ import { CHEST_PART, Head } from '../physics/head';
 import { ThrowHands } from '../physics/throw-hands';
 import { throwInStand } from '../ai/throw-in';
 import { ExperienceTracker, PlayerMind } from '../ai/mind';
-import { applyMemory, type AgentMemory } from '../ai/agent-memory';
+import { applyMemory } from '../ai/agent-memory';
 import { BenchManager } from '../ai/bench-manager';
 import { PITCH, attackSign, BALL_SPEC } from '../physics/pitch-geometry';
 import { PHYSICS_DT, PhysicsWorld, physicsClock, type Contact, type ContactPart } from '../physics/world';
 import { Referee, penaltySpot, restartDistance, type Decision, type PlayerState } from '../rules/referee';
 import { SLOTS, toWorld } from '../ai/shape';
 import { createRng, type Rng } from './rng';
-import { createRoster, TEAMS } from './rosters';
+import { applyLineup, createRoster, TEAMS } from './rosters';
+import { DEFAULT_INSTRUCTION, type MatchConfig } from './match-config';
 import { chooseTaker, clampSpot, PLACE_DELAY, restartReady, type RestartState } from './restarts';
 import { engineSnapshot } from './snapshot';
 import { benchOf, canSubstitute, leavePitch, setPartsEnabled, substitute, SubstitutionLog } from './substitutions';
@@ -23,16 +24,9 @@ import type {
   BallAction, DecisionMoment, DecisionSource, MatchEvent, MatchPhase, MatchSnapshot, PlayerIntent, PlayerProfile, RestartKind, Role, SubReason, TeamId, TeamInstruction, Vec2, Vec3,
 } from './types';
 
-/**
- * `memory`: what the players remember from earlier matches (agent-memory.ts); without it they start from their traits.
- * `benchCoach`: teams whose substitutions the computer's coach makes (bench-manager.ts); the user's team changes only by
- * the user's decision.
- */
-export type MatchConfig = { seed: number; halfMinutes: number; rosterSeed?: number; memory?: AgentMemory; benchCoach?: TeamId[] };
+export { DEFAULT_INSTRUCTION, type MatchConfig } from './match-config';
 export type Director = (engine: MatchEngine) => DecisionMoment | null;
 type EventInput = MatchEvent extends infer E ? E extends MatchEvent ? Omit<E, 'id' | 'tick' | 'time'> : never : never;
-
-export const DEFAULT_INSTRUCTION: TeamInstruction = { press: 'mid', lineHeight: 0, risk: 0.5 };
 /**
  * How often a player re-plans: every tick while he plays or goes for the ball or is within NEAR_BALL of it; otherwise
  * every 2nd tick (30 Hz), and beyond FAR_FROM_BALL every 3rd (20 Hz). The bodies keep following the last plan in every
@@ -88,6 +82,8 @@ export class MatchEngine {
   constructor(readonly config: MatchConfig) {
     this.rng = createRng(config.seed);
     this.profiles = createRoster(config.rosterSeed ?? 7);
+    if (config.lineup?.length) applyLineup(this.profiles, config.lineup);
+    config.instructions?.forEach((ins, t) => { if (ins) { this.instructions[t] = { ...ins }; this.baseInstructions[t] = { ...ins }; } });
     for (const p of this.profiles) {
       // Created on their kick-off spots, so no collider ever sweeps across the pitch on the first step.
       const spot = toWorld(attackSign(p.team, 1), SLOTS[p.role].u, SLOTS[p.role].v);

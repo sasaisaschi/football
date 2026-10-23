@@ -12,3 +12,6 @@
 .consequence ol li:last-child { color: var(--c-text); }
 .consequence.done ol li:last-child { color: var(--c-warn); font-weight: 700; }
 @media (max-width: 820px) { .consequence { width: auto; right: var(--space-2); left: var(--space-2); bottom: 36px; } }
+
+/* In a scene the card sits above the letterbox bar. */
+.scene:not([hidden]) ~ .consequence { bottom: calc(7vh + var(--space-3)); }

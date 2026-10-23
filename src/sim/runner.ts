@@ -1,12 +1,19 @@
 import { MatchEngine } from '../engine/match-engine';
-import type { DecisionMoment, DecisionSource, MatchEvent, PlayerProfile, TeamId } from '../engine/types';
+import type { DecisionMoment, DecisionSource, MatchEvent, PlayerProfile, TeamId, TeamInstruction } from '../engine/types';
+import type { LineupSwap } from '../engine/rosters';
 import { Orchestrator } from '../orchestrator/orchestrator';
 import { emptyMemory, updateMemory, type AgentMemory } from '../ai/agent-memory';
 import { setLang, type Lang } from '../i18n';
 import { encodeEngineFrame, encodeFrame, frameSize } from './frame-codec';
 
-/** `lang`: the page's language; texts the orchestrator writes in the worker (options, situations) use it too. */
-export type RunnerConfig = { seed: number; halfMinutes: number; userTeam: TeamId; cooldown: number; maxPerHalf: number; timeoutSeconds: number; memory?: AgentMemory; lang?: Lang };
+/**
+ * `lang`: the page's language; texts the orchestrator writes in the worker (options, situations) use it too.
+ * `instruction` and `lineup`: the user's preparation (tactics and team sheet of the user's team) from kick-off.
+ */
+export type RunnerConfig = {
+  seed: number; halfMinutes: number; userTeam: TeamId; cooldown: number; maxPerHalf: number; timeoutSeconds: number; memory?: AgentMemory; lang?: Lang;
+  instruction?: TeamInstruction; lineup?: LineupSwap[];
+};
 
 /** Ticks simulated since the last batch: frames (one per tick, in order), the events they produced and where the match stands. */
 export type Batch = {
@@ -39,7 +46,8 @@ export class SimRunner {
   constructor(readonly config: RunnerConfig) {
     setLang(config.lang ?? 'en');
     // The other team's substitutions are made by the computer's coach; the user's only by the user.
-    this.engine = new MatchEngine({ seed: config.seed, halfMinutes: config.halfMinutes, memory: config.memory, benchCoach: [(1 - config.userTeam) as TeamId] });
+    this.engine = new MatchEngine({ seed: config.seed, halfMinutes: config.halfMinutes, memory: config.memory, benchCoach: [(1 - config.userTeam) as TeamId],
+      lineup: config.lineup, instructions: config.instruction ? (config.userTeam === 0 ? [config.instruction, undefined] : [undefined, config.instruction]) : undefined });
     this.orchestrator = new Orchestrator({ userTeam: config.userTeam, cooldown: config.cooldown, maxPerHalf: config.maxPerHalf, timeoutSeconds: config.timeoutSeconds });
     this.engine.director = this.orchestrator.attach();
     this.engine.onEvent(e => this.events.push(e));
