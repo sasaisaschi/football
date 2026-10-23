@@ -19,6 +19,11 @@ export function lerpPlayer(a: PlayerView, b: PlayerView, t: number): PlayerView 
   };
 }
 
+/** Pose all players from both adjacent simulation ticks; discrete scene state is selected separately. */
+export function lerpPlayers(a: readonly PlayerView[], b: readonly PlayerView[], t: number): PlayerView[] {
+  return a.map((player, i) => lerpPlayer(player, b[i], t));
+}
+
 /** The ball between two ticks (a placed dead ball jumps, it is not slid). */
 export function lerpBall(a: MatchSnapshot['ball'], b: MatchSnapshot['ball'], t: number): Vec3 {
   if (Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z) > 3) return b.position;
