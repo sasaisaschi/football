@@ -6,8 +6,9 @@ import type { DecisionMoment, MatchEvent, MatchSnapshot, PlayerProfile, TeamId, 
 import { tr } from '../i18n';
 import { attackSign } from '../physics/pitch-geometry';
 import { createBallView } from './ball-view';
-import { CameraDirector, WIDE_FOV } from './camera-director';
-import { frameMoment } from './framing';
+import { ATTACK_FOV, CameraDirector, WIDE_FOV } from './camera-director';
+import { OffsideLine } from './offside-line';
+import { frameAttack, frameMoment } from './framing';
 import { lerpBall, lerpPlayer } from './interpolate';
 import { NameTag } from './name-tag';
 import { Footballer, loadFootballer } from './footballer';
@@ -30,6 +31,11 @@ const CATEGORY = (m: DecisionMoment) => ({ attack: tr('Attack', 'Angriff'), tran
 export class SceneView {
   readonly el = document.createElement('div');
   readonly overlay = new TacticalOverlay();
+  private readonly offside = new OffsideLine();
+  /** An open-play scene: offside line for the team in possession, attack camera. */
+  private openPlay = false;
+  /** A shot was struck in this scene: offside no longer matters, the line goes. */
+  private shotTaken = false;
   readonly camera: CameraDirector;
   private readonly figures: Footballer[];
   private readonly ball = createBallView();
@@ -51,7 +57,7 @@ export class SceneView {
   ) {
     this.camera = new CameraDirector(cam);
     this.figures = profiles.map(p => { const f = new Footballer(p, TEAMS[p.team], model); scene.add(f.root); return f; });
-    scene.add(this.ball.mesh, this.overlay.group);
+    scene.add(this.ball.mesh, this.overlay.group, this.offside.group);
     if (o.focusPlayer !== null) { this.nameTag = new NameTag(profiles[o.focusPlayer], TEAMS[profiles[o.focusPlayer].team].kit); scene.add(this.nameTag.sprite); }
     this.el.className = 'scene';
     this.el.hidden = true;
@@ -79,6 +85,11 @@ export class SceneView {
     const r = s.restart;
     const setPiece = m.category === 'set-piece' && r && ['corner', 'free-kick', 'penalty'].includes(r.kind);
     this.camera.setPiece = setPiece ? { spot: r.position, goalX: attackSign(r.team, s.half) * 52.5, kind: r.kind } : null;
+    // Open play: the camera stands behind the attack of the team that has the ball and looks at the goal it attacks.
+    this.openPlay = m.category !== 'set-piece' && m.category !== 'coach';
+    this.shotTaken = false;
+    const attackers = s.possession ?? m.team;
+    this.camera.attackGoalX = this.openPlay ? attackSign(attackers, s.half) * 52.5 : null;
     this.camera.cutTo(setPiece ? 'set-piece' : 'follow', s);
   }
 
@@ -107,7 +118,8 @@ export class SceneView {
     }
     const w = host.clientWidth, h = host.clientHeight;
     const safe = { left: -0.92, right: 1 - (2 * (panel.right + 64)) / w, bottom: -1 + (2 * (panel.bottom + 70)) / h, top: 1 - (2 * 120) / h };
-    this.camera.decisionFrame = frameMoment(points, attackSign(m.team, s.half), this.cam.aspect, WIDE_FOV, safe);
+    const goalX = this.camera.attackGoalX;
+    this.camera.decisionFrame = goalX !== null ? frameAttack(points, s.ball.position, goalX, this.cam.aspect, ATTACK_FOV, safe) : frameMoment(points, attackSign(m.team, s.half), this.cam.aspect, WIDE_FOV, safe);
     this.camera.cutTo('decision', s);
   }
 
@@ -124,6 +136,8 @@ export class SceneView {
   end(): void {
     this.active = false;
     this.camera.setPiece = null;
+    this.camera.attackGoalX = null;
+    this.offside.group.visible = false;
     this.el.hidden = true;
     this.overlay.hide();
     this.camera.scene = false;
@@ -132,6 +146,8 @@ export class SceneView {
   /** Camera cuts and sounds for an event reached in the scene. */
   onEvent(e: MatchEvent, wall: number): void {
     this.camera.onEvent(e, wall);
+    if (e.type === 'swing' && e.action === 'shot') this.shotTaken = true;
+    if (e.type === 'restart' || e.type === 'kickoff') this.shotTaken = false;
     this.audio.onEvent(e, this.o.userTeam);
     if (e.type === 'goal') { this.celebrateUntil = wall + 6; this.celebrateTeam = e.team; }
   }
@@ -147,10 +163,13 @@ export class SceneView {
     this.ball.update(ball, s.ball.rotation);
     // The decorative running cycle follows the shown time (slower in slow motion).
     const gaitDt = dt * pace;
-    s.players.forEach((p, k) => this.figures[k].update(lerpPlayer(a.players[k], p, alpha), gaitDt, ball));
+    // Positions over the whole interval a → b (taking the nearer snapshot as the end made figures stand still for half
+    // an interval and then jump; issue #39 / PR #38). Discrete state (score, clock) comes from the nearer snapshot.
+    a.players.forEach((p, k) => this.figures[k].update(lerpPlayer(p, b.players[k], alpha), gaitDt, ball));
     this.camera.update({ ...s, ball: { ...s.ball, position: ball } }, wall, dt);
     this.followShadows(ball);
     this.overlay.update(wall, this.cam);
+    this.offside.update(s, this.profiles, this.openPlay && !this.shotTaken ? s.possession : null, this.cam);
     const excitement = Math.min(1, Math.max(0, (Math.abs(ball.x) - 20) / 30));
     const celebrate = wall < this.celebrateUntil ? (this.celebrateTeam === 0 ? 1 : -1) : 0;
     this.stadium.update(wall, excitement, celebrate);
@@ -175,7 +194,7 @@ export class SceneView {
 
   dispose(): void {
     for (const f of this.figures) { this.scene.remove(f.root); f.dispose(); }
-    this.scene.remove(this.ball.mesh, this.overlay.group);
+    this.scene.remove(this.ball.mesh, this.overlay.group, this.offside.group);
     if (this.nameTag) { this.scene.remove(this.nameTag.sprite); this.nameTag.dispose(); }
   }
 }

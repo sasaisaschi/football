@@ -1,82 +1,26 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { PlayerProfile, PlayerView, TeamProfile, Vec3 } from '../engine/types';
+import { cloneBones, HAIR, Kit, kitMaterial, MODEL_HEIGHT, SKIN, type Model } from './footballer-model';
+import { Motion } from './footballer-motion';
+
+export { loadFootballer } from './footballer-model';
 
 /**
- * The footballer figure: a skinned body from Blender's "Human Base Meshes" (Blender Foundation, CC0 1.0), rigged and
- * exported by scripts/figure/build-footballer.py. It plays no canned animation: every frame its skeleton is posed from
- * the physics view – both legs by two-bone IK onto the real boots, keeper and thrower arms onto the real hands, the
- * trunk bent so that forehead or chest are where the physical contact part is. Only the stride of a resting leg, the
- * arm swing, lean and gaze are presentation around that.
+ * The footballer figure (model: footballer-model.ts). Each frame, in layers:
+ *  1. Motion capture (footballer-motion.ts): running and walking at the body's real speed with the stride phase tied
+ *     to the distance covered, the strike clip while a boot swings.
+ *  2. Contacts from the physics: while a boot swings, both legs are posed by two-bone IK onto the real boots (the
+ *     boot decides what the ball does, so the foot is drawn exactly there).
+ *  3. Situations the clips do not cover keep the physics-driven pose of before, blended in and out: sliding tackle,
+ *     header and chest control (the trunk bent onto the contact part), keeper and thrower hands, a keeper's dive.
+ *  4. The head turns towards the ball.
  */
 
-/** Height of the model as built (m); each figure is scaled to its player's height. */
-const MODEL_HEIGHT = 1.684;
-/** Kit colours of a figure, in the order of the material's colour uniform. */
-const enum Kit { Skin, Shirt, Sleeve, Shorts, Socks, Boots, Hair, Hands, Eyes }
-
-/**
- * Standard material whose base colour is the kit: the body part comes per vertex from the model (R = (part + 0.5) / 16,
- * scripts/figure/build-footballer.py), and inside a part the shader cuts shirt, shorts, socks and boots at fixed
- * heights of the model in its rest pose, so hems are straight lines whatever the triangles are. The cuts are the same
- * heights at which the build script lets the cloth stand off the skin. Heights in model metres (y up, face towards +z).
- */
-function kitMaterial(palette: THREE.Color[]): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0 });
-  mat.onBeforeCompile = shader => {
-    shader.uniforms.kitColours = { value: palette };
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>
-attribute vec4 bodyPart;
-flat varying int vPart;
-varying vec3 vRest;`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
-vPart = int(bodyPart.r * 16.0);
-vRest = position;`);
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
-uniform vec3 kitColours[9];
-flat varying int vPart;
-varying vec3 vRest;
-int kit() {
-  float y = vRest.y;
-  if (vPart == 0) return y < 0.99 ? 3 : 1;                 // torso: shorts, shirt
-  if (vPart == 1) return y < 1.44 ? 1 : 0;                 // neck: collar, skin
-  if (vPart == 2) return (y > 1.615 || (vRest.z < -0.005 && y > 1.5)) ? 6 : 0; // head: hair, face
-  if (vPart == 3) return y > 1.215 ? 1 : 2;                // upper arm: sleeve of the shirt, then arm
-  if (vPart == 4) return 2;                                // forearm (a keeper's long sleeve)
-  if (vPart == 5) return 7;                                // hand (a keeper's glove)
-  if (vPart == 6) return y > 0.99 ? 1 : y > 0.70 ? 3 : 0;  // thigh: (hip under the shirt), shorts, knee
-  if (vPart == 7) return y < 0.115 ? 5 : y < 0.45 ? 4 : 0; // shin: boot, sock, knee
-  if (vPart == 8) return 5;                                // foot: boot
-  return 8;                                                // eyes
-}`)
-      .replace('vec4 diffuseColor = vec4( diffuse, opacity );', 'vec4 diffuseColor = vec4( kitColours[kit()], opacity );');
-  };
-  mat.customProgramCacheKey = () => 'footballer-kit';
-  return mat;
-}
-const SKIN = ['#e3b08c', '#c58a62', '#8f5b3c', '#5a3826'];
-const HAIR = ['#1c130d', '#3b2a1e', '#0d0d0d', '#6b4a2b', '#a9814c'];
 /** Sliding tackle: hip height on the turf and how far the trunk leans back (m, rad). */
 const SLIDE_HIP = 0.18, SLIDE_LEAN = 1.05;
 const CHEST_FRONT = 0.2, HEADER_LEAN = 0.45, TURN_LEAN = 0.22, KICK_CROUCH = 0.05, NECK_YAW = 1.1;
 /** The physics boot is the sole of the foot; the ankle joint sits this far above and behind it (m, model scale). */
 const ANKLE_UP = 0.075, ANKLE_BACK = 0.04;
-
-type Model = { scene: THREE.Group; mesh: THREE.SkinnedMesh };
-let model: Promise<Model> | null = null;
-
-/** Loads the figure once (public/models/footballer.glb); a failure is an error, there is no stand-in figure. */
-export function loadFootballer(url: string): Promise<Model> {
-  model ??= new GLTFLoader().loadAsync(url).then(gltf => {
-    let mesh: THREE.SkinnedMesh | null = null;
-    gltf.scene.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) mesh = o as THREE.SkinnedMesh; });
-    if (!mesh) throw new Error(`${url}: no skinned mesh`);
-    return { scene: gltf.scene, mesh };
-  });
-  return model;
-}
 
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), knee = new THREE.Vector3(), dir = new THREE.Vector3();
 const q = new THREE.Quaternion(), q2 = new THREE.Quaternion(), euler = new THREE.Euler();
@@ -96,6 +40,13 @@ export class Footballer {
   private readonly hip: number;
   private readonly pelvisRest: THREE.Vector3;
   private gait = Math.random() * 6;
+  private readonly motion: Motion;
+  /** Bones in parent-before-child order, and a scratch copy of their pose for blending layers. */
+  private readonly list: THREE.Bone[];
+  private readonly saved: THREE.Quaternion[];
+  private readonly savedPelvis = new THREE.Vector3();
+  /** Weight of the physics-driven pose of special situations (slide, header, hands, dive), smoothed. */
+  private special = 0;
   private lastHeading: number | null = null;
   private turnLean = 0;
 
@@ -126,6 +77,8 @@ export class Footballer {
     const roots = src.skeleton.bones.filter(b => !(b.parent as THREE.Bone | null)?.isBone).map(cloneBones);
     const list: THREE.Bone[] = [];
     for (const rootBone of roots) rootBone.traverse(o => { if ((o as THREE.Bone).isBone) { list.push(o as THREE.Bone); this.bones[o.name] = o as THREE.Bone; } });
+    this.list = list;
+    this.saved = list.map(() => new THREE.Quaternion());
     const ordered = src.skeleton.bones.map(b => this.bones[b.name.replace('.', '')]);
     this.skeleton = new THREE.Skeleton(ordered, src.skeleton.boneInverses.map(m => m.clone()));
     const mat = kitMaterial(palette);
@@ -153,6 +106,7 @@ export class Footballer {
     this.arms = [chain('upperarmL', 'forearmL', 'handL'), chain('upperarmR', 'forearmR', 'handR')];
     this.pelvisRest = this.bones.pelvis.position.clone();
     this.hip = this.bones.thighL.getWorldPosition(new THREE.Vector3()).y - this.root.position.y;
+    this.motion = new Motion(holder, m.clips);
   }
 
   /** Shirt numbers on back and chest, attached to the chest bone so they bend with the trunk. */
@@ -203,6 +157,50 @@ export class Footballer {
   update(view: PlayerView, dt: number, look?: Vec3): void {
     this.root.visible = !view.sentOff;
     if (view.sentOff) return;
+    this.root.position.set(view.position.x, Math.max(0, view.position.y - this.profile.heightM / 2), view.position.z);
+    this.root.rotation.set(0, view.heading, 0);
+    this.root.updateMatrixWorld(true);
+    this.invFrame.copy(this.root.children[0].matrixWorld).invert();
+    const right = Math.cos(view.heading) * view.velocity.x - Math.sin(view.heading) * view.velocity.z;
+    const forward = Math.sin(view.heading) * view.velocity.x + Math.cos(view.heading) * view.velocity.z;
+    // 1. Motion capture.
+    this.motion.update(forward, right, view.swingingBoot, dt);
+    this.leanIntoTurn(view, dt);
+    // 3. Situations the clips do not cover: the physics-driven pose, blended.
+    const dive = this.profile.role === 'GK' && Math.abs(right) > 3.2;
+    const wantSpecial = view.lying > 0 || view.upperBody !== null || view.hands !== null || dive ? 1 : 0;
+    this.special += (wantSpecial - this.special) * Math.min(1, dt * 10);
+    if (this.special > 0.01) {
+      this.save();
+      this.procedural(view, dt, look);
+      this.blendFromSaved(this.special, () => true);
+    }
+    // 2. Contacts: while a boot swings, both legs onto the physics boots.
+    const strike = this.motion.strikeWeight * (1 - this.special);
+    if (strike > 0.01) {
+      this.save();
+      this.legsOnBoots(view);
+      this.blendFromSaved(strike, b => b.name.startsWith('thigh') || b.name.startsWith('shin') || b.name.startsWith('foot'));
+    }
+    // 4. Gaze.
+    if (this.special < 0.99) this.turnHead(look);
+  }
+
+  /** Copies the current pose (all bone rotations, pelvis position). */
+  private save(): void {
+    this.list.forEach((b, i) => this.saved[i].copy(b.quaternion));
+    this.savedPelvis.copy(this.bones.pelvis.position);
+  }
+
+  /** The pose now is a layer over the saved one: blends the chosen bones from saved to now by `w`, restores the rest. */
+  private blendFromSaved(w: number, which: (b: THREE.Bone) => boolean): void {
+    this.list.forEach((b, i) => { if (which(b)) b.quaternion.copy(this.saved[i].clone().slerp(b.quaternion, w)); else b.quaternion.copy(this.saved[i]); });
+    this.bones.pelvis.position.lerpVectors(this.savedPelvis, this.bones.pelvis.position, which(this.bones.pelvis) ? w : 0);
+    this.root.updateMatrixWorld(true);
+  }
+
+  /** Banks the body into a turn: the faster he runs and turns, the more the pelvis tilts towards the inside. */
+  private leanIntoTurn(view: PlayerView, dt: number): void {
     const speed = Math.hypot(view.velocity.x, view.velocity.z);
     if (this.lastHeading !== null && dt > 0) {
       const turnRate = Math.atan2(Math.sin(view.heading - this.lastHeading), Math.cos(view.heading - this.lastHeading)) / dt;
@@ -210,12 +208,33 @@ export class Footballer {
       this.turnLean += (target - this.turnLean) * Math.min(1, dt * 8);
     }
     this.lastHeading = view.heading;
-    const kicking = view.swingingBoot !== -1;
-    this.root.position.set(view.position.x, Math.max(0, view.position.y - this.profile.heightM / 2), view.position.z);
-    this.root.rotation.set(0, view.heading, 0);
+    if (Math.abs(this.turnLean) < 1e-3) return;
+    const pelvis = this.bones.pelvis;
     this.root.updateMatrixWorld(true);
-    const holder = this.root.children[0];
-    this.invFrame.copy(holder.matrixWorld).invert();
+    const now = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().multiplyMatrices(this.invFrame, pelvis.matrixWorld));
+    this.setWorld(pelvis, q.setFromEuler(euler.set(0, 0, this.turnLean)).multiply(now));
+  }
+
+  /** Both legs by two-bone IK onto the physics boots, from where the hips are now; feet level. */
+  private legsOnBoots(view: PlayerView): void {
+    const s = this.scale;
+    this.root.updateMatrixWorld(true);
+    this.legs.forEach((leg, side) => {
+      const hip = this.at(leg.upper, tmp.set(0, 0, 0)).clone();
+      const foot = tmp2.set(view.boots[side].x, view.boots[side].y, view.boots[side].z).applyMatrix4(this.invFrame);
+      foot.y += ANKLE_UP / s; foot.z -= ANKLE_BACK / s;
+      this.solve(leg, hip, foot, 1);
+      this.setWorld(leg.end, this.rest.get(leg.end)!.world);
+    });
+  }
+
+  /**
+   * The physics-driven pose of Phase E, now for the situations the clips do not cover: legs by IK onto the boots (with a
+   * drawn stride for a resting leg), trunk bent onto the contact part, arms onto the physics hands.
+   */
+  private procedural(view: PlayerView, dt: number, look?: Vec3): void {
+    const speed = Math.hypot(view.velocity.x, view.velocity.z);
+    const kicking = view.swingingBoot !== -1;
     const s = this.scale;
     const right = Math.cos(view.heading) * view.velocity.x - Math.sin(view.heading) * view.velocity.z;
     const forward = Math.sin(view.heading) * view.velocity.x + Math.cos(view.heading) * view.velocity.z;
@@ -277,6 +296,16 @@ export class Footballer {
     this.lookAt(look);
   }
 
+  /** The head turns towards the ball on top of the clip's head movement, within what a neck can do. */
+  private turnHead(look: Vec3 | undefined): void {
+    if (!look) return;
+    const head = this.bones.head;
+    head.updateMatrixWorld(true);
+    const p = head.worldToLocal(tmp.set(look.x, look.y, look.z));
+    const yaw = Math.max(-NECK_YAW, Math.min(NECK_YAW, Math.atan2(p.x, p.z))) * 0.6;
+    head.quaternion.multiply(q.setFromEuler(euler.set(0, yaw, 0, 'YXZ')));
+  }
+
   /** Two-bone IK in the figure frame; `bend` +1 puts the knee forward, −1 the elbow back. */
   private solve(c: Chain, start: THREE.Vector3, target: THREE.Vector3, bend: 1 | -1): void {
     const s = this.scale, l1 = c.l1 / s, l2 = c.l2 / s;
@@ -309,12 +338,4 @@ export class Footballer {
   dispose(): void {
     (this.root.children[0].children.find(o => (o as THREE.SkinnedMesh).isSkinnedMesh) as THREE.SkinnedMesh | undefined)?.geometry.dispose();
   }
-}
-
-/** A deep copy of a bone hierarchy (names kept, without the dot that glTF loaders strip). */
-function cloneBones(b: THREE.Bone): THREE.Bone {
-  const c = b.clone(false) as THREE.Bone;
-  c.name = b.name.replace('.', '');
-  for (const child of b.children) if ((child as THREE.Bone).isBone) c.add(cloneBones(child as THREE.Bone));
-  return c;
 }

@@ -21,13 +21,15 @@ describe.skipIf(!out)('reference protocol', () => {
       ...(process.env.PROTOCOL_INSTRUCTION ? { instruction: JSON.parse(process.env.PROTOCOL_INSTRUCTION) } : {}),
       ...(process.env.PROTOCOL_LINEUP ? { lineup: JSON.parse(process.env.PROTOCOL_LINEUP) } : {}),
     });
+    const choose = Object.fromEntries((process.env.PROTOCOL_CHOOSE ?? '').split(',').filter(Boolean).map(x => x.split(':')));
     const protocol: string[] = [], moments: string[] = [];
     for (;;) {
       const b = r.advance(600);
       for (const e of b.events) protocol.push(`${e.tick}:${e.type}${e.type === 'decision' ? `:${e.optionId}` : ''}`);
       if (b.moment) {
         moments.push(b.moment.kind);
-        const o = policy === 'first' || b.moment.options.length < 2 ? b.moment.options[0] : b.moment.options[1];
+        const fixed = choose[b.moment.kind];
+        const o = fixed ? b.moment.options[Number(fixed) - 1] : policy === 'first' || b.moment.options.length < 2 ? b.moment.options[0] : b.moment.options[1];
         r.resolve(o.id, 'user');
       }
       if (b.done) break;

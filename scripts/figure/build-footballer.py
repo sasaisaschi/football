@@ -11,7 +11,11 @@ from mathutils import Matrix, Vector
 
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 OUT = argv[0] if argv else os.path.join(os.getcwd(), 'public', 'models', 'footballer.glb')
-PREVIEW = argv[1] if len(argv) > 1 else None
+PREVIEW = argv[1] if len(argv) > 1 and argv[1] != '-' else None
+# CMU motion capture (BVH, see cmu_clips.py) and where the clip metadata for the game goes.
+CMU_DIR = argv[2] if len(argv) > 2 else None
+CLIPS_JSON = argv[3] if len(argv) > 3 else None
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 DECIMATE = 0.5  # ≈ 10 000 triangles per figure
 
 # Joint positions (m) of the centred model, standing on z = 0, facing −y; +x is the model's left. Read off front and
@@ -147,10 +151,23 @@ if PREVIEW:
         scene.render.filepath = os.path.join(PREVIEW, f'footballer-{name}.png')
         bpy.ops.render.render(write_still=True)
 
-# 6. Export the skinned figure.
+# 6. Motion clips (CMU mocap retargeted onto this rig).
+clips = []
+if CMU_DIR:
+    import cmu_clips, json
+    clips = cmu_clips.build_clips(rig, CMU_DIR)
+    rig.animation_data.action = None
+    for pb in rig.pose.bones:
+        pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
+    if CLIPS_JSON:
+        with open(CLIPS_JSON, 'w') as f:
+            json.dump({'source': 'CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu), BVH conversion by B. Hahne; free for research and commercial use', 'clips': clips}, f, indent=1)
+    print('clips', [(c['name'], round(c['speed'], 2), round(c['duration'], 2)) for c in clips])
+
+# 7. Export the skinned figure.
 for o in scene.objects:
     o.select_set(o in (mesh, rig))
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
-bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=True, export_skins=True, export_animations=False, export_morph=False,
+bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=True, export_skins=True, export_animations=bool(clips), export_animation_mode='ACTIONS', export_morph=False,
                           export_texcoords=False, export_normals=True, export_vertex_color='ACTIVE', export_all_vertex_colors=False, export_materials='NONE', export_yup=True)
 print('written', OUT, os.path.getsize(OUT), 'bytes')

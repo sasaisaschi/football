@@ -16,6 +16,7 @@ const run = seed => new Promise((done, fail) => {
   const env = { ...process.env, PROTOCOL_OUT: join(out, `seed-${seed}.json`), PROTOCOL_SEED: String(seed), PROTOCOL_HALF: arg('half', '5'), PROTOCOL_POLICY: arg('policy', 'second') };
   if (arg('instruction')) env.PROTOCOL_INSTRUCTION = arg('instruction');
   if (arg('lineup')) env.PROTOCOL_LINEUP = arg('lineup');
+  if (arg('choose')) env.PROTOCOL_CHOOSE = arg('choose');
   const c = spawn(process.execPath, [join('node_modules', 'vitest', 'vitest.mjs'), 'run', 'src/session/protocol.test.ts'], { env, stdio: ['ignore', 'ignore', 'pipe'] });
   let err = '';
   c.stderr.on('data', d => { err += d; });

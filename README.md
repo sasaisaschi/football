@@ -107,11 +107,13 @@ src/session/       manager session: state machine (manager ⇄ scene), pacing, t
 src/manager/       match preparation, manager view, half-time screen, substitution dialog (CSS next to TS)
 src/render/        Three.js stadium, skinned footballer (Blender Human Base Meshes, CC0) posed from physics, scene cameras, tactical overlays
 src/ui/            decision panel, intelligence panel, consequence card, result (CSS next to TS)
-scripts/figure/    reproducible Blender build of the footballer model
+scripts/figure/    reproducible Blender build of the footballer model and its motion capture clips
 api/               optional Azure Function for Foundry narration (not deployed)
 ```
 
 The simulation is the single writer of the match state. Orchestrator, intelligence and UI only read events and frames, and the user's choices enter as player intents. Same seed and same decisions give the same match, which is tested.
+
+**Motion:** the players move with motion capture from the CMU Graphics Lab Motion Capture Database (free for research and commercial use). The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217. Details: [scripts/figure/README.md](scripts/figure/README.md).
 
 **Stack:** TypeScript 7, Three.js 0.186, Rapier 3D 0.21 (WASM, SIMD), Vite 8, Vitest 5. No backend is needed to play.
 

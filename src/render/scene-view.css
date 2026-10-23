@@ -17,7 +17,7 @@
 .scene-bug i { font-style: normal; font-family: var(--font-score); font-variant-numeric: tabular-nums; }
 .scene-bug em { font-style: normal; font-size: var(--fs-xs); letter-spacing: var(--tracking); color: var(--c-night); background: var(--c-live); border-radius: var(--radius-sm); padding: 1px var(--space-2); }
 .scene[data-phase='decide'] .scene-bug em { background: var(--c-warn); }
-.scene-title { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: var(--space-1); opacity: 0; text-shadow: 0 2px 18px var(--c-night); }
+.scene-title { position: absolute; left: 50%; top: 24%; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: var(--space-1); opacity: 0; text-shadow: 0 2px 18px var(--c-night); }
 .scene-title small { font-size: var(--fs-sm); letter-spacing: 0.3em; text-transform: uppercase; color: var(--c-accent); font-weight: 800; }
 .scene-title strong { font-family: var(--font-score); font-size: clamp(28px, 4.5vw, 64px); letter-spacing: 0.06em; text-transform: uppercase; }
 .scene-title.show { animation: scene-title 2600ms ease forwards; }

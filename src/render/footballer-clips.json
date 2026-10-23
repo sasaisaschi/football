@@ -1,0 +1,70 @@
+{
+ "source": "CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu), BVH conversion by B. Hahne; free for research and commercial use",
+ "clips": [
+  {
+   "name": "walk",
+   "frames": 136,
+   "duration": 1.125,
+   "speed": 1.390619166223463,
+   "cycle": 1.5644465620013959,
+   "mirror": false,
+   "source": "CMU 07_01"
+  },
+  {
+   "name": "jog",
+   "frames": 96,
+   "duration": 0.7916666666666666,
+   "speed": 2.79193455902246,
+   "cycle": 2.2102815258927806,
+   "mirror": false,
+   "source": "CMU 16_35"
+  },
+  {
+   "name": "run",
+   "frames": 91,
+   "duration": 0.75,
+   "speed": 3.4730873251184047,
+   "cycle": 2.6048154938388035,
+   "mirror": false,
+   "source": "CMU 09_01"
+  },
+  {
+   "name": "sprint",
+   "frames": 83,
+   "duration": 0.6833333333333333,
+   "speed": 3.9019883908704593,
+   "cycle": 2.6663587337614807,
+   "mirror": false,
+   "source": "CMU 16_45"
+  },
+  {
+   "name": "idle",
+   "frames": 241,
+   "duration": 2.0,
+   "speed": 0.005421171864447871,
+   "cycle": 0.0,
+   "mirror": false,
+   "source": "CMU 10_01"
+  },
+  {
+   "name": "kickR",
+   "frames": 67,
+   "duration": 0.55,
+   "speed": 1.8446946768017347,
+   "cycle": 0.0,
+   "mirror": false,
+   "source": "CMU 10_03",
+   "contact": 0.3
+  },
+  {
+   "name": "kickL",
+   "frames": 67,
+   "duration": 0.55,
+   "speed": 1.8446946768017347,
+   "cycle": 0.0,
+   "mirror": true,
+   "source": "CMU 10_03",
+   "contact": 0.3
+  }
+ ]
+}

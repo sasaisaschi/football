@@ -14,6 +14,11 @@ export type Shot = 'main' | 'close' | 'behind-goal' | 'decision' | 'wide' | 'ove
 export const BROADCAST_FOV = 27, WIDE_FOV = 36;
 /** The scene's following shot: low and close on the near side, a long lens, so the players fill the picture. */
 export const FOLLOW_FOV = 24;
+/**
+ * The attack camera of a scene (issue #39): behind the play, raised, looking towards the goal being attacked, wide
+ * enough that ball carrier, the defensive line, the team-mates to pass to and the goal are seen together.
+ */
+export const ATTACK_FOV = 34, ATTACK_BACK = 12.5, ATTACK_HEIGHT = 8, ATTACK_LOOK = 7;
 
 /**
  * TV direction. The main gantry camera follows play with some anticipation; real events trigger cuts
@@ -52,6 +57,10 @@ export class CameraDirector {
   setPiece: { spot: { x: number; z: number }; goalX: number; kind: string } | null = null;
   /** Where the last shot in a scene was struck from, and towards which goal. */
   private shotFrom: { x: number; z: number; goalX: number } | null = null;
+  /** In an open-play scene: the goal the team in possession attacks (x); the following shot is then the attack camera. */
+  attackGoalX: number | null = null;
+  /** Smoothed ball position the attack camera is aimed by (so it does not jerk with every touch). */
+  private readonly steady = new THREE.Vector3();
   /** Smoothed direction of play along the pitch, for the following shot to trail it. */
   private flow = 1;
 
@@ -67,7 +76,9 @@ export class CameraDirector {
       this.celebrating = true;
     } else if (e.type === 'moment') {
       this.cut('decision', wallTime, 600);
-    } else if (e.type === 'swing' && e.action === 'shot' && this.scene && this.shot !== 'decision') {
+    } else if (e.type === 'swing' && e.action === 'shot' && this.scene && this.shot !== 'decision' && this.attackGoalX === null) {
+      // (In open play the attack camera already looks at the goal from behind the striker: no cut, so the kick itself
+      // and the ball's flight are seen in one take.)
       // A shot in a scene: cut low behind the striker, looking at the goal, while the ball travels.
       this.shotFrom = { x: this.lastBall.x, z: this.lastBall.z, goalX: Math.sign(this.lastBall.x || 1) * PITCH.halfLength };
       this.cut('shot', wallTime, 2.6);
@@ -116,6 +127,20 @@ export class CameraDirector {
         break;
       }
       case 'follow': {
+        if (this.attackGoalX !== null) {
+          // Behind the attack: the camera stands back from the ball on the line from the goal, raised, and looks
+          // past the ball towards the goal. Aimed by a smoothed ball so it glides with play instead of jerking.
+          if (this.snapNext) this.steady.set(b.x, 0, b.z);
+          else this.steady.lerp(new THREE.Vector3(b.x + v.x * 0.25, 0, b.z + v.z * 0.25), Math.min(1, dt * 3));
+          const gx = this.attackGoalX, dx = gx - this.steady.x, dz = -this.steady.z * 0.6, d = Math.hypot(dx, dz) || 1;
+          this.target.set(this.steady.x - (dx / d) * ATTACK_BACK, ATTACK_HEIGHT, this.steady.z - (dz / d) * ATTACK_BACK);
+          for (let i = 0; i < 40 && !cameraAllowed(this.target); i++) this.target.lerp(this.steady, 0.06);
+          // Looks a little past the ball towards goal, never more than 40 % of the way (the ball stays in the picture).
+          const ahead = Math.min(ATTACK_LOOK, 0.4 * d);
+          this.look.set(this.steady.x + (dx / d) * ahead, 0, this.steady.z + (dz / d) * ahead);
+          if (this.snapNext) { snap = true; this.snapNext = false; }
+          break;
+        }
         // Trails play from the near side, low, with a long lens; the direction of play turns slowly, not with every touch.
         if (Math.abs(v.x) > 2) this.flow += (Math.sign(v.x) - this.flow) * Math.min(1, dt * 0.8);
         const lead = { x: b.x + v.x * 0.35, z: b.z + v.z * 0.25 };
@@ -192,7 +217,7 @@ export class CameraDirector {
     const k = snap && shot !== 'decision' && (shot === 'follow' || shot === 'set-piece' || shot === 'shot' || this.camera.position.distanceTo(this.target) > 20) ? 1 : 1 - Math.exp(-dt * rate);
     this.camera.position.lerp(this.target, k);
     this.lookNow.lerp(this.look, k);
-    const fov = shot === 'main' ? BROADCAST_FOV : shot === 'follow' || shot === 'shot' ? FOLLOW_FOV : shot === 'set-piece' ? 30 : WIDE_FOV;
+    const fov = shot === 'main' ? BROADCAST_FOV : shot === 'follow' ? (this.attackGoalX !== null ? ATTACK_FOV : FOLLOW_FOV) : shot === 'shot' ? FOLLOW_FOV : shot === 'set-piece' ? 30 : shot === 'decision' && this.attackGoalX !== null ? ATTACK_FOV : WIDE_FOV;
     if (Math.abs(this.camera.fov - fov) > 0.01) {
       this.camera.fov += (fov - this.camera.fov) * (k === 1 ? 1 : shot === 'decision' ? Math.min(1, k * 1.2) : k);
       this.camera.updateProjectionMatrix();

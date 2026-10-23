@@ -13,3 +13,7 @@ intel-output/
 video-output/
 protocol-output/
 protocol-tactics/
+cmu-bvh/
+protocol-15/
+protocol-s35shot/
+__pycache__/

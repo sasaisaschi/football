@@ -1,6 +1,6 @@
 # THE 12TH MAN – Technical Report & Development Guide
 
-**Stand:** 23.10.2026 · Phasen B–D auf `main` gemergt (#33–#36); **Phase E – Umbau zum interaktiven Fußballmanager – auf Branch `claude/phase-e-manager` (PR offen, Abnahme durch den Auftraggeber offen)**. Ablauf, Messwerte, offene Qualitätsprobleme und Testanleitung in §13; Benutzeraktionen zur Einreichung weiter in §12.6. Frühere Messwerte bleiben historisch datiert.
+**Stand:** 23.10.2026 · Phasen B–E auf `main` gemergt (#33–#37); **Issue #39 – glaubwürdige Fußballbewegung (Mocap, Angriffskamera, Abseitslinie) – auf Branch `claude/issue-39-football-motion` (PR offen, Abnahme offen)**, §14. Managerablauf und Testanleitung in §13; Benutzeraktionen zur Einreichung in §12.6. Frühere Messwerte bleiben historisch datiert.
 **Rolle:** verbindliche Source of Truth für Architektur, tatsächlichen Stand, Versionen, Tests, Messwerte und nächste Schritte.
 **Kennzeichnung:** **Implementiert** = Code vorhanden · **Getestet** = durch tatsächlich ausgeführte Tests belegt · **Gemessen** = Zahl aus einem tatsächlichen Lauf · **Geplant** = nicht vorhanden · **Nicht geprüft** = vorhanden, ohne Nachweis.
 
@@ -82,6 +82,7 @@ scripts/probe.mjs           Mehr-Seed-Statistik (npm run probe; --orchestrator: 
 | KI-Formulierung über Microsoft Foundry | **Vorbereitet, nicht bereitgestellt** (Kernlogik unit-getestet) | `intel/foundry/*`, `api/` |
 | Managerablauf: Vorbereitung (Aufstellung, Taktik), Manageransicht ohne 3D, Szenen in 3D, Halbzeit, Wechseldialog | Implementiert, getestet, im Browser geprüft (Phase E) | `session/*`, `manager/*`, `app.ts` |
 | Spielerfigur aus Blender Human Base Meshes (CC0), Skelett aus der Physik gestellt; Szenenkamera | Implementiert, getestet, im Browser geprüft (Phase E) | `render/footballer.ts`, `scripts/figure/`, `render/camera-director.ts` |
+| Bewegung aus Motion Capture (CMU), streckengekoppelter Schritt, Schussclip mit Bein-IK auf die Physikschuhe; Angriffskamera, Abseitslinie | Implementiert, getestet, im Browser per Video geprüft (Issue #39) | `render/footballer-motion.ts`, `scripts/figure/cmu_clips.py`, `render/offside-line.ts` |
 
 ## 5. Testing Status (tatsächlich ausgeführt)
 
@@ -1912,3 +1913,78 @@ Dann die angezeigte Adresse öffnen (Chrome oder Edge). Ablauf:
 6. Sprache: `?lang=de` oder EN/DE in der Vorbereitung; **I** wechselt Fan/Analyst. Reproduzierbare Partie: `?seed=7&half=5`, mit Elfmeter `?seed=11&half=5`, mit Ecke `?seed=4&half=5`.
 
 Die automatischen Browserläufe sind eine technische Vorprüfung, **keine** Abnahme: Ob sich die Sitzung als Fußballmanager gut spielt und die Grafik überzeugt, entscheidet der Auftraggeber.
+
+## 14. Issue #39 – Glaubwürdige Fußballbewegung in den 3D-Szenen (23.10.2026)
+
+**Auftrag:** eine vollständige Angriffsszene, die im laufenden Browser wie Fußball aussieht: weite, aber immersive Perspektive mit Ballführer, Mitspielern, Abwehrlinie und Tor; zwei oder mehr tatsächlich ausführbare Optionen; glaubwürdige Läufe, Antritte, Richtungswechsel, Pässe und Schüsse mit sichtbaren Ballkontakten; flüssige Fortsetzung. Abnahme über ein echtes Browservideo. Branch `claude/issue-39-football-motion`, ein PR, kein Merge ohne Freigabe. Match Engine, KI, Regeln und Managerablauf bleiben unverändert.
+
+### 14.1 Ursachen (untersucht)
+
+1. **Zwischenbilder:** `SceneView.draw` interpolierte die Figuren von `a` zum *näheren* Snapshot. In der ersten Hälfte jedes Intervalls standen sie still, dann sprangen sie (Befund aus PR #38). Behoben: Interpolation über das ganze Intervall, mit Test `render/interpolate.test.ts`. Der Inhalt von PR #38 ist damit enthalten.
+2. **Gleiten:** Der Laufschritt war rein dekorativ. Ein Phasenzähler lief mit der Zeit, nicht mit der zurückgelegten Strecke, und die ruhenden Physikschuhe standen unter der Hüfte. Dadurch rutschten die Füße über den Rasen, und die Beinbewegung passte zu keinem Tempo.
+3. **Kamera:** Die Verfolgung von der Seite (7,5 m hoch, 24°-Objektiv) zeigte Ballführer und Gegenspieler groß, aber weder Tor noch Abwehrlinie noch Abseitslage.
+
+### 14.2 Bewertete Animationsquellen
+
+| Quelle | Lizenz | Ergebnis |
+| --- | --- | --- |
+| **CMU Graphics Lab Motion Capture Database** (BVH-Konvertierung B. Hahne) | „free for use in research and commercial projects worldwide“ | **Gewählt.** Echte Fußball-Schüsse (Subjekte 10, 11), Lauf, Jog, Gehen, Richtungswechsel; per Skript beziehbar (`scripts/figure/fetch-cmu.mjs`) |
+| Mixamo | Adobe-Konto, Weitergabe der Rohdaten eingeschränkt | verworfen (kein automatisierter, rechtlich klarer Bezug) |
+| Quaternius Universal Animation Library | CC0 | geprüft: kein Fußballschuss nachweisbar, Bezug nur über Itch/Drive |
+| Quaternius „Animated Human“ (2017) | CC0 | zu grob (≈ 1600 Dreiecke), kein Schuss |
+| Bandai-Namco-Motion-Dataset | CC BY-NC | verworfen (nicht kommerziell) |
+
+### 14.3 Neue Bewegungsarchitektur
+
+- **Retargeting** (`scripts/figure/cmu_clips.py`, in Blender reproduzierbar):
+  - Rumpfknochen übernehmen die Drehung der Aufnahme relativ zu ihrer T-Pose, Gliedmaßen werden entlang der Glieder des Akteurs ausgerichtet.
+  - Jede Aufnahme wird in Laufrichtung gedreht und auf der Stelle abgespielt; die Hüfthöhe wird vom eigenen Boden der Aufnahme gemessen.
+  - Zyklen werden aus den Fußkontakten geschnitten.
+  - Sieben Clips: Stehen, Gehen, Jog, Lauf, Sprint, Schuss rechts und links (gespiegelt).
+  - Beim Prüfen gefunden und behoben:
+    - Export mit 24 statt 120 Bildern pro Sekunde (Clips fünfmal zu langsam).
+    - Falsche Hüfthöhe: Die synthetische T-Pose der Konvertierung steht nicht auf dem Boden der Aufnahme.
+    - Eine Drehung, die nur auf die Gliedmaßen wirkte (konjugiert statt angewandt): Rumpf und Beine zeigten in verschiedene Richtungen.
+- **Laufzeit** (`render/footballer-motion.ts`, `render/footballer.ts`), in Schichten:
+  1. **Fortbewegung:** Die vier Gangarten werden nach dem echten Tempo des Körpers gemischt. Die gemeinsame Schrittphase läuft mit der zurückgelegten Strecke (Strecke / Schrittlänge der Mischung), nicht mit der Uhr. Rückwärtslaufen spielt den Zyklus rückwärts, Stehen nutzt den Ruhe-Clip.
+  2. **Ballkontakt:** Beginnt ein Physikschuh einen Schwung, läuft der Schussclip so, dass sein Kontaktbild auf den Kontaktzeitpunkt der Physik fällt (Ausholen 0,1–0,2 s plus Schlag, Clip-Kontakt bei 0,30 s). Er bewegt Rumpf, Hüfte und Arme. Beide Beine werden per Zwei-Knochen-IK auf die echten Schuhe gelegt. Der Fuß ist also genau dort, wo die Physik den Ball trifft.
+  3. **Sonderlagen:** Grätsche, Kopfball, Brustannahme, Torwart- und Einwurfhände sowie der Hechtsprung behalten die physikgetriebene Pose aus Phase E, weich überblendet.
+  4. **Blick:** Der Kopf dreht sich zum Ball.
+- **Kamera** (`render/camera-director.ts`, `render/framing.ts`):
+  - **Angriffskamera** für alle Szenen aus offenem Spiel (Angriff, Konter, Abwehr): hinter dem Ball auf der Linie zum angegriffenen Tor, 8 m hoch, 12,5 m zurück, 34°-Objektiv, Blick 7 m (höchstens 40 % des Wegs) über den Ball hinaus. Gezielt wird mit einem geglätteten Ball, damit die Kamera mitgleitet statt zu rucken. Im offenen Spiel gibt es keinen Schnitt mehr beim Schuss: Anlauf, Schuss und Ballflug sind eine Einstellung.
+  - **Entscheidungsansicht** aus derselben Perspektive: nur so weit zurück und so hoch, bis alle Beteiligten und Optionsziele im freien Bildteil liegen; die Pfosten werden mit einbezogen, wenn das Tor höchstens 32 m entfernt ist.
+- **Abseitslinie** (`render/offside-line.ts`): an jedem Bild aus dem gezeigten Zustand nach Regel 11 berechnet (vorletzter Gegenspieler oder Ball, nie in der eigenen Hälfte). Sie ist sichtbar, solange die ballführende Mannschaft in der gegnerischen Hälfte ist, und verschwindet nach einem Schuss.
+- **Optionen:** Sie kommen unverändert aus dem Orchestrator: nur ausführbare Optionen mit mindestens 30 % geschätztem Erfolg, Pässe auf abseits stehende Mitspieler werden aus der Wahrnehmung des Spielers ausgeschlossen (`ai/options.ts`). Je nach Lage sind es 2 bis 4. In der Abnahmeszene waren es vier: Schuss, zwei Pässe, Durchsetzen.
+
+### 14.4 Nachweis im Browser (Produktions-Build, Chrome, Intel Iris Xe)
+
+**Abnahmeszene:** Seed 35, 2 × 5, dritter Moment „Abschluss oder Ablage?“ (Ferreira, 9), echter Spielverlauf, jede Entscheidung über die Tastatur.
+
+| Video (`docs/issue-39/`) | Inhalt |
+| --- | --- |
+| `vorher-nachher-schuss.mp4` (15,7 s) | oben `main` (Phase E), unten nachher; identische Szene und Entscheidungen (Schuss) |
+| `nachher-schuss.mp4` | Vorgeschichte (Dribbling auf den Strafraum, Verteidiger, Abseitslinie, Tor) → Stillstand mit vier Optionen → Schuss in einer Einstellung |
+| `nachher-pass.mp4` | dieselbe Szene, Option „Pass auf Doyle (7)“: andere echte Folge (Zweikampf im Strafraum) |
+
+**Prüfungen:**
+- `npm run check`: 33 Testdateien, 175 Tests grün. Neu: Interpolation; Figurtests mit Clips (steht auf den Schuhen, Knöchel am schwingenden Schuh, Torwarthände).
+- Volle 2 × 15-Sitzung (Seed 7):
+  - `ok`, 4127 Ereignisse genau einmal weitergegeben, 11 von 11 Entscheidungen als `user`.
+  - Szenen mit 60,0–60,5 FPS bei 22 Mocap-Figuren, Nutzerzeit 5:50 min.
+  - **Protokoll identisch** zur Node-Referenz.
+- Seeds 4 und 35 ebenfalls **identisch** zur Node-Referenz.
+
+Ein scheinbarer Determinismusfehler stellte sich als Artefakt des Prüfskripts heraus:
+- Während ffmpeg die Aufnahme der vorigen Szene kodierte, blockierte die Prüfschleife einige Sekunden.
+- Dadurch verpasste sie eine direkt folgende Szene; deren Countdown lief ab, also galt eine andere Entscheidung.
+- Behoben: Kodierung erst am Ende der Sitzung, Szenen werden notfalls am Stillstand erkannt.
+
+### 14.5 Grenzen (ehrlich)
+
+- **Clips:** Es gibt eine Aufnahme je Gangart und einen Schuss für alle Ballkontakte; Pass, Schuss, Dribbling und Klärung unterscheiden sich nur durch die Physik des Schuhs. Rückwärtslaufen spielt den Vorwärtszyklus rückwärts. Seitwärtslaufen hat keinen eigenen Clip (der Körper bewegt sich seitlich bei Vorwärtsbeinarbeit). Nicht vorhanden: Ballannahme, Richtungswechsel mit Abstoppen, Zweikampf- und Torwartclips.
+- **Fußkontakt:** Das Schleifen ist durch die streckengekoppelte Phase weitgehend weg, aber nicht per Fuß-IK fixiert. Schnelle Drehungen auf der Stelle zeigen weiter leichtes Rutschen.
+- **Sprint:** Die schnellste Aufnahme läuft 3,9 m/s; schnellere Spieler spielen den Zyklus schneller ab statt mit längeren Schritten.
+- **Kamera:** Bei weit verteilten Optionen (langer Pass auf den anderen Flügel) wird die Entscheidungsansicht weit. Szenen nach Standards nutzen weiter die Standardkamera.
+- Weitere Spielsituationen (Konter, Abwehr) nutzen dieselbe Kamera und dieselben Clips bereits. Eigene Clips für Ecke, Elfmeter und Freistoß (Anlauf mit Stopp, Torwart) sind der nächste Schritt.
+
+**Produktabnahme:** Die Videos sind der technische Nachweis. Ob die Szene als Fußball überzeugt, entscheidet der Auftraggeber.
