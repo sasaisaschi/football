@@ -72,3 +72,5 @@
   .mgr-intel { grid-column: 1 / -1; }
 }
 @media (max-width: 720px) { .mgr-cols { grid-template-columns: 1fr; } .mgr-centre { grid-template-rows: auto auto auto; } }
+.mgr-tactic.temporary b { color: var(--c-warn); }
+.mgr-tactic.temporary::after { content: attr(data-temporary); grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--c-warn); }

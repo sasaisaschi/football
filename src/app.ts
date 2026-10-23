@@ -201,6 +201,7 @@ export class MatchApp {
     if (!m) return;
     this.consequence.start(m, optionId, by, this.intel.clock(s), s.time, s.possession);
     this.driver.decide(optionId, by);
+    this.noteInstruction(m, optionId, s.time);
     this.stage.decided();
   }
 
@@ -210,6 +211,7 @@ export class MatchApp {
       const s = this.client.frame(this.driver.tick);
       this.consequence.start(m, optionId, by, this.intel.clock(s), s.time, s.possession);
       this.driver.decide(optionId, by);
+      this.noteInstruction(m, optionId, s.time);
       // A coach decision is told in the manager's key developments, not on the scene's card.
       this.consequence.hide();
       this.dialog = null;
@@ -217,6 +219,12 @@ export class MatchApp {
     if (this.interval) { this.interval.talk(m, decide); return; }
     this.dialog = new CoachDialog(m, decide);
     this.host.append(this.dialog.el);
+  }
+
+  /** A decision that changes the user's team instruction shows on the manager's tactics, with its duration. */
+  private noteInstruction(m: DecisionMoment, optionId: string, time: number): void {
+    const fx = m.options.find(o => o.id === optionId)?.effect;
+    if (fx?.type === 'team' && fx.team === this.options.userTeam) this.manager.setInstruction(fx.instruction, fx.seconds > 0 ? time + fx.seconds : null);
   }
 
   private openInterval(): void {

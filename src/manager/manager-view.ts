@@ -23,7 +23,9 @@ const PRESS = (p: TeamInstruction['press']) => ({ high: tr('high', 'hoch'), mid:
 export class ManagerView {
   readonly el = document.createElement('div');
   private readonly q = <T extends HTMLElement>(s: string) => this.el.querySelector<T>(s)!;
+  /** The instruction for the rest of the match, and a temporary one from a decision with the match time it ends. */
   private instruction: TeamInstruction;
+  private temporary: { instruction: TeamInstruction; until: number } | null = null;
   private lastUpdate = -Infinity;
   private readonly cameOn = new Set<number>();
   private readonly wentOff = new Set<number>();
@@ -92,7 +94,6 @@ export class ManagerView {
 
   /** A match event as it is reached by the shown time: the timeline line (from commentary.ts) and what changes the screen. */
   event(e: MatchEvent, clock: string, line: string | null, s: MatchSnapshot | null): void {
-    if (e.type === 'instruction' && e.team === this.o.userTeam) { this.instruction = { ...e.instruction }; this.renderTactic(); }
     if (e.type === 'substitution') { this.cameOn.add(e.on); this.wentOff.add(e.off); }
     const kind: EntryKind = e.type === 'goal' ? 'goal' : e.type === 'foul' && e.card !== 'none' ? 'card' : e.type === 'substitution' ? 'sub' : e.type === 'half-time' || e.type === 'full-time' || e.type === 'kickoff' ? 'half' : 'info';
     if (line) this.feed(clock, line, kind);
@@ -134,8 +135,20 @@ export class ManagerView {
     this.q('[data-markers]').append(m);
   }
 
+  /**
+   * The user's team got an instruction by a decision: for the rest of the match (`until` null), or for a while – the
+   * engine then returns to the instruction before without an event, so the screen keeps the end time itself.
+   */
+  setInstruction(instruction: TeamInstruction, until: number | null): void {
+    if (until === null) { this.instruction = { ...instruction }; this.temporary = null; }
+    else this.temporary = { instruction: { ...instruction }, until };
+    this.renderTactic();
+  }
+
   private renderTactic(): void {
-    const i = this.instruction;
+    const i = this.temporary?.instruction ?? this.instruction;
+    this.q('[data-tactic]').classList.toggle('temporary', this.temporary !== null);
+    this.q('[data-tactic]').dataset.temporary = tr('For a while after your decision, then back to the plan.', 'Für eine Weile nach deiner Entscheidung, dann zurück zum Plan.');
     const line = i.lineHeight === 0 ? tr('normal', 'normal') : `${i.lineHeight > 0 ? '+' : ''}${i.lineHeight.toFixed(1)}`;
     this.q('[data-tactic]').innerHTML = `<span>${tr('Pressing', 'Pressing')}<b></b></span><span>${tr('Line', 'Linie')}<b></b></span><span>${tr('Risk', 'Risiko')}<b></b></span>`;
     const b = this.q('[data-tactic]').querySelectorAll('b');
@@ -144,6 +157,7 @@ export class ManagerView {
 
   /** Refreshes score, clock, simulation state, team and statistics (a few times per second). */
   update(s: MatchSnapshot, status: SimStatus, clock: string, wall: number): void {
+    if (this.temporary && s.time >= this.temporary.until) { this.temporary = null; this.renderTactic(); }
     this.q('[data-score]').textContent = `${s.score[0]} : ${s.score[1]}`;
     this.q('[data-clock]').textContent = clock;
     this.q<HTMLElement>('[data-progress]').style.width = `${(this.clock(s) / (this.o.halfMinutes * 120)) * 100}%`;
