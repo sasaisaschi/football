@@ -52,7 +52,7 @@ export function showPrepScreen(host: HTMLElement, memoryMatches: number, stored:
       <section class="mgr-card prep-match">
         <h2>${tr('Match', 'Partie')}</h2>
         <label>${tr('Your club', 'Dein Verein')}</label><div class="mgr-seg" data-club role="radiogroup"></div>
-        <p class="mgr-note">${tr('Full match · 2 × 45 min, each half in 2.5 minutes. The match stands still while you decide.', 'Volle Spielzeit · 2 × 45 min, jede Halbzeit in 2,5 Minuten. Während deiner Entscheidungen steht das Spiel still.')}</p>
+        <p class="mgr-note">${tr('Full match · 2 × 45 min, each half in 7 minutes. The match stands still while you decide.', 'Volle Spielzeit · 2 × 45 min, jede Halbzeit in 7 Minuten. Während deiner Entscheidungen steht das Spiel still.')}</p>
         <label>${tr('Match intelligence', 'Match Intelligence')}</label><div class="mgr-seg" data-mode role="radiogroup"></div>
         <label>${tr('Focus player', 'Fokusspieler')}</label><select class="mgr-select" data-focus></select>
         <p class="mgr-note" data-memory></p>
