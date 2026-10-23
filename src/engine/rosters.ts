@@ -3,8 +3,8 @@ import { createRng } from './rng';
 
 /** Two fictional clubs. No real players, clubs or likenesses are used. */
 export const TEAMS: [TeamProfile, TeamProfile] = [
-  { id: 0, name: 'Harbourside Athletic', short: 'HAR', kit: '#ff8a2a', shorts: '#14213d', keeperKit: '#d6f04a' },
-  { id: 1, name: 'Northgate Rovers', short: 'NOR', kit: '#4cc3ff', shorts: '#eef2f8', keeperKit: '#c04ae8' },
+  { id: 0, name: 'Riverdale FC', short: 'RIV', kit: '#1f4fb4', shorts: '#f2f4f7', keeperKit: '#e0c21a' },
+  { id: 1, name: 'Stonebridge', short: 'STO', kit: '#b01e30', shorts: '#9c1828', keeperKit: '#2e7a4c' },
 ];
 
 /** 4-3-3 shirt numbers. */
@@ -14,9 +14,10 @@ const SHAPE: { role: Role; number: number }[] = [
   { role: 'RW', number: 7 }, { role: 'ST', number: 9 }, { role: 'LW', number: 11 },
 ];
 
+/** Shown as on a broadcast graphic: initial and surname (the home number 10 is the reference picture's A. Martin). */
 const NAMES = [
-  ['Okafor', 'Reyes', 'Lindqvist', 'Brandt', 'Mensah', 'Hale', 'Costa', 'Nakamura', 'Doyle', 'Ferreira', 'Kowal'],
-  ['Ashworth', 'Diallo', 'Varga', 'Moreau', 'Quinn', 'Sato', 'Petrov', 'Adeyemi', 'Holm', 'Navarro', 'Byrne'],
+  ['J. Okafor', 'L. Reyes', 'E. Lindqvist', 'T. Brandt', 'K. Mensah', 'R. Hale', 'D. Costa', 'A. Martin', 'S. Doyle', 'M. Ferreira', 'P. Kowal'],
+  ['O. Ashworth', 'I. Diallo', 'B. Varga', 'C. Moreau', 'N. Quinn', 'H. Sato', 'V. Petrov', 'F. Adeyemi', 'G. Holm', 'R. Navarro', 'L. Byrne'],
 ];
 
 /** Role tendencies; individual ratings scatter around them from the seed. */
@@ -51,8 +52,8 @@ const BENCH: { role: Role; number: number }[] = [
   { role: 'GK', number: 12 }, { role: 'RCB', number: 15 }, { role: 'CM', number: 14 }, { role: 'RW', number: 17 }, { role: 'ST', number: 19 },
 ];
 const BENCH_NAMES = [
-  ['Achterberg', 'Sule', 'Pereira', 'Lindgren', 'Odum'],
-  ['Kerr', 'Baptiste', 'Novak', 'Fofana', 'Iwata'],
+  ['W. Achterberg', 'Y. Sule', 'J. Pereira', 'E. Lindgren', 'C. Odum'],
+  ['D. Kerr', 'A. Baptiste', 'T. Novak', 'M. Fofana', 'K. Iwata'],
 ];
 
 type Rng = ReturnType<typeof createRng>;

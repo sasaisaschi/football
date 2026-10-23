@@ -44,7 +44,7 @@ export class KeeperSkill {
     }
     if (this.guess && ctx.now > this.guess.until) this.guess = null;
     // The keeper looks like everybody else: his picture of the ball is his own perception.
-    this.brain.perception.observe(ctx.truth, self, body.heading);
+    this.brain.perception.observe(ctx.truth, self, body.gaze);
     const goalSide = (-ctx.sign) as 1 | -1;
     this.hands.setActive(ctx.handsAllowed && inPenaltyArea(self.x, self.z, goalSide));
 

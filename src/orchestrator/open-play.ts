@@ -39,12 +39,14 @@ export function attackingMoment(e: MatchEngine, team: TeamId): MomentDraft | nul
   const best = Math.max(...candidates.map(o => o.value));
   // Relevant: there is real threat at stake and at least two options are close enough to be a dilemma.
   if (Math.max(threatAt(sign, { x: ball.x, z: ball.z }), shot?.success ?? 0) < STAKES) return null;
-  const contenders = candidates.filter(o => o.value >= best - DILEMMA_GAP).slice(0, 4);
+  // Ordered as on the reference picture's cards: passes first, then the take-on, the shot last.
+  const order = { pass: 0, dribble: 1, shot: 2 } as Record<string, number>;
+  const contenders = candidates.filter(o => o.value >= best - DILEMMA_GAP).slice(0, 4).sort((a, b) => (order[a.kind] ?? 1) - (order[b.kind] ?? 1));
   if (contenders.length < 2) return null;
   const from = { x: ball.x, z: ball.z };
   const decisionOptions: DecisionOption[] = contenders.map((o, i) => ({
     id: `${o.kind}-${i}`,
-    label: o.kind === 'shot' ? tr('Shoot', 'Selbst abschließen') : o.kind === 'pass' ? tr(`Pass to ${playerName(e, o.target!)}`, `Pass auf ${playerName(e, o.target!)}`) : tr('Take on the defender', 'Gegenspieler ausspielen'),
+    label: optionLabel(e, sign, o),
     detail: o.note,
     effect: { type: 'player', player: c, intent: { type: 'ball', action: o.action, source: 'user', decidedAt: e.time } satisfies PlayerIntent },
     outlook: outlook(o),
@@ -61,6 +63,24 @@ export function attackingMoment(e: MatchEngine, team: TeamId): MomentDraft | nul
     focusPlayer: c, options: decisionOptions, defaultOptionId: fallback.id,
     participants: participantsFor(e, team, c, decisionOptions, shot && keeper ? [keeper.id] : []),
   };
+}
+
+/**
+ * The words on an option's card, as in the client's reference picture ("Steilpass auf Nr. 9", "Direkt aufs Tor
+ * schießen"). A pass is named by what it really is: played into the space ahead of a team-mate towards goal (a through
+ * ball), lofted into the box (a cross) or long, or simply to his feet.
+ */
+export function optionLabel(e: MatchEngine, sign: 1 | -1, o: EvaluatedOption): string {
+  const a = o.action;
+  if (a.kind === 'shot') return tr('Shoot at goal', 'Direkt aufs Tor schießen');
+  if (a.kind !== 'pass') return tr('Take on the defender', 'Gegenspieler ausspielen');
+  const n = e.profiles[a.receiver].number;
+  const at = e.bodies[a.receiver].position(), ball = e.ballPos();
+  const ahead = sign * (a.aim.x - at.x), forward = sign * (a.aim.x - ball.x);
+  const inBox = sign * a.aim.x > PITCH.halfLength - PITCH.penaltyAreaDepth && Math.abs(a.aim.z) < PITCH.penaltyAreaHalfWidth;
+  if (a.lofted) return inBox ? tr(`Cross to No. ${n}`, `Flanke auf Nr. ${n}`) : tr(`Long ball to No. ${n}`, `Hoher Ball auf Nr. ${n}`);
+  if (forward > 4 && ahead > 1.2) return tr(`Through ball to No. ${n}`, `Steilpass auf Nr. ${n}`);
+  return tr(`Pass to No. ${n}`, `Pass auf Nr. ${n}`);
 }
 
 /** The overlay of a ball option: where the ball is meant to go from the ball's current position. */

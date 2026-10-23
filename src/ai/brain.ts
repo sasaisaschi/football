@@ -168,7 +168,7 @@ export class PlayerBrain {
 
   private decide(ctx: BrainContext): BrainOutput {
     const self = this.body.position();
-    this.perception.observe(ctx.truth, self, this.body.heading);
+    this.perception.observe(ctx.truth, self, this.body.gaze);
     const believed = this.perception.ballNow(ctx.now);
     // Kept in 3D: whether the ball is in the air decides where it can be met.
     const ball = { pos: { ...believed.pos }, vel: { ...believed.vel }, spin: { ...believed.spin } };

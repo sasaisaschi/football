@@ -3,6 +3,7 @@ import type { MatchEvent, MatchSnapshot } from '../engine/types';
 import { PITCH } from '../physics/pitch-geometry';
 import { STANDS } from '../physics/pitch-colliders';
 import { cameraAllowed, type Framing } from './framing';
+import { allowedPose, REFERENCE, referencePose } from './reference-camera';
 
 export type Shot = 'main' | 'close' | 'behind-goal' | 'decision' | 'wide' | 'overview' | 'follow' | 'set-piece' | 'shot';
 
@@ -14,11 +15,8 @@ export type Shot = 'main' | 'close' | 'behind-goal' | 'decision' | 'wide' | 'ove
 export const BROADCAST_FOV = 27, WIDE_FOV = 36;
 /** The scene's following shot: low and close on the near side, a long lens, so the players fill the picture. */
 export const FOLLOW_FOV = 24;
-/**
- * The attack camera of a scene (issue #39): behind the play, raised, looking towards the goal being attacked, wide
- * enough that ball carrier, the defensive line, the team-mates to pass to and the goal are seen together.
- */
-export const ATTACK_FOV = 34, ATTACK_BACK = 12.5, ATTACK_HEIGHT = 8, ATTACK_LOOK = 7;
+/** The attack camera of a scene: the client's reference composition (reference-camera.ts). */
+export const ATTACK_FOV = REFERENCE.fov;
 
 /**
  * TV direction. The main gantry camera follows play with some anticipation; real events trigger cuts
@@ -128,16 +126,13 @@ export class CameraDirector {
       }
       case 'follow': {
         if (this.attackGoalX !== null) {
-          // Behind the attack: the camera stands back from the ball on the line from the goal, raised, and looks
-          // past the ball towards the goal. Aimed by a smoothed ball so it glides with play instead of jerking.
+          // The reference composition: raised on the attackers' right behind the ball, looking diagonally at the goal
+          // they attack. Aimed by a smoothed ball so it glides with play instead of jerking with every touch.
           if (this.snapNext) this.steady.set(b.x, 0, b.z);
           else this.steady.lerp(new THREE.Vector3(b.x + v.x * 0.25, 0, b.z + v.z * 0.25), Math.min(1, dt * 3));
-          const gx = this.attackGoalX, dx = gx - this.steady.x, dz = -this.steady.z * 0.6, d = Math.hypot(dx, dz) || 1;
-          this.target.set(this.steady.x - (dx / d) * ATTACK_BACK, ATTACK_HEIGHT, this.steady.z - (dz / d) * ATTACK_BACK);
-          for (let i = 0; i < 40 && !cameraAllowed(this.target); i++) this.target.lerp(this.steady, 0.06);
-          // Looks a little past the ball towards goal, never more than 40 % of the way (the ball stays in the picture).
-          const ahead = Math.min(ATTACK_LOOK, 0.4 * d);
-          this.look.set(this.steady.x + (dx / d) * ahead, 0, this.steady.z + (dz / d) * ahead);
+          const pose = allowedPose(referencePose({ x: this.steady.x, z: this.steady.z }, this.attackGoalX > 0 ? 1 : -1));
+          this.target.copy(pose.position);
+          this.look.copy(pose.target);
           if (this.snapNext) { snap = true; this.snapNext = false; }
           break;
         }

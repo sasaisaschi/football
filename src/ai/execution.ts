@@ -25,6 +25,8 @@ const STRIKE_STANDOFF = 0.55;
 const TOUCH_OFFSET = 0.5;
 /** Ball beside the body when shielding it: outside the far foot, still inside the leg's reach. */
 const SHIELD_OFFSET = 0.24;
+/** Distance to the striking spot (m) from which the body turns towards the kick direction (before: the whole run). */
+const SHAPE_DISTANCE = 2.2;
 /** Closest a running body passes the ball centre without touching it: body radius + ball radius + margin. */
 const BALL_CLEARANCE = 0.5;
 
@@ -79,10 +81,12 @@ export function approach(body: PlayerBody, legs: Legs, action: BallAction, ball:
     offset = SHIELD_OFFSET;
   }
   const spot = { x: bx - dir.x * STRIKE_STANDOFF - rx * side * offset, z: bz - dir.z * STRIKE_STANDOFF - rz * side * offset };
+  const toSpot = Math.hypot(spot.x - p.x, spot.z - p.z);
   return {
     target: roundTheBall(p, spot, ball.pos),
-    speed: Math.min(body.limits.maxSpeed, Math.hypot(spot.x - p.x, spot.z - p.z) / horizon),
-    face: { x: p.x + dir.x * 5, z: p.z + dir.z * 5 },
+    speed: Math.min(body.limits.maxSpeed, toSpot / horizon),
+    // On the way he watches the ball; the body opens towards the kick only for the last strides.
+    face: toSpot > SHAPE_DISTANCE ? ball.pos : { x: p.x + dir.x * 5, z: p.z + dir.z * 5 },
   };
 }
 
