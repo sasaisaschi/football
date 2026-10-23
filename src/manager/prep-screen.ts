@@ -1,7 +1,6 @@
 import './controls.css';
 import './prep-screen.css';
 import { applyLineup, createRoster, TEAMS, type LineupSwap } from '../engine/rosters';
-import { DEFAULT_INSTRUCTION } from '../engine/match-config';
 import type { PlayerProfile, TeamId, TeamInstruction } from '../engine/types';
 import { lang, LANG_STORAGE_KEY, tr, type Lang } from '../i18n';
 import type { Mode } from '../intel/types';
@@ -194,4 +193,3 @@ export function showPrepScreen(host: HTMLElement, defaultHalf: number, memoryMat
   host.append(el);
 }
 
-export const DEFAULT_STORED: StoredChoice = { userTeam: 0, mode: 'fan', focusPlayer: null, instruction: { ...DEFAULT_INSTRUCTION } };

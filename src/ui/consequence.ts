@@ -120,6 +120,11 @@ export class ConsequenceCard {
     this.hideAt = -1; // hide after a while of wall time, see tick()
   }
 
+  /** Off screen at once (the scene is over); a consequence still being followed keeps being followed. */
+  hide(): void {
+    this.el.hidden = true;
+  }
+
   /** Wall-clock housekeeping: the card stays a few seconds after its result. */
   tick(wall: number): void {
     if (this.hideAt === -1) this.hideAt = wall + 6;

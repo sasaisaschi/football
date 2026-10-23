@@ -1,14 +1,8 @@
-import RAPIER from '@dimforge/rapier3d-simd-compat';
 import * as THREE from 'three';
-import { beforeAll, describe, expect, it } from 'vitest';
-import { MatchEngine } from '../engine/match-engine';
+import { describe, expect, it } from 'vitest';
 import type { MatchSnapshot } from '../engine/types';
 import { PITCH } from '../physics/pitch-geometry';
 import { CameraDirector } from './camera-director';
-
-beforeAll(async () => {
-  await RAPIER.init();
-});
 
 /** The main broadcast shot settled on a ball at rest at (x, z); returns the camera (16:9 like the browser test). */
 function settledOn(x: number, z: number): THREE.PerspectiveCamera {

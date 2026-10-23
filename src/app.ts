@@ -59,9 +59,7 @@ export class MatchApp {
   private shownFrame: MatchSnapshot | null = null;
 
   private constructor(
-    private readonly scene: THREE.Scene,
     private readonly cam: THREE.PerspectiveCamera,
-    private readonly stadium: StadiumView,
     private readonly host: HTMLElement,
     private readonly audio: CrowdAudio,
     readonly options: AppOptions,
@@ -86,7 +84,7 @@ export class MatchApp {
   }
 
   static async create(scene: THREE.Scene, cam: THREE.PerspectiveCamera, stadium: StadiumView, host: HTMLElement, audio: CrowdAudio, options: AppOptions): Promise<MatchApp> {
-    const app = new MatchApp(scene, cam, stadium, host, audio, options);
+    const app = new MatchApp(cam, host, audio, options);
     await app.client.ready;
     app.profiles = app.client.profiles;
     app.intel = new IntelBoard(app.profiles, options.halfMinutes);
@@ -180,6 +178,7 @@ export class MatchApp {
 
   private sceneBegins(m: DecisionMoment, from: number): void {
     this.dialog?.close();
+    this.consequence.hide();
     this.manager.show(false);
     this.stage.begin(m, this.client.frame(from));
   }
@@ -207,6 +206,8 @@ export class MatchApp {
       const s = this.client.frame(this.driver.tick);
       this.consequence.start(m, optionId, by, this.intel.clock(s), s.time, s.possession);
       this.driver.decide(optionId, by);
+      // A coach decision is told in the manager's key developments, not on the scene's card.
+      this.consequence.hide();
       this.dialog = null;
     };
     if (this.interval) { this.interval.talk(m, decide); return; }
@@ -224,6 +225,7 @@ export class MatchApp {
   }
 
   private sceneEnds(): void {
+    this.consequence.hide();
     this.stage.end();
     this.manager.show(true);
   }
