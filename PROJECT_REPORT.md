@@ -1709,3 +1709,29 @@ Kernpunkte:
 - **Hardware:** Die Demo braucht WebGL 2 und WASM-SIMD. Auf schwacher Hardware dauert eine Sitzung länger (2 × 15 gemessen 7:16 min auf Intel Iris Xe).
 - **Video:** Es zeigt den Endstand ohne Foundry. Wird Foundry bereitgestellt, ist es neu aufzunehmen: `record-demo.mjs`, dann `build-video.mjs`, zusammen etwa 7 min.
 - **Spielstatistik:** Sie bleibt wie in §11 (Schüsse 16/90). Das ist kein Abgabehindernis.
+
+## 13. Phase E – Umbau zum interaktiven Fußballmanager (23.10.2026)
+
+**Ausgangslage:** `main` = `5e2f82c` (PR #36 gemergt). Branch `claude/phase-e-manager`, ein PR, kein Merge ohne Freigabe. Nicht Teil dieser Phase: Microsoft-Cloud, GitHub-Pages-Veröffentlichung, finales Video, Einreichung, neue Physik, Neubau der Match Intelligence, Wirtschaftssimulation.
+
+**Hinweis zum Zeitplan (Widerspruch nach CLAUDE.md):** Die Abgabefrist ist der 28.10.2026, 07:59 MEZ. Nach dieser Phase stehen noch manuelle Abnahme, finales Video, Veröffentlichung und vor allem die **Stage-One-Pflicht (laufende Microsoft-Technologie)** aus. Phase E wird deshalb so geschnitten, dass jeder Meilenstein für sich lauffähig bleibt und die Abgabe nicht blockiert.
+
+### 13.1 Arbeitsplan
+
+**Leitidee der Architektur:** Die vorhandene Trennung trägt bereits: Der Worker rechnet chronologisch vor, der Hauptthread zeigt nur Vergangenes, die Engine hält an jedem offenen Moment. Neu ist, **wer** das Gezeigte darstellt. In der Manageransicht läuft keine 3D-Grafik; die Ereignisse gehen in Zeitleiste, Statistik und Intelligence. Nur für eine Entscheidungsszene wird der Stadion-Canvas aktiv und spielt die letzten Sekunden **zum ersten Mal** aus dem Puffer ab. Dadurch gibt es keine zweite Engine, keine zweite Physikwelt und keine doppelt ausgegebenen Ereignisse.
+
+**Zustände der Sitzung (`src/session/flow.ts`, reine Zustandsmaschine, Node-getestet):**
+`prep → manager ⇄ scene(build-up → decide → consequence → return) → … → interval (Halbzeit) → manager → … → final`.
+- **manager:** Die Bildzeit folgt der Simulation mit wählbarem Tempo, bleibt aber mindestens die Länge der Vorgeschichte hinter ihr (sonst wäre die Vorgeschichte schon „verbraucht“). Pause und Fortsetzen halten den Worker tatsächlich an.
+- **scene:** Sobald der Worker an einem Moment steht, läuft die Manageransicht bis Moment − Vorgeschichte; dann übernimmt die 3D-Szene und zeigt die echte Vorgeschichte in Echtzeit, filmischer Übergang, Entscheidung, Konsequenz aus neu berechneten Frames, Rückkehr.
+- **coach-Momente** (Halbzeitansprache, Wechsel) erscheinen ohne 3D in Manageroberflächen.
+- Invarianten: genau eine Auflösung je Moment, keine neue Szene während einer offenen, kein Ereignis doppelt.
+
+**Arbeitsschritte:**
+1. **E1/E3 Fachlogik vor dem Anpfiff:** `MatchConfig.instructions` (Pressing, Linie, Risiko wirken ab Tick 0 über die vorhandene `TeamInstruction`) und `MatchConfig.lineup` (Tausch Startelf ↔ Bank vor dem Anpfiff, Torwart nur gegen Torwart, Position wie bei `substitute`). Ohne Änderung bleibt die Partie bit-identisch (Test).
+2. **E3 Zustandssteuerung:** `SessionFlow`, Manager-Taktgeber (Tempo, Abstand zur Simulation, Pause), Szenen-Taktgeber (Vorgeschichte, Zeitlupe vor dem Einfrieren, Konsequenz), Worker-Pause, Freigabe alter Frames; Rechenzeit ohne 3D im Browser messen (Einfluss auf Genauigkeit/Determinismus: keiner, dieselben Ticks).
+3. **E2 Manageroberfläche:** Spielvorbereitung (Verein, Startelf/Bank mit Rollen und Fähigkeiten, Tausch, Taktikregler, Modus, Länge, Sprache), Manageransicht (Anzeigetafel, Minute, Status der Simulation mit Tempo/Pause, Taktik, Mannschaft mit Form, Ereignis-Zeitleiste, Intelligence Fan/Analyst, Entwicklungen), Halbzeitbildschirm (Statistik der 1. Halbzeit, Ansprache als Taktik), Wechseldialog, Ergebnisbildschirm mit neuer Partie.
+4. **E4 3D-Szenen:** Spielerfigur aus dem **Blender „Human Base Meshes“** (Blender Foundation, CC0), per Blender-Skript reproduzierbar geriggt und exportiert, im Browser weiter von der vorhandenen Physik-IK gesteuert (Schuhe, Hände, Kopf, Brust bleiben dort, wo die Physik sie hat). Filmische Kamera (Verfolgung, Übergang, Entscheidungsperspektive, Konsequenz, Torwinkel), Nachbearbeitung (Bloom der Flutlichter, Tiefenunschärfe, Farbabstimmung, Vignette), engere Schatten um die Szene, Übergänge mit Letterbox und Titelkarte, taktische Markierungen überarbeitet. Zuerst eine vollständige Angriffsszene mit Browseraufnahme, dann Konter, Abwehr, Freistoß, Ecke, Elfmeter.
+5. **E5 Integration:** Intelligence, Konsequenzkarte, Chronik, JSON-Export, Gedächtnis, Sprachen, Foundry-Adapter und Pages-Workflow unverändert weiterverwenden.
+6. **E6 Abnahme:** Browsercheck für die neuen Übergänge (keine verlorenen Entscheidungen, keine doppelten Ereignisse, keine abweichenden Zustände), Protokollvergleich gleicher Seed + gleiche Entscheidungen vor/nach dem Umbau (alter `main`-Build gegen neuen Build) und getrennt mit konfigurierter Taktik, Sitzungsmessung, Screenshots und kurze Szenenaufnahmen, lokaler Testablauf.
+7. **E7 Bericht und PR.**
