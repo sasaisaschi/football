@@ -1,0 +1,1917 @@
+{
+ "schema": "the12thman.intel/v1",
+ "generatedFrom": "synthetic match events of THE 12TH MAN simulation (no real match data)",
+ "match": {
+  "seed": 7,
+  "halfMinutes": 15,
+  "teams": [
+   "Harbourside Athletic",
+   "Northgate Rovers"
+  ],
+  "userTeam": 0,
+  "score": [
+   0,
+   2
+  ]
+ },
+ "ingested": {
+  "events": 4323,
+  "frames": 6822
+ },
+ "teams": [
+  {
+   "name": "Harbourside Athletic",
+   "possessionPct": 54,
+   "possession": 912.7499999993345,
+   "territory": 296.566666666466,
+   "passes": 259,
+   "passesCompleted": 204,
+   "passDistance": 2081.5539572430166,
+   "passDifficulty": 666,
+   "progressivePasses": 7,
+   "shots": 0,
+   "shotsOnTarget": 0,
+   "xg": 0,
+   "goals": 0,
+   "pressures": 331,
+   "pressureWins": 156,
+   "ballsWon": 229,
+   "ballsLost": 229,
+   "lostOwnThird": 56,
+   "fouls": 6,
+   "corners": 1,
+   "maxShotSpeed": 0,
+   "passAccuracyPct": 79,
+   "avgPassDistance": 8,
+   "avgPassDifficulty": 2.57,
+   "maxShotKmh": 0
+  },
+  {
+   "name": "Northgate Rovers",
+   "possessionPct": 46,
+   "possession": 785.6499999994267,
+   "territory": 398.5499999996861,
+   "passes": 216,
+   "passesCompleted": 167,
+   "passDistance": 1863.7923154125015,
+   "passDifficulty": 556,
+   "progressivePasses": 4,
+   "shots": 7,
+   "shotsOnTarget": 7,
+   "xg": 1.94,
+   "goals": 2,
+   "pressures": 354,
+   "pressureWins": 153,
+   "ballsWon": 229,
+   "ballsLost": 229,
+   "lostOwnThird": 27,
+   "fouls": 0,
+   "corners": 2,
+   "maxShotSpeed": 26.146405226184456,
+   "passAccuracyPct": 77,
+   "avgPassDistance": 8.6,
+   "avgPassDifficulty": 2.57,
+   "maxShotKmh": 94
+  }
+ ],
+ "players": [
+  {
+   "id": 0,
+   "name": "Okafor",
+   "number": 1,
+   "team": 0,
+   "touches": 14,
+   "passes": 1,
+   "passesCompleted": 1,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 782,
+   "topSpeed": 5.5580377100934175,
+   "sprints": 0,
+   "ballsWon": 5,
+   "topSpeedKmh": 20
+  },
+  {
+   "id": 1,
+   "name": "Reyes",
+   "number": 2,
+   "team": 0,
+   "touches": 51,
+   "passes": 15,
+   "passesCompleted": 12,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4849,
+   "topSpeed": 8.530435743739147,
+   "sprints": 10,
+   "ballsWon": 13,
+   "topSpeedKmh": 30.7
+  },
+  {
+   "id": 2,
+   "name": "Lindqvist",
+   "number": 5,
+   "team": 0,
+   "touches": 84,
+   "passes": 29,
+   "passesCompleted": 21,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4485,
+   "topSpeed": 8.257944680728391,
+   "sprints": 12,
+   "ballsWon": 13,
+   "topSpeedKmh": 29.7
+  },
+  {
+   "id": 3,
+   "name": "Brandt",
+   "number": 6,
+   "team": 0,
+   "touches": 139,
+   "passes": 37,
+   "passesCompleted": 29,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4829,
+   "topSpeed": 7.900597228247215,
+   "sprints": 8,
+   "ballsWon": 16,
+   "topSpeedKmh": 28.4
+  },
+  {
+   "id": 4,
+   "name": "Mensah",
+   "number": 3,
+   "team": 0,
+   "touches": 84,
+   "passes": 25,
+   "passesCompleted": 23,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4955,
+   "topSpeed": 8.05206090295238,
+   "sprints": 19,
+   "ballsWon": 14,
+   "topSpeedKmh": 29
+  },
+  {
+   "id": 5,
+   "name": "Hale",
+   "number": 8,
+   "team": 0,
+   "touches": 118,
+   "passes": 34,
+   "passesCompleted": 27,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 5471,
+   "topSpeed": 8.320521419485642,
+   "sprints": 39,
+   "ballsWon": 33,
+   "topSpeedKmh": 30
+  },
+  {
+   "id": 6,
+   "name": "Costa",
+   "number": 4,
+   "team": 0,
+   "touches": 120,
+   "passes": 44,
+   "passesCompleted": 34,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 5275,
+   "topSpeed": 8.162392386737737,
+   "sprints": 27,
+   "ballsWon": 27,
+   "topSpeedKmh": 29.4
+  },
+  {
+   "id": 7,
+   "name": "Nakamura",
+   "number": 10,
+   "team": 0,
+   "touches": 113,
+   "passes": 29,
+   "passesCompleted": 22,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 5505,
+   "topSpeed": 8.422783906673313,
+   "sprints": 45,
+   "ballsWon": 31,
+   "topSpeedKmh": 30.3
+  },
+  {
+   "id": 8,
+   "name": "Doyle",
+   "number": 7,
+   "team": 0,
+   "touches": 83,
+   "passes": 15,
+   "passesCompleted": 13,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4463,
+   "topSpeed": 8.074861618490306,
+   "sprints": 13,
+   "ballsWon": 32,
+   "topSpeedKmh": 29.1
+  },
+  {
+   "id": 9,
+   "name": "Ferreira",
+   "number": 9,
+   "team": 0,
+   "touches": 48,
+   "passes": 15,
+   "passesCompleted": 11,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4152,
+   "topSpeed": 8.007282082995802,
+   "sprints": 11,
+   "ballsWon": 22,
+   "topSpeedKmh": 28.8
+  },
+  {
+   "id": 10,
+   "name": "Kowal",
+   "number": 11,
+   "team": 0,
+   "touches": 59,
+   "passes": 15,
+   "passesCompleted": 11,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4395,
+   "topSpeed": 8.851060781749155,
+   "sprints": 14,
+   "ballsWon": 23,
+   "topSpeedKmh": 31.9
+  },
+  {
+   "id": 11,
+   "name": "Ashworth",
+   "number": 1,
+   "team": 1,
+   "touches": 2,
+   "passes": 0,
+   "passesCompleted": 0,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 726,
+   "topSpeed": 5.026052411334925,
+   "sprints": 0,
+   "ballsWon": 0,
+   "topSpeedKmh": 18.1
+  },
+  {
+   "id": 12,
+   "name": "Diallo",
+   "number": 2,
+   "team": 1,
+   "touches": 60,
+   "passes": 15,
+   "passesCompleted": 10,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4808,
+   "topSpeed": 8.618056088938296,
+   "sprints": 12,
+   "ballsWon": 9,
+   "topSpeedKmh": 31
+  },
+  {
+   "id": 13,
+   "name": "Varga",
+   "number": 5,
+   "team": 1,
+   "touches": 52,
+   "passes": 21,
+   "passesCompleted": 16,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4380,
+   "topSpeed": 8.250886743332003,
+   "sprints": 9,
+   "ballsWon": 8,
+   "topSpeedKmh": 29.7
+  },
+  {
+   "id": 14,
+   "name": "Moreau",
+   "number": 6,
+   "team": 1,
+   "touches": 81,
+   "passes": 21,
+   "passesCompleted": 18,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4839,
+   "topSpeed": 8.140430084405759,
+   "sprints": 11,
+   "ballsWon": 14,
+   "topSpeedKmh": 29.3
+  },
+  {
+   "id": 15,
+   "name": "Quinn",
+   "number": 3,
+   "team": 1,
+   "touches": 65,
+   "passes": 21,
+   "passesCompleted": 18,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 4831,
+   "topSpeed": 8.199977392015844,
+   "sprints": 14,
+   "ballsWon": 17,
+   "topSpeedKmh": 29.5
+  },
+  {
+   "id": 16,
+   "name": "Sato",
+   "number": 8,
+   "team": 1,
+   "touches": 130,
+   "passes": 32,
+   "passesCompleted": 24,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 5305,
+   "topSpeed": 8.16175421461105,
+   "sprints": 27,
+   "ballsWon": 38,
+   "topSpeedKmh": 29.4
+  },
+  {
+   "id": 17,
+   "name": "Petrov",
+   "number": 4,
+   "team": 1,
+   "touches": 117,
+   "passes": 30,
+   "passesCompleted": 24,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 5198,
+   "topSpeed": 8.205626149220414,
+   "sprints": 19,
+   "ballsWon": 23,
+   "topSpeedKmh": 29.5
+  },
+  {
+   "id": 18,
+   "name": "Adeyemi",
+   "number": 10,
+   "team": 1,
+   "touches": 82,
+   "passes": 27,
+   "passesCompleted": 19,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 5338,
+   "topSpeed": 8.286568329381362,
+   "sprints": 28,
+   "ballsWon": 27,
+   "topSpeedKmh": 29.8
+  },
+  {
+   "id": 19,
+   "name": "Holm",
+   "number": 7,
+   "team": 1,
+   "touches": 76,
+   "passes": 13,
+   "passesCompleted": 10,
+   "shots": 2,
+   "goals": 1,
+   "xg": 0.87,
+   "distance": 4642,
+   "topSpeed": 8.530532533446388,
+   "sprints": 19,
+   "ballsWon": 29,
+   "topSpeedKmh": 30.7
+  },
+  {
+   "id": 20,
+   "name": "Navarro",
+   "number": 9,
+   "team": 1,
+   "touches": 106,
+   "passes": 22,
+   "passesCompleted": 17,
+   "shots": 5,
+   "goals": 1,
+   "xg": 1.06,
+   "distance": 4515,
+   "topSpeed": 8.63461971537451,
+   "sprints": 18,
+   "ballsWon": 45,
+   "topSpeedKmh": 31.1
+  },
+  {
+   "id": 21,
+   "name": "Byrne",
+   "number": 11,
+   "team": 1,
+   "touches": 40,
+   "passes": 9,
+   "passesCompleted": 8,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 3694,
+   "topSpeed": 8.154084253495062,
+   "sprints": 5,
+   "ballsWon": 12,
+   "topSpeedKmh": 29.4
+  },
+  {
+   "id": 28,
+   "name": "Baptiste",
+   "number": 15,
+   "team": 1,
+   "touches": 24,
+   "passes": 5,
+   "passesCompleted": 3,
+   "shots": 0,
+   "goals": 0,
+   "xg": 0,
+   "distance": 636,
+   "topSpeed": 8.210162699748121,
+   "sprints": 1,
+   "ballsWon": 7,
+   "topSpeedKmh": 29.6
+  }
+ ],
+ "shots": [
+  {
+   "time": 26.0999999999998,
+   "team": 1,
+   "player": 19,
+   "xg": 0.75,
+   "speed": 22.02836016691711,
+   "distance": 3.2354575287471072,
+   "outcome": "goal",
+   "eventIds": [
+    54,
+    55,
+    56
+   ],
+   "kmh": 79
+  },
+  {
+   "time": 273.21666666674685,
+   "team": 1,
+   "player": 20,
+   "xg": 0.747,
+   "speed": 24.393210103850745,
+   "distance": 5.614330441070141,
+   "outcome": "goal",
+   "eventIds": [
+    663,
+    664,
+    665
+   ],
+   "kmh": 88
+  },
+  {
+   "time": 322.4500000000354,
+   "team": 1,
+   "player": 20,
+   "xg": 0.05,
+   "speed": 22.528620957395923,
+   "distance": 20.94710579782816,
+   "outcome": "saved",
+   "eventIds": [
+    751,
+    754,
+    757
+   ],
+   "kmh": 81
+  },
+  {
+   "time": 1371.3999999990815,
+   "team": 1,
+   "player": 19,
+   "xg": 0.125,
+   "speed": 22.987931339975948,
+   "distance": 15.112230475384168,
+   "outcome": "saved",
+   "eventIds": [
+    3327,
+    3328,
+    3329
+   ],
+   "kmh": 83
+  },
+  {
+   "time": 1657.799999998821,
+   "team": 1,
+   "player": 20,
+   "xg": 0.04,
+   "speed": 23.880394873522157,
+   "distance": 23.16976570503605,
+   "outcome": "saved",
+   "eventIds": [
+    3976,
+    3977,
+    3980
+   ],
+   "kmh": 86
+  },
+  {
+   "time": 1741.9666666654111,
+   "team": 1,
+   "player": 20,
+   "xg": 0.06,
+   "speed": 26.146405226184456,
+   "distance": 20.45092192271409,
+   "outcome": "saved",
+   "eventIds": [
+    4181,
+    4182,
+    4183
+   ],
+   "kmh": 94
+  },
+  {
+   "time": 1788.4999999987022,
+   "team": 1,
+   "player": 20,
+   "xg": 0.163,
+   "speed": 23.538949906934786,
+   "distance": 13.72592093559327,
+   "outcome": "saved",
+   "eventIds": [
+    4258,
+    4260,
+    4261
+   ],
+   "kmh": 85
+  }
+ ],
+ "insights": [
+  {
+   "id": 1,
+   "tick": 1008,
+   "time": 16.800000000000328,
+   "clock": "00:16",
+   "kind": "decision",
+   "team": 0,
+   "player": 3,
+   "priority": 3,
+   "data": {
+    "title": "Danger at the edge of our box",
+    "choice": "Hold the shape",
+    "by": "timeout",
+    "outcome": "won-back",
+    "seconds": 2
+   },
+   "eventIds": [
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    35
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: Hold the shape – the ball was won back."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: Hold the shape – der Ball wurde zurückerobert."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Danger at the edge of our box",
+      "text": "Time ran out: Hold the shape. Outcome after 2 s: the ball was won back. (Brandt)"
+     },
+     "de": {
+      "title": "Danger at the edge of our box",
+      "text": "Zeit abgelaufen: Hold the shape. Ergebnis nach 2 s: der Ball wurde zurückerobert. (Brandt)"
+     }
+    }
+   }
+  },
+  {
+   "id": 2,
+   "tick": 1574,
+   "time": 26.233333333333125,
+   "clock": "00:26",
+   "kind": "goal-story",
+   "team": 1,
+   "player": 19,
+   "priority": 3,
+   "data": {
+    "ownGoal": false,
+    "score": "0:1",
+    "passes": 0,
+    "origin": "turnover",
+    "zone": "own-third",
+    "seconds": 0,
+    "xg": 0.75,
+    "distance": 3,
+    "kmh": 79
+   },
+   "eventIds": [
+    54,
+    55,
+    56
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "GOAL – Holm",
+      "text": "Holm scores pouncing on a loose ball. 0:1."
+     },
+     "de": {
+      "title": "TOR – Holm",
+      "text": "Holm trifft nach einem Abpraller. 0:1."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Goal 0:1 – how it happened",
+      "text": "Scored from a ball won high up the pitch. Shot from 3 m at 79 km/h, model xG 0.75."
+     },
+     "de": {
+      "title": "Tor 0:1 – wie es entstand",
+      "text": "Erzielt aus einem Ballgewinn weit vorn. Schuss aus 3 m mit 79 km/h, Modell-xG 0.75."
+     }
+    }
+   }
+  },
+  {
+   "id": 3,
+   "tick": 4350,
+   "time": 72.49999999999717,
+   "clock": "01:12",
+   "kind": "decision",
+   "team": 0,
+   "player": 9,
+   "priority": 3,
+   "data": {
+    "title": "Ball lost in their half",
+    "choice": "Drop off",
+    "by": "timeout",
+    "outcome": "won-back",
+    "seconds": 7
+   },
+   "eventIds": [
+    135,
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145,
+    146,
+    147,
+    148,
+    149,
+    150,
+    150
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: Drop off – the ball was won back."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: Drop off – der Ball wurde zurückerobert."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Ball lost in their half",
+      "text": "Time ran out: Drop off. Outcome after 7 s: the ball was won back. (Ferreira)"
+     },
+     "de": {
+      "title": "Ball lost in their half",
+      "text": "Zeit abgelaufen: Drop off. Ergebnis nach 7 s: der Ball wurde zurückerobert. (Ferreira)"
+     }
+    }
+   }
+  },
+  {
+   "id": 4,
+   "tick": 15090,
+   "time": 251.50000000009229,
+   "clock": "04:11",
+   "kind": "decision",
+   "team": 0,
+   "player": 3,
+   "priority": 3,
+   "data": {
+    "title": "Opponent through on goal",
+    "choice": "Chase fairly",
+    "by": "timeout",
+    "outcome": "won-back",
+    "seconds": 2
+   },
+   "eventIds": [
+    594,
+    595,
+    596,
+    597,
+    598,
+    599,
+    600,
+    600
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: Chase fairly – the ball was won back."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: Chase fairly – der Ball wurde zurückerobert."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Opponent through on goal",
+      "text": "Time ran out: Chase fairly. Outcome after 2 s: the ball was won back. (Brandt)"
+     },
+     "de": {
+      "title": "Opponent through on goal",
+      "text": "Zeit abgelaufen: Chase fairly. Ergebnis nach 2 s: der Ball wurde zurückerobert. (Brandt)"
+     }
+    }
+   }
+  },
+  {
+   "id": 5,
+   "tick": 16411,
+   "time": 273.5166666667466,
+   "clock": "04:33",
+   "kind": "goal-story",
+   "team": 1,
+   "player": 20,
+   "priority": 3,
+   "data": {
+    "ownGoal": false,
+    "score": "0:2",
+    "passes": 0,
+    "origin": "turnover",
+    "zone": "own-third",
+    "seconds": 0,
+    "xg": 0.75,
+    "distance": 6,
+    "kmh": 88
+   },
+   "eventIds": [
+    663,
+    664,
+    665
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "GOAL – Navarro",
+      "text": "Navarro scores pouncing on a loose ball. 0:2."
+     },
+     "de": {
+      "title": "TOR – Navarro",
+      "text": "Navarro trifft nach einem Abpraller. 0:2."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Goal 0:2 – how it happened",
+      "text": "Scored from a ball won high up the pitch. Shot from 6 m at 88 km/h, model xG 0.75."
+     },
+     "de": {
+      "title": "Tor 0:2 – wie es entstand",
+      "text": "Erzielt aus einem Ballgewinn weit vorn. Schuss aus 6 m mit 88 km/h, Modell-xG 0.75."
+     }
+    }
+   }
+  },
+  {
+   "id": 6,
+   "tick": 17086,
+   "time": 284.76666666673634,
+   "clock": "04:44",
+   "kind": "danger",
+   "team": 1,
+   "player": null,
+   "priority": 2,
+   "data": {
+    "shots": 1,
+    "xg": 0.75,
+    "minutes": 4.1
+   },
+   "eventIds": [
+    663
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Pressure on goal",
+      "text": "Northgate Rovers 1 shots in 4 minutes – a goal is in the air."
+     },
+     "de": {
+      "title": "Es brennt vor dem Tor",
+      "text": "Northgate Rovers: 1 Schüsse in 4 Minuten – ein Tor liegt in der Luft."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Threat: 1 shots, xG 0.75",
+      "text": "Northgate Rovers in the last 4.1 min (model xG)."
+     },
+     "de": {
+      "title": "Gefahr: 1 Schüsse, xG 0.75",
+      "text": "Northgate Rovers in den letzten 4.1 min (Modell-xG)."
+     }
+    }
+   }
+  },
+  {
+   "id": 7,
+   "tick": 23248,
+   "time": 387.46666666664294,
+   "clock": "06:27",
+   "kind": "decision",
+   "team": 0,
+   "player": 10,
+   "priority": 3,
+   "data": {
+    "title": "Corner – which routine?",
+    "choice": "Near post",
+    "by": "timeout",
+    "outcome": "out-theirs",
+    "seconds": 5
+   },
+   "eventIds": [
+    886,
+    887,
+    888,
+    889,
+    890,
+    890
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: Near post – the ball went out – their restart."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: Near post – Ball im Aus – Spielfortsetzung für den Gegner."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Corner – which routine?",
+      "text": "Time ran out: Near post. Outcome after 5 s: the ball went out – their restart. (Kowal)"
+     },
+     "de": {
+      "title": "Corner – which routine?",
+      "text": "Zeit abgelaufen: Near post. Ergebnis nach 5 s: Ball im Aus – Spielfortsetzung für den Gegner. (Kowal)"
+     }
+    }
+   }
+  },
+  {
+   "id": 8,
+   "tick": 26126,
+   "time": 435.433333333266,
+   "clock": "07:15",
+   "kind": "pressing",
+   "team": 0,
+   "player": null,
+   "priority": 2,
+   "data": {
+    "wins": 16,
+    "presses": 28,
+    "rate": 57,
+    "otherRate": 41,
+    "minutes": 5.1
+   },
+   "eventIds": [],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "The press is working",
+      "text": "Your team keep winning the ball back in the opponents' half – 16 times in 5 minutes."
+     },
+     "de": {
+      "title": "Das Pressing greift",
+      "text": "Dein Team erobert den Ball immer wieder in der gegnerischen Hälfte – 16-mal in 5 Minuten."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "High press: 57 % success",
+      "text": "your team: 16 of 28 pressures in the opponents' half won the ball within 3 s (other side 41 %; last 5.1 min; pressure = defender within 2 m of the carrier)."
+     },
+     "de": {
+      "title": "Hohes Pressing: 57 % Erfolg",
+      "text": "dein Team: 16 von 28 Druckaktionen in der gegnerischen Hälfte gewannen den Ball binnen 3 s (Gegner 41 %; letzte 5.1 min; Druck = Verteidiger höchstens 2 m am Ballführer)."
+     }
+    }
+   }
+  },
+  {
+   "id": 9,
+   "tick": 31550,
+   "time": 525.8333333331838,
+   "clock": "08:45",
+   "kind": "danger",
+   "team": 1,
+   "player": null,
+   "priority": 2,
+   "data": {
+    "shots": 2,
+    "xg": 0.8,
+    "minutes": 5.1
+   },
+   "eventIds": [
+    663,
+    751
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Pressure on goal",
+      "text": "Northgate Rovers 2 shots in 5 minutes – a goal is in the air."
+     },
+     "de": {
+      "title": "Es brennt vor dem Tor",
+      "text": "Northgate Rovers: 2 Schüsse in 5 Minuten – ein Tor liegt in der Luft."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Threat: 2 shots, xG 0.8",
+      "text": "Northgate Rovers in the last 5.1 min (model xG)."
+     },
+     "de": {
+      "title": "Gefahr: 2 Schüsse, xG 0.8",
+      "text": "Northgate Rovers in den letzten 5.1 min (Modell-xG)."
+     }
+    }
+   }
+  },
+  {
+   "id": 10,
+   "tick": 38782,
+   "time": 646.3666666664075,
+   "clock": "10:46",
+   "kind": "momentum",
+   "team": 0,
+   "player": null,
+   "priority": 2,
+   "data": {
+    "share": 66,
+    "minutes": 5,
+    "shots": 0,
+    "xg": 0,
+    "otherShots": 0
+   },
+   "eventIds": [],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your team on top",
+      "text": "Your team have been playing in the opponents' half most of the last 5 minutes."
+     },
+     "de": {
+      "title": "Dein Team drückt",
+      "text": "Dein Team spielt seit 5 Minuten fast nur in der gegnerischen Hälfte."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Territory shift: your team 66 %",
+      "text": "66 % of attacking time in the last 5 min; shots 0:0, xG 0."
+     },
+     "de": {
+      "title": "Feldverschiebung: dein Team 66 %",
+      "text": "66 % der Angriffszeit in den letzten 5 min; Schüsse 0:0, xG 0."
+     }
+    }
+   }
+  },
+  {
+   "id": 11,
+   "tick": 40590,
+   "time": 676.4999999997134,
+   "clock": "11:16",
+   "kind": "pressing",
+   "team": 0,
+   "player": null,
+   "priority": 2,
+   "data": {
+    "wins": 17,
+    "presses": 26,
+    "rate": 65,
+    "otherRate": 32,
+    "minutes": 5
+   },
+   "eventIds": [],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "The press is working",
+      "text": "Your team keep winning the ball back in the opponents' half – 17 times in 5 minutes."
+     },
+     "de": {
+      "title": "Das Pressing greift",
+      "text": "Dein Team erobert den Ball immer wieder in der gegnerischen Hälfte – 17-mal in 5 Minuten."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "High press: 65 % success",
+      "text": "your team: 17 of 26 pressures in the opponents' half won the ball within 3 s (other side 32 %; last 5 min; pressure = defender within 2 m of the carrier)."
+     },
+     "de": {
+      "title": "Hohes Pressing: 65 % Erfolg",
+      "text": "dein Team: 17 von 26 Druckaktionen in der gegnerischen Hälfte gewannen den Ball binnen 3 s (Gegner 32 %; letzte 5 min; Druck = Verteidiger höchstens 2 m am Ballführer)."
+     }
+    }
+   }
+  },
+  {
+   "id": 12,
+   "tick": 53315,
+   "time": 888.5833333328538,
+   "clock": "14:48",
+   "kind": "decision",
+   "team": 0,
+   "player": 8,
+   "priority": 3,
+   "data": {
+    "title": "Take him on or pass?",
+    "choice": "Pass to Ferreira (9)",
+    "by": "timeout",
+    "outcome": "lost",
+    "seconds": 3,
+    "estimate": 60
+   },
+   "eventIds": [
+    2114,
+    2115,
+    2116,
+    2116
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: Pass to Ferreira (9) – the ball was lost."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: Pass to Ferreira (9) – der Ball ging verloren."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Take him on or pass?",
+      "text": "Time ran out: Pass to Ferreira (9). Outcome after 3 s: the ball was lost. Players' estimate beforehand: 60 %. (Doyle)"
+     },
+     "de": {
+      "title": "Take him on or pass?",
+      "text": "Zeit abgelaufen: Pass to Ferreira (9). Ergebnis nach 3 s: der Ball ging verloren. Einschätzung der Spieler vorher: 60 %. (Doyle)"
+     }
+    }
+   }
+  },
+  {
+   "id": 13,
+   "tick": 54001,
+   "time": 900.0166666661768,
+   "clock": "15:00",
+   "kind": "half-summary",
+   "team": null,
+   "player": null,
+   "priority": 3,
+   "data": {
+    "score": "0:2",
+    "possession0": 56,
+    "shots0": 0,
+    "xg0": 0,
+    "passAcc0": 83,
+    "pressureWins0": 77,
+    "possession1": 44,
+    "shots1": 3,
+    "xg1": 1.55,
+    "passAcc1": 71,
+    "pressureWins1": 84
+   },
+   "eventIds": [
+    2145
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Half-time 0:2",
+      "text": "Harbourside Athletic had more of the ball (56 %); shots 0:3."
+     },
+     "de": {
+      "title": "Halbzeit 0:2",
+      "text": "Harbourside Athletic hatte mehr vom Ball (56 %); Schüsse 0:3."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Half-time 0:2",
+      "text": "Possession 56:44 %, shots 0:3, xG 0:1.55, pass accuracy 83:71 %, pressures won 77:84."
+     },
+     "de": {
+      "title": "Halbzeit 0:2",
+      "text": "Ballbesitz 56:44 %, Schüsse 0:3, xG 0:1.55, Passquote 83:71 %, gewonnene Druckaktionen 77:84."
+     }
+    }
+   }
+  },
+  {
+   "id": 14,
+   "tick": 54113,
+   "time": 901.8833333328417,
+   "clock": "15:01",
+   "kind": "decision",
+   "team": 0,
+   "player": 6,
+   "priority": 3,
+   "data": {
+    "title": "Half-time – your team talk",
+    "choice": "Carry on",
+    "by": "timeout",
+    "outcome": "no-change",
+    "seconds": 2
+   },
+   "eventIds": [
+    2149,
+    2150,
+    2150
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: Carry on – the team stays as it is."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: Carry on – die Mannschaft bleibt, wie sie ist."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Half-time – your team talk",
+      "text": "Time ran out: Carry on. Outcome after 2 s: the team stays as it is. (Costa)"
+     },
+     "de": {
+      "title": "Half-time – your team talk",
+      "text": "Zeit abgelaufen: Carry on. Ergebnis nach 2 s: die Mannschaft bleibt, wie sie ist. (Costa)"
+     }
+    }
+   }
+  },
+  {
+   "id": 15,
+   "tick": 59942,
+   "time": 999.0333333327534,
+   "clock": "16:39",
+   "kind": "decision",
+   "team": 0,
+   "player": 10,
+   "priority": 3,
+   "data": {
+    "title": "Take him on or pass?",
+    "choice": "Pass to Nakamura (10)",
+    "by": "timeout",
+    "outcome": "lost",
+    "seconds": 2,
+    "estimate": 54
+   },
+   "eventIds": [
+    2418,
+    2419,
+    2419
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: Pass to Nakamura (10) – the ball was lost."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: Pass to Nakamura (10) – der Ball ging verloren."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Take him on or pass?",
+      "text": "Time ran out: Pass to Nakamura (10). Outcome after 2 s: the ball was lost. Players' estimate beforehand: 54 %. (Kowal)"
+     },
+     "de": {
+      "title": "Take him on or pass?",
+      "text": "Zeit abgelaufen: Pass to Nakamura (10). Ergebnis nach 2 s: der Ball ging verloren. Einschätzung der Spieler vorher: 54 %. (Kowal)"
+     }
+    }
+   }
+  },
+  {
+   "id": 16,
+   "tick": 61735,
+   "time": 1028.9166666660597,
+   "clock": "17:08",
+   "kind": "decision",
+   "team": 0,
+   "player": 6,
+   "priority": 3,
+   "data": {
+    "title": "Ball lost in their half",
+    "choice": "Drop off",
+    "by": "timeout",
+    "outcome": "won-back",
+    "seconds": 1
+   },
+   "eventIds": [
+    2486,
+    2487,
+    2488,
+    2489,
+    2489
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: Drop off – the ball was won back."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: Drop off – der Ball wurde zurückerobert."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Ball lost in their half",
+      "text": "Time ran out: Drop off. Outcome after 1 s: the ball was won back. (Costa)"
+     },
+     "de": {
+      "title": "Ball lost in their half",
+      "text": "Zeit abgelaufen: Drop off. Ergebnis nach 1 s: der Ball wurde zurückerobert. (Costa)"
+     }
+    }
+   }
+  },
+  {
+   "id": 17,
+   "tick": 62398,
+   "time": 1039.9666666660496,
+   "clock": "17:19",
+   "kind": "pressing",
+   "team": 1,
+   "player": null,
+   "priority": 2,
+   "data": {
+    "wins": 18,
+    "presses": 36,
+    "rate": 50,
+    "otherRate": 39,
+    "minutes": 5.1
+   },
+   "eventIds": [],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "The press is working",
+      "text": "Northgate Rovers keep winning the ball back in the opponents' half – 18 times in 5 minutes."
+     },
+     "de": {
+      "title": "Das Pressing greift",
+      "text": "Northgate Rovers erobert den Ball immer wieder in der gegnerischen Hälfte – 18-mal in 5 Minuten."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "High press: 50 % success",
+      "text": "Northgate Rovers: 18 of 36 pressures in the opponents' half won the ball within 3 s (other side 39 %; last 5.1 min; pressure = defender within 2 m of the carrier)."
+     },
+     "de": {
+      "title": "Hohes Pressing: 50 % Erfolg",
+      "text": "Northgate Rovers: 18 von 36 Druckaktionen in der gegnerischen Hälfte gewannen den Ball binnen 3 s (Gegner 39 %; letzte 5.1 min; Druck = Verteidiger höchstens 2 m am Ballführer)."
+     }
+    }
+   }
+  },
+  {
+   "id": 18,
+   "tick": 67769,
+   "time": 1129.4833333326349,
+   "clock": "18:49",
+   "kind": "decision",
+   "team": 0,
+   "player": 10,
+   "priority": 3,
+   "data": {
+    "title": "Substitution?",
+    "choice": "No change",
+    "by": "timeout",
+    "outcome": "no-change",
+    "seconds": 2
+   },
+   "eventIds": [
+    2737,
+    2738,
+    2738
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: No change – the team stays as it is."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: No change – die Mannschaft bleibt, wie sie ist."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Substitution?",
+      "text": "Time ran out: No change. Outcome after 2 s: the team stays as it is. (Kowal)"
+     },
+     "de": {
+      "title": "Substitution?",
+      "text": "Zeit abgelaufen: No change. Ergebnis nach 2 s: die Mannschaft bleibt, wie sie ist. (Kowal)"
+     }
+    }
+   }
+  },
+  {
+   "id": 19,
+   "tick": 71042,
+   "time": 1184.0333333325852,
+   "clock": "19:44",
+   "kind": "decision",
+   "team": 0,
+   "player": 5,
+   "priority": 3,
+   "data": {
+    "title": "Take him on or pass?",
+    "choice": "Pass to Doyle (7)",
+    "by": "timeout",
+    "outcome": "lost",
+    "seconds": 0,
+    "estimate": 35
+   },
+   "eventIds": [
+    2892,
+    2893,
+    2893
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: Pass to Doyle (7) – the ball was lost."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: Pass to Doyle (7) – der Ball ging verloren."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Take him on or pass?",
+      "text": "Time ran out: Pass to Doyle (7). Outcome after 0 s: the ball was lost. Players' estimate beforehand: 35 %. (Hale)"
+     },
+     "de": {
+      "title": "Take him on or pass?",
+      "text": "Zeit abgelaufen: Pass to Doyle (7). Ergebnis nach 0 s: der Ball ging verloren. Einschätzung der Spieler vorher: 35 %. (Hale)"
+     }
+    }
+   }
+  },
+  {
+   "id": 20,
+   "tick": 76878,
+   "time": 1281.2999999991634,
+   "clock": "21:21",
+   "kind": "pressing",
+   "team": 1,
+   "player": null,
+   "priority": 2,
+   "data": {
+    "wins": 11,
+    "presses": 19,
+    "rate": 58,
+    "otherRate": 31,
+    "minutes": 5.1
+   },
+   "eventIds": [],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "The press is working",
+      "text": "Northgate Rovers keep winning the ball back in the opponents' half – 11 times in 5 minutes."
+     },
+     "de": {
+      "title": "Das Pressing greift",
+      "text": "Northgate Rovers erobert den Ball immer wieder in der gegnerischen Hälfte – 11-mal in 5 Minuten."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "High press: 58 % success",
+      "text": "Northgate Rovers: 11 of 19 pressures in the opponents' half won the ball within 3 s (other side 31 %; last 5.1 min; pressure = defender within 2 m of the carrier)."
+     },
+     "de": {
+      "title": "Hohes Pressing: 58 % Erfolg",
+      "text": "Northgate Rovers: 11 von 19 Druckaktionen in der gegnerischen Hälfte gewannen den Ball binnen 3 s (Gegner 31 %; letzte 5.1 min; Druck = Verteidiger höchstens 2 m am Ballführer)."
+     }
+    }
+   }
+  },
+  {
+   "id": 21,
+   "tick": 77907,
+   "time": 1298.4499999991478,
+   "clock": "21:38",
+   "kind": "decision",
+   "team": 0,
+   "player": 0,
+   "priority": 3,
+   "data": {
+    "title": "Corner against us – how do we defend?",
+    "choice": "As usual",
+    "by": "timeout",
+    "outcome": "out-ours",
+    "seconds": 5
+   },
+   "eventIds": [
+    3166,
+    3167,
+    3168,
+    3169,
+    3170,
+    3170
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: As usual – the ball went out – our restart."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: As usual – Ball im Aus – Spielfortsetzung für uns."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Corner against us – how do we defend?",
+      "text": "Time ran out: As usual. Outcome after 5 s: the ball went out – our restart. (Okafor)"
+     },
+     "de": {
+      "title": "Corner against us – how do we defend?",
+      "text": "Zeit abgelaufen: As usual. Ergebnis nach 5 s: Ball im Aus – Spielfortsetzung für uns. (Okafor)"
+     }
+    }
+   }
+  },
+  {
+   "id": 22,
+   "tick": 80494,
+   "time": 1341.5666666657753,
+   "clock": "22:21",
+   "kind": "momentum",
+   "team": 1,
+   "player": null,
+   "priority": 2,
+   "data": {
+    "share": 68,
+    "minutes": 5,
+    "shots": 0,
+    "xg": 0,
+    "otherShots": 0
+   },
+   "eventIds": [],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Northgate Rovers on top",
+      "text": "Northgate Rovers have been playing in the opponents' half most of the last 5 minutes."
+     },
+     "de": {
+      "title": "Northgate Rovers drückt",
+      "text": "Northgate Rovers spielt seit 5 Minuten fast nur in der gegnerischen Hälfte."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Territory shift: Northgate Rovers 68 %",
+      "text": "68 % of attacking time in the last 5 min; shots 0:0, xG 0."
+     },
+     "de": {
+      "title": "Feldverschiebung: Northgate Rovers 68 %",
+      "text": "68 % der Angriffszeit in den letzten 5 min; Schüsse 0:0, xG 0."
+     }
+    }
+   }
+  },
+  {
+   "id": 23,
+   "tick": 82325,
+   "time": 1372.0833333324142,
+   "clock": "22:52",
+   "kind": "save",
+   "team": 0,
+   "player": 0,
+   "priority": 2,
+   "data": {
+    "xg": 0.12,
+    "distance": 15,
+    "kmh": 83,
+    "shooter": 19,
+    "caught": false
+   },
+   "eventIds": [
+    3327,
+    3328,
+    3329
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "What a save!",
+      "text": "Okafor keeps out Holm's 83 km/h shot."
+     },
+     "de": {
+      "title": "Was für eine Parade!",
+      "text": "Okafor hält den Schuss von Holm mit 83 km/h."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Save – xG 0.12",
+      "text": "Okafor parries a 15 m shot (83 km/h, model xG 0.12) by Holm."
+     },
+     "de": {
+      "title": "Parade – xG 0.12",
+      "text": "Okafor wehrt ab: Schuss aus 15 m (83 km/h, Modell-xG 0.12) von Holm."
+     }
+    }
+   }
+  },
+  {
+   "id": 24,
+   "tick": 86835,
+   "time": 1447.2499999990125,
+   "clock": "24:07",
+   "kind": "decision",
+   "team": 0,
+   "player": 10,
+   "priority": 3,
+   "data": {
+    "title": "Substitution?",
+    "choice": "No change",
+    "by": "timeout",
+    "outcome": "no-change",
+    "seconds": 5
+   },
+   "eventIds": [
+    3478,
+    3479,
+    3479
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: No change – the team stays as it is."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: No change – die Mannschaft bleibt, wie sie ist."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Substitution?",
+      "text": "Time ran out: No change. Outcome after 5 s: the team stays as it is. (Kowal)"
+     },
+     "de": {
+      "title": "Substitution?",
+      "text": "Zeit abgelaufen: No change. Ergebnis nach 5 s: die Mannschaft bleibt, wie sie ist. (Kowal)"
+     }
+    }
+   }
+  },
+  {
+   "id": 25,
+   "tick": 88995,
+   "time": 1483.2499999989798,
+   "clock": "24:43",
+   "kind": "decision",
+   "team": 0,
+   "player": 3,
+   "priority": 3,
+   "data": {
+    "title": "Opponent through on goal",
+    "choice": "Chase fairly",
+    "by": "timeout",
+    "outcome": "won-back",
+    "seconds": 3
+   },
+   "eventIds": [
+    3572,
+    3573,
+    3574,
+    3575,
+    3576,
+    3576
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Your call",
+      "text": "Time ran out: Chase fairly – the ball was won back."
+     },
+     "de": {
+      "title": "Deine Entscheidung",
+      "text": "Zeit abgelaufen: Chase fairly – der Ball wurde zurückerobert."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Opponent through on goal",
+      "text": "Time ran out: Chase fairly. Outcome after 3 s: the ball was won back. (Brandt)"
+     },
+     "de": {
+      "title": "Opponent through on goal",
+      "text": "Zeit abgelaufen: Chase fairly. Ergebnis nach 3 s: der Ball wurde zurückerobert. (Brandt)"
+     }
+    }
+   }
+  },
+  {
+   "id": 26,
+   "tick": 96766,
+   "time": 1612.7666666655286,
+   "clock": "26:52",
+   "kind": "pressing",
+   "team": 1,
+   "player": null,
+   "priority": 2,
+   "data": {
+    "wins": 18,
+    "presses": 44,
+    "rate": 41,
+    "otherRate": 27,
+    "minutes": 5
+   },
+   "eventIds": [],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "The press is working",
+      "text": "Northgate Rovers keep winning the ball back in the opponents' half – 18 times in 5 minutes."
+     },
+     "de": {
+      "title": "Das Pressing greift",
+      "text": "Northgate Rovers erobert den Ball immer wieder in der gegnerischen Hälfte – 18-mal in 5 Minuten."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "High press: 41 % success",
+      "text": "Northgate Rovers: 18 of 44 pressures in the opponents' half won the ball within 3 s (other side 27 %; last 5 min; pressure = defender within 2 m of the carrier)."
+     },
+     "de": {
+      "title": "Hohes Pressing: 41 % Erfolg",
+      "text": "Northgate Rovers: 18 von 44 Druckaktionen in der gegnerischen Hälfte gewannen den Ball binnen 3 s (Gegner 27 %; letzte 5 min; Druck = Verteidiger höchstens 2 m am Ballführer)."
+     }
+    }
+   }
+  },
+  {
+   "id": 27,
+   "tick": 104518,
+   "time": 1741.9666666654111,
+   "clock": "29:01",
+   "kind": "speed",
+   "team": 1,
+   "player": 20,
+   "priority": 1,
+   "data": {
+    "kmh": 94,
+    "previousKmh": 88,
+    "distance": 20
+   },
+   "eventIds": [
+    4181,
+    4182
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "94 km/h!",
+      "text": "The hardest shot of the match so far, by Navarro."
+     },
+     "de": {
+      "title": "94 km/h!",
+      "text": "Der härteste Schuss des Spiels bisher – von Navarro."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Fastest shot: 94 km/h",
+      "text": "Navarro from 20 m; previous best 88 km/h (ball speed after the kick)."
+     },
+     "de": {
+      "title": "Härtester Schuss: 94 km/h",
+      "text": "Navarro aus 20 m; bisher 88 km/h (Ballgeschwindigkeit nach dem Schuss)."
+     }
+    }
+   }
+  },
+  {
+   "id": 28,
+   "tick": 107345,
+   "time": 1789.083333332035,
+   "clock": "29:49",
+   "kind": "save",
+   "team": 0,
+   "player": 0,
+   "priority": 2,
+   "data": {
+    "xg": 0.16,
+    "distance": 14,
+    "kmh": 85,
+    "shooter": 20,
+    "caught": false
+   },
+   "eventIds": [
+    4258,
+    4260,
+    4261
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "What a save!",
+      "text": "Okafor keeps out Navarro's 85 km/h shot."
+     },
+     "de": {
+      "title": "Was für eine Parade!",
+      "text": "Okafor hält den Schuss von Navarro mit 85 km/h."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Save – xG 0.16",
+      "text": "Okafor parries a 14 m shot (85 km/h, model xG 0.16) by Navarro."
+     },
+     "de": {
+      "title": "Parade – xG 0.16",
+      "text": "Okafor wehrt ab: Schuss aus 14 m (85 km/h, Modell-xG 0.16) von Navarro."
+     }
+    }
+   }
+  },
+  {
+   "id": 29,
+   "tick": 107614,
+   "time": 1793.5666666653642,
+   "clock": "29:53",
+   "kind": "danger",
+   "team": 1,
+   "player": null,
+   "priority": 2,
+   "data": {
+    "shots": 3,
+    "xg": 0.26,
+    "minutes": 5
+   },
+   "eventIds": [
+    3976,
+    4181,
+    4258
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Pressure on goal",
+      "text": "Northgate Rovers 3 shots in 5 minutes – a goal is in the air."
+     },
+     "de": {
+      "title": "Es brennt vor dem Tor",
+      "text": "Northgate Rovers: 3 Schüsse in 5 Minuten – ein Tor liegt in der Luft."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Threat: 3 shots, xG 0.26",
+      "text": "Northgate Rovers in the last 5 min (model xG)."
+     },
+     "de": {
+      "title": "Gefahr: 3 Schüsse, xG 0.26",
+      "text": "Northgate Rovers in den letzten 5 min (Modell-xG)."
+     }
+    }
+   }
+  },
+  {
+   "id": 30,
+   "tick": 108598,
+   "time": 1809.9666666653493,
+   "clock": "30:00",
+   "kind": "full-summary",
+   "team": null,
+   "player": null,
+   "priority": 3,
+   "data": {
+    "score": "0:2",
+    "possession0": 54,
+    "shots0": 0,
+    "xg0": 0,
+    "passAcc0": 79,
+    "pressureWins0": 156,
+    "possession1": 46,
+    "shots1": 7,
+    "xg1": 1.94,
+    "passAcc1": 77,
+    "pressureWins1": 153
+   },
+   "eventIds": [
+    4324
+   ],
+   "text": {
+    "fan": {
+     "en": {
+      "title": "Full time 0:2",
+      "text": "Harbourside Athletic had more of the ball (54 %); shots 0:7."
+     },
+     "de": {
+      "title": "Abpfiff 0:2",
+      "text": "Harbourside Athletic hatte mehr vom Ball (54 %); Schüsse 0:7."
+     }
+    },
+    "analyst": {
+     "en": {
+      "title": "Full time 0:2",
+      "text": "Possession 54:46 %, shots 0:7, xG 0:1.94, pass accuracy 79:77 %, pressures won 156:153."
+     },
+     "de": {
+      "title": "Abpfiff 0:2",
+      "text": "Ballbesitz 54:46 %, Schüsse 0:7, xG 0:1.94, Passquote 79:77 %, gewonnene Druckaktionen 156:153."
+     }
+    }
+   }
+  }
+ ]
+}

@@ -69,8 +69,11 @@ export function showResult(host: HTMLElement, score: readonly [number, number], 
   }
   // The automated recap: the final summary, every goal's story and the notable moments, in the viewer's mode.
   const recap = el.querySelector('[data-recap]')!;
-  const picked = intel.insights.filter(i => i.kind === 'full-summary' || i.kind === 'goal-story' || (i.priority === 2 && i.kind !== 'speed')).slice(-8);
-  const ordered = [...picked.filter(i => i.kind === 'full-summary'), ...picked.filter(i => i.kind !== 'full-summary')];
+  // Always the final summary and every goal; of the other notable moments the latest of each kind and team, at most four.
+  const notable = new Map<string, Insight>();
+  for (const i of intel.insights) if (i.priority === 2 && i.kind !== 'speed') notable.set(`${i.kind}:${i.team}`, i);
+  const others = [...notable.values()].sort((a, b) => a.time - b.time).slice(-4);
+  const ordered = [...intel.insights.filter(i => i.kind === 'full-summary'), ...[...intel.insights.filter(i => i.kind === 'goal-story'), ...others].sort((a, b) => a.time - b.time)];
   for (const i of ordered) {
     const w = narrate(i, intel.prefs.mode, { profiles: dev.profiles, favouriteTeam: intel.prefs.favouriteTeam });
     const li = document.createElement('li');

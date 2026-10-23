@@ -96,7 +96,7 @@ export function briefMoment(m: DecisionMoment, s: MatchSnapshot, profiles: reado
     const recent = (t: 0 | 1) => stats.shots.filter(x => x.team === t && s.time - x.time <= 300);
     const ours = recent(m.team), theirs = recent((1 - m.team) as 0 | 1);
     const xg = (l: typeof ours) => l.reduce((a, x) => a + x.xg, 0).toFixed(2);
-    lines.push(tr(`Last 5 min: shots ${ours.length}:${theirs.length}, xG ${xg(ours)}:${xg(theirs)}.`, `Letzte 5 min: Schüsse ${ours.length}:${theirs.length}, xG ${xg(ours)}:${xg(theirs)}.`));
+    if (ours.length + theirs.length > 0) lines.push(tr(`Last 5 min: shots ${ours.length}:${theirs.length}, xG ${xg(ours)}:${xg(theirs)}.`, `Letzte 5 min: Schüsse ${ours.length}:${theirs.length}, xG ${xg(ours)}:${xg(theirs)}.`));
   }
   return { lines, options };
 }

@@ -66,7 +66,8 @@ const gl = process.env.CHECK_SOFTWARE_GL ? ['--use-angle=swiftshader', '--enable
 const browser = spawn(browserPath, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${join(out, 'profile')}`, `--window-size=${vw},${vh}`, '--autoplay-policy=no-user-gesture-required', ...gl, 'about:blank'], { stdio: 'ignore' });
 
 let targets = null;
-for (let i = 0; i < 60 && !targets; i++) { try { targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json(); } catch { await sleep(250); } }
+// Chrome can take a while to come up after a previous heavy run: up to 40 s.
+for (let i = 0; i < 160 && !targets; i++) { try { targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json(); } catch { await sleep(250); } }
 const page = targets?.find(t => t.type === 'page');
 if (!page) { console.error('Browser did not expose a page target'); browser.kill(); vite.kill(); process.exit(2); }
 const ws = new WebSocket(page.webSocketDebuggerUrl);
@@ -166,7 +167,9 @@ try {
     if (full) {
       if (session) {
         entry.panel = await evaluate("document.querySelector('.decision')?.innerText");
-        const think = thinkMin + rand() * (thinkMax - thinkMin);
+        // The think time counts from now, but never past the panel's own countdown (the script may notice a moment late).
+        const remaining = Number((await evaluate("document.querySelector('[data-seconds]')?.textContent ?? ''")).replace(/[^0-9.]/g, '')) || 15;
+        const think = Math.min(thinkMin + rand() * (thinkMax - thinkMin), Math.max(1, remaining - 2));
         const opened = Date.now();
         if (n <= 6) { await sleep(1400); await shot(`${String(10 + n)}-${m.kind}-a-before`); }
         await sleep(Math.max(0, think * 1000 - (Date.now() - opened)));
@@ -176,8 +179,9 @@ try {
         await press(key);
         entry.thinkSeconds = +((Date.now() - opened) / 1000).toFixed(1);
         entry.chosen = delegate ? 'delegated' : m.options[Number(key) - 1];
-        await sleep(300);
-        entry.decision = await evaluate(`${D}.events.slice(${before}).find(e=>e.type==='decision')?.chosenBy ?? null`);
+        // The decision event comes back with the worker's next batch: wait for it (up to 3 s) instead of a fixed pause.
+        entry.decision = null;
+        for (let k = 0; k < 30 && entry.decision === null; k++) { await sleep(100); entry.decision = await evaluate(`${D}.events.slice(${before}).find(e=>e.type==='decision')?.chosenBy ?? null`); }
         if (entry.decision !== (delegate ? 'delegated' : 'user')) fail(`moment ${n}: decision recorded as ${entry.decision}`);
         time.decision += (Date.now() - opened) / 1000;
         if (n <= 6) { await sleep(3500); await shot(`${String(10 + n)}-${m.kind}-c-after`); }
@@ -240,6 +244,8 @@ try {
   }
   report.checks.events = await evaluate(`(()=>{const c={};for(const e of ${D}.events)c[e.type]=(c[e.type]||0)+1;return c})()`);
   report.checks.workerCpuSeconds = +((await evaluate(`${D}.cpuMs`)) / 1000).toFixed(1);
+  // Match intelligence: what it ingested, how many insights, and the AI narration status line (analyst mode).
+  report.checks.intel = await evaluate(`(()=>{const i=${D}.intel;return i?{mode:i.mode,insights:i.insights.length,kinds:[...new Set(i.insights.map(x=>x.kind))],ingested:i.ingested,aiStatus:document.querySelector('.intel-ai-status')?.textContent??null,panel:!!document.querySelector('.intel')}:null})()`);
 } catch (err) {
   fail(`check aborted: ${err}`);
 } finally {
