@@ -1,8 +1,8 @@
 # THE 12TH MAN
 
-**An agent-based football match you coach at the moments that matter, with match intelligence that explains every one of them.**
+**A football manager with autonomous AI players, where the decisive moments play out as cinematic, interactive 3D scenes – and match intelligence explains every one of them.**
 
-Twenty-two autonomous players play a full 11-v-11 match on their own. Every event comes from a real physics simulation with an independent referee, and everything is synthetic. A decision orchestrator stops the match only when there is a real choice, for example a risky build-up pass, a corner routine, a defensive wall or a half-time team talk. You decide, and the players try to carry it out. Feet, ball and opponents decide whether it works.
+You prepare the match like a manager: starting eleven and bench, pressing, defensive line and risk. Then twenty-two autonomous players play a full 11-v-11 match in the background, on a real physics simulation with an independent referee; everything is synthetic. You follow it in the manager view – score, minute, tactics, team form, timeline, statistics and match intelligence – without a permanent 3D picture. When the orchestrator finds a real choice in the match (a risky pass, a counter, a corner routine, a defensive wall, a penalty), the simulation stops, the last seconds of real play are shown in 3D, the scene freezes and you decide. The players try to carry it out; feet, ball and opponents decide whether it works. Then the match goes on from exactly there.
 
 Next to the match runs a match intelligence pipeline. It turns the synthetic event stream into statistics, patterns and explanations:
 
@@ -14,7 +14,8 @@ Next to the match runs a match intelligence pipeline. It turns the synthetic eve
 
 | | |
 | --- | --- |
-| ![Decision scene with "why it matters"](docs/phase-d/02-decision-why.jpg) | ![Analyst mode during play](docs/phase-d/03-analyst-mode.jpg) |
+| ![Manager view](docs/phase-e/03-manager-view.jpg) | ![Decision scene in 3D](docs/phase-e/05-attack-b-decide.jpg) |
+| ![Match preparation](docs/phase-e/01-preparation.jpg) | ![Corner from behind the flag](docs/phase-e/10-corner-a-build-up.jpg) |
 
 ## Why
 
@@ -38,8 +39,8 @@ This follows the hackathon's *Ingest → Interpret → Explain → Render → Pe
 | Ingest | `board.ts` | Every `MatchEvent` in display order, together with the frame of its tick, plus sampled frames. |
 | Interpret | `stats.ts` | <ul><li>Passes with distance, completion and a 1–5 difficulty rating from length, pressure and progression</li><li>Shots with speed and model xG</li><li>Possession and territory, possession changes, turnovers by zone</li><li>Pressure on the ball carrier and whether it won the ball</li><li>Distance, top speed and sprints per player</li></ul> |
 | Explain | `patterns.ts`, `moment-brief.ts` | <ul><li>Insights with reasons: the story of each goal (origin, passes, assist), big chances and saves, which team is on top, control or chaos, a high press that works, fastest shot, what came of each user decision</li><li>Decision scenes get *why it matters*: who presses the actor and how fast, how open each passing lane is, how free the receiver is, safest against boldest option</li></ul> |
-| Render | `narrator.ts`, `ui/intel-panel.ts` | Fan and analyst wordings, overlay panel, player name tag with sprint speed, automated match report. |
-| Personalize | start screen, `I` key | Club, mode, focus player and language. |
+| Render | `narrator.ts`, `ui/intel-panel.ts` | Fan and analyst wordings in the manager view, explanation in each 3D scene, player name tag with sprint speed, half-time summary, automated match report. |
+| Personalize | match preparation, `I` key | Club, team sheet, tactics, mode, focus player and language. |
 
 Every insight keeps its numbers and the IDs of the events it was derived from. Nothing is invented: a test checks that every cited event exists and that goals, shots and possession changes match an independent statistics module. At full time, the complete intelligence can be downloaded as a versioned, timed JSON feed (`the12thman.intel/v1`) for overlays or recaps.
 
@@ -62,10 +63,10 @@ npm install
 npm run dev          # open the printed URL
 ```
 
-1. Choose **your club**, **Fan** or **Analyst**, an optional **focus player** and **2 × 15 min**. A session takes about 7 minutes of your time; every second of the 30 match minutes is simulated.
-2. Press **Kick-off**. The match plays itself; quiet phases are condensed and every tick is still computed.
-3. When the orchestrator stops, read *why it matters*. Press **1–4** to choose, or **0** to leave it to the players.
-4. Press **I** to switch between fan and analyst mode. At full time you get the match report and can download the intelligence feed.
+1. **Match preparation:** choose your club and the length (**2 × 15 min** takes about 6½ minutes of your time; every second of the 30 match minutes is simulated). Check the team sheet: click a starter, then a bench player, to swap them. Set pressing, defensive line and risk. Pick **Fan** or **Analyst** and an optional focus player.
+2. Press **Kick-off**. The **manager view** follows the background simulation: score and minute, tactics, team with form, statistics, key developments, match events and match intelligence. **Normal / Fast** sets the pace, **Pause** stops the simulation.
+3. A **decisive scene** opens in 3D: the real build-up, a slow-motion freeze, the options on the pitch and *why it matters*. Press **1–4** (or click) to choose, **0** to leave it to the players. The consequence is played from newly computed frames, then you are back in the manager view.
+4. **Substitutions** come as a dialog, the **team talk** in the half-time screen. **I** switches fan/analyst. At full time you get the match report, your decisions and the intelligence feed; **New match** starts again.
 
 URL parameters for testing:
 
@@ -84,7 +85,8 @@ URL parameters for testing:
 | Command | What it does |
 | --- | --- |
 | `npm run check` | Type check, all unit and integration tests, production build |
-| `npm run test:browser` | Real headless Chrome/Edge run with screenshots (`CHECK_SESSION=1` plays a whole session like a user; `CHECK_PREVIEW=1` uses the production build) |
+| `npm run test:browser` | Real headless Chrome/Edge run of a whole manager session with screenshots, invariants (every decision and event exactly once, no 3D in the manager view) and the match protocol (`CHECK_PREVIEW=1` production build, `CHECK_HALF=15`, `CHECK_RECORD=2` scene videos) |
+| `node scripts/protocol.mjs --seeds 7` | Reference match protocol in Node with the same decisions; must equal the browser's `protocol.json` |
 | `npm run intel -- --seed 7 --half 15` | Export one synthetic match: the complete event log and its match intelligence, as JSON |
 | `npm run sim` / `npm run probe` | Full autonomous match / multi-seed statistics |
 | `npm run lab` | Shot lab: keeper against shots from 8–25 m |
@@ -100,9 +102,12 @@ src/ai/            player agents: perception, option evaluation, execution, keep
 src/rules/         referee (IFAB Laws)
 src/orchestrator/  decision moments from the real state (open play, set pieces, coach)
 src/intel/         match intelligence pipeline, moment explanations, Foundry narration client and core
-src/sim/           simulation in a Web Worker, frame transfer, presentation pacing
-src/render/        Three.js stadium, figures, broadcast and decision cameras, tactical overlays, name tags
-src/ui/            start, HUD, decision panel, intelligence panel, consequence card, result (CSS next to TS)
+src/sim/           simulation in a Web Worker, frame transfer, pause
+src/session/       manager session: state machine (manager ⇄ scene), pacing, timeline (every event exactly once)
+src/manager/       match preparation, manager view, half-time screen, substitution dialog (CSS next to TS)
+src/render/        Three.js stadium, skinned footballer (Blender Human Base Meshes, CC0) posed from physics, scene cameras, tactical overlays
+src/ui/            decision panel, intelligence panel, consequence card, result (CSS next to TS)
+scripts/figure/    reproducible Blender build of the footballer model
 api/               optional Azure Function for Foundry narration (not deployed)
 ```
 
