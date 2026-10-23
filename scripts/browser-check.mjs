@@ -36,6 +36,7 @@ const fail = msg => { report.errors.push(msg); };
 const recordScenes = Number(process.env.CHECK_RECORD ?? 0);
 /** Screencast of the scene being recorded: JPEG frames with their timestamps. */
 let recording = null;
+const recorded = [];
 
 const base = process.env.CHECK_BASE ?? '/';
 const viteArgs = process.env.CHECK_PREVIEW ? ['preview', '--port', String(port), '--strictPort', '--base', base] : ['--port', String(port), '--strictPort'];
@@ -80,6 +81,8 @@ const waitFor = async (expr, seconds) => { for (let i = 0; i < seconds * 4; i++)
 const D = 'window.__match.debug';
 /** The option a policy picks (1-based key); the same rule as the Node reference (scripts/protocol.mjs). */
 const keyFor = n => policy === 'delegate' ? '0' : policy === 'first' || n < 2 ? '1' : '2';
+/** CHECK_CHOOSE='finish-or-pass:1,corner:3': a fixed key for a kind of scene (to compare options in the same scene). */
+const choose = Object.fromEntries((process.env.CHECK_CHOOSE ?? '').split(',').filter(Boolean).map(x => x.split(':')));
 
 /** Participants of the frozen moment projected through the real camera, against the decision panel's box. */
 const layoutCheck = () => evaluate(`(()=>{
@@ -147,10 +150,9 @@ try {
       const NL = String.fromCharCode(10);
       const list = r.frames.map((fr, i) => `file '${fr.f.replaceAll(String.fromCharCode(92), '/')}'${NL}duration ${Math.max(0.001, Math.min(0.5, (r.frames[i + 1]?.t ?? fr.t + 0.04) - fr.t)).toFixed(3)}`).join(NL);
       writeFileSync(join(out, `rec-${r.n}.txt`), list);
-      try {
-        execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', join(out, `rec-${r.n}.txt`), '-vf', 'fps=30,scale=1280:-2', '-c:v', 'libx264', '-crf', '26', '-pix_fmt', 'yuv420p', join(out, `scene-${r.n}.mp4`)]);
-        report.checks[`scene${r.n}Video`] = { frames: r.frames.length, seconds: +((r.frames.at(-1).t - r.frames[0].t)).toFixed(1) };
-      } catch (err) { report.notes.push(`scene ${r.n} video not built: ${err}`); }
+      // Encoded after the session: encoding here blocked this loop for seconds, a quick next scene was missed and its
+      // countdown decided it (a different decision, so a different match – an artifact of the check, not the game).
+      recorded.push(r);
     }
     if (phase === 'build-up' && lastPhase !== 'build-up') {
       const m = await evaluate(`(()=>{const m=window.__match.driver.moment;return m?{id:m.id,kind:m.kind,category:m.category,title:m.title,options:m.options.map(o=>o.label)}:null})()`);
@@ -158,6 +160,11 @@ try {
       report.scenes.push(scene);
       if (shots < maxShots) { await sleep(1800); await shot(`${String(10 + shots)}-${m.kind}-a-build-up`); }
       scene.fps = await fps();
+    }
+    if (phase === 'decide') {
+      // A scene whose build-up the loop did not see (it followed straight on): take it up at the freeze.
+      const m = await evaluate(`(()=>{const m=window.__match.driver.moment;return m?{id:m.id,kind:m.kind,category:m.category,title:m.title,options:m.options.map(o=>o.label)}:null})()`);
+      if (m && (!scene || scene.id !== m.id)) { scene = { ...m, openedAt: Math.round((Date.now() - t0) / 1000), lateDetected: true }; report.scenes.push(scene); }
     }
     if (phase === 'decide' && scene && !scene.decided) {
       const producedAtFreeze = await evaluate(`${D}.produced`);
@@ -169,7 +176,7 @@ try {
       if (scene.layout?.covered?.length) report.notes.push(`scene ${scene.id} (${scene.kind}): panel covers ${scene.layout.covered.join(', ')}`);
       if (shots < maxShots) await shot(`${String(10 + shots)}-${scene.kind}-b-decide`);
       await sleep((thinkMin + rand() * (thinkMax - thinkMin)) * 1000);
-      const key = keyFor(scene.options.length);
+      const key = choose[scene.kind] ?? keyFor(scene.options.length);
       const before = await evaluate(`${D}.events.length`);
       await press(key);
       scene.decided = true;
@@ -238,6 +245,12 @@ try {
 } catch (err) {
   fail(`check aborted: ${err}`);
 } finally {
+  for (const r of recorded) {
+    try {
+      execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', join(out, `rec-${r.n}.txt`), '-vf', 'fps=30,scale=1280:-2', '-c:v', 'libx264', '-crf', '26', '-pix_fmt', 'yuv420p', join(out, `scene-${r.n}.mp4`)]);
+      report.checks[`scene${r.n}Video`] = { frames: r.frames.length, seconds: +((r.frames.at(-1).t - r.frames[0].t)).toFixed(1) };
+    } catch (err) { report.notes.push(`scene ${r.n} video not built: ${err}`); }
+  }
   report.ok = report.errors.length === 0;
   writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ ok: report.ok, errors: report.errors, warnings: report.warnings.slice(0, 5), checks: report.checks, scenes: report.scenes.map(s => ({ kind: s.kind, decision: s.decision, covered: s.layout?.covered?.length, offscreen: s.layout?.offscreen?.length })), coach: report.coach.length, notes: report.notes }, null, 2));

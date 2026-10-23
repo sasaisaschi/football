@@ -178,3 +178,45 @@ export function projectWith(f: Framing, aspect: number, fovDeg: number, p: Vec3)
   camera.updateMatrixWorld(true);
   return new THREE.Vector3(p.x, p.y, p.z).project(camera);
 }
+
+/**
+ * The decision view of an open-play scene (issue #39): the same perspective as the attack camera – behind the ball,
+ * looking towards the goal being attacked – only as far back and as high as it takes for every point (actor, team-mates
+ * to pass to, nearest opponents, option targets, both posts when the goal is near) to lie in the free part of the screen.
+ * Azimuths within ±0.45 rad of straight behind, raised 0.45–0.8 rad; among the views that fit, the nearest and most straight one wins.
+ * Without a fitting view it falls back to the general solver.
+ */
+export function frameAttack(points: readonly Vec3[], ball: Vec3, goalX: number, aspect: number, fovDeg: number, safe: SafeArea): Framing {
+  camera.fov = fovDeg;
+  camera.aspect = aspect;
+  camera.near = 0.5;
+  camera.far = 600;
+  camera.updateProjectionMatrix();
+  // The goal is part of the picture when it is near enough to matter (≤ 32 m); further away it would only push the
+  // camera back and shrink the players.
+  const near = Math.abs(goalX - ball.x) <= 32;
+  const all = near ? [...points, { x: goalX, y: 2.44, z: -3.66 }, { x: goalX, y: 0, z: 3.66 }] : [...points];
+  // Aimed between the ball and the goal, a little nearer the ball.
+  const target = new THREE.Vector3(ball.x + (goalX - ball.x) * 0.35, 0.5, ball.z * 0.75);
+  aimAt(safe);
+  const behind = Math.atan2(ball.z - 0, ball.x - goalX);
+  let best: { score: number; position: THREE.Vector3; aimed: THREE.Vector3 } | null = null;
+  for (const off of [0, 0.15, -0.15, 0.3, -0.3, 0.45, -0.45]) {
+    for (const elevation of [0.45, 0.55, 0.65, 0.8]) {
+      let lo = 6, hi = 110;
+      place(target, behind + off, elevation, hi);
+      if (!fits(all, safe)) continue;
+      for (let i = 0; i < 16; i++) {
+        const mid = (lo + hi) / 2;
+        place(target, behind + off, elevation, mid);
+        if (fits(all, safe)) hi = mid; else lo = mid;
+      }
+      place(target, behind + off, elevation, hi * 1.05);
+      const p = camera.position;
+      if (p.y < 4 || !cameraAllowed(p)) continue;
+      const score = hi * (1 + 0.35 * Math.abs(off)) * (1 + 0.25 * Math.max(0, elevation - 0.6));
+      if (!best || score < best.score) best = { score, position: p.clone(), aimed: aimedTarget() };
+    }
+  }
+  return best ? { position: best.position, target: best.aimed } : frameMoment(points, Math.sign(goalX) as 1 | -1, aspect, fovDeg, safe);
+}
