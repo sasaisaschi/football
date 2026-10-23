@@ -8,7 +8,7 @@ import { attackSign } from '../physics/pitch-geometry';
 import { createBallView } from './ball-view';
 import { CameraDirector, WIDE_FOV } from './camera-director';
 import { frameMoment } from './framing';
-import { lerpBall, lerpPlayer } from './interpolate';
+import { lerpBall, lerpPlayers } from './interpolate';
 import { NameTag } from './name-tag';
 import { Footballer, loadFootballer } from './footballer';
 import type { StadiumView } from './stadium-view';
@@ -147,7 +147,8 @@ export class SceneView {
     this.ball.update(ball, s.ball.rotation);
     // The decorative running cycle follows the shown time (slower in slow motion).
     const gaitDt = dt * pace;
-    s.players.forEach((p, k) => this.figures[k].update(lerpPlayer(a.players[k], p, alpha), gaitDt, ball));
+    // Always interpolate between consecutive simulation frames, independently of which tick supplies discrete state.
+    lerpPlayers(a.players, b.players, alpha).forEach((p, k) => this.figures[k].update(p, gaitDt, ball));
     this.camera.update({ ...s, ball: { ...s.ball, position: ball } }, wall, dt);
     this.followShadows(ball);
     this.overlay.update(wall, this.cam);
